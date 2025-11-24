@@ -46,8 +46,17 @@ const gameControllers: Record<GameType, GameController> = {
   connect4: {
     createMatch: connect4.createConnect4Match,
     updateGame: () => {}, // Turn-based, no continuous update
+    updateBotAI: (state, botIsPlayer2) => {
+      const bot = botIsPlayer2 ? state.player2 : state.player1;
+      if (state.currentTurn === bot.id) {
+        const col = connect4.getConnect4BotMove(state);
+        connect4.dropPiece(state, col, bot.id);
+      }
+    },
     handleInput: (state, playerId, input) => {
-      connect4.dropPiece(state, input.column, playerId);
+      if (input.column !== undefined) {
+        connect4.dropPiece(state, input.column, playerId);
+      }
     },
   },
   flappybird: {
@@ -67,7 +76,9 @@ const gameControllers: Record<GameType, GameController> = {
     updateBotAI: breakout.updateBreakoutBotAI,
     handleInput: (state, playerId, input) => {
       const player = state.player1.id === playerId ? state.player1 : state.player2;
-      breakout.moveBreakoutPaddle(player, input.direction);
+      if (input.direction) {
+        breakout.moveBreakoutPaddle(player, input.direction);
+      }
     },
   },
   airhockey: {
@@ -76,7 +87,9 @@ const gameControllers: Record<GameType, GameController> = {
     updateBotAI: airhockey.updateAirHockeyBotAI,
     handleInput: (state, playerId, input) => {
       const player = state.player1.id === playerId ? state.player1 : state.player2;
-      airhockey.moveAirHockeyPaddle(player, input.x, input.y);
+      if (typeof input.x === 'number' && typeof input.y === 'number') {
+        airhockey.moveAirHockeyPaddle(player, input.x, input.y);
+      }
     },
   },
 };

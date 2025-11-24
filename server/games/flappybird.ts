@@ -1,21 +1,25 @@
+interface FlappyPlayer {
+  y: number;
+  velocity: number;
+  alive: boolean;
+}
+
 export interface FlappyBirdGameState {
   matchId: string;
   gameType: 'flappybird';
   player1: {
     id: string;
     name: string;
-    y: number;
-    velocity: number;
+    socketId?: string;
     score: number;
-    alive: boolean;
+    gameData: FlappyPlayer;
   };
   player2: {
     id: string;
     name: string;
-    y: number;
-    velocity: number;
+    socketId?: string;
     score: number;
-    alive: boolean;
+    gameData: FlappyPlayer;
   };
   pipes: { x: number; gap: number; passed: boolean }[];
   status: 'playing' | 'finished';
@@ -36,18 +40,22 @@ export function createFlappyBirdMatch(player1Id: string, player2Id: string, play
     player1: {
       id: player1Id,
       name: player1Name,
-      y: CANVAS_HEIGHT / 2,
-      velocity: 0,
       score: 0,
-      alive: true,
+      gameData: {
+        y: CANVAS_HEIGHT / 2,
+        velocity: 0,
+        alive: true,
+      },
     },
     player2: {
       id: player2Id,
       name: player2Name,
-      y: CANVAS_HEIGHT / 2,
-      velocity: 0,
       score: 0,
-      alive: true,
+      gameData: {
+        y: CANVAS_HEIGHT / 2,
+        velocity: 0,
+        alive: true,
+      },
     },
     pipes: [
       { x: 400, gap: 200, passed: false },
@@ -61,42 +69,38 @@ export function createFlappyBirdMatch(player1Id: string, player2Id: string, play
 export function updateFlappyBirdGame(state: FlappyBirdGameState): void {
   if (state.status !== 'playing') return;
 
-  // Update players
   [state.player1, state.player2].forEach(player => {
-    if (!player.alive) return;
+    const gameData = player.gameData;
+    if (!gameData.alive) return;
 
-    player.velocity += GRAVITY;
-    player.y += player.velocity;
+    gameData.velocity += GRAVITY;
+    gameData.y += gameData.velocity;
 
-    // Check ground/ceiling collision
-    if (player.y < 0 || player.y > CANVAS_HEIGHT - 30) {
-      player.alive = false;
+    if (gameData.y < 0 || gameData.y > CANVAS_HEIGHT - 30) {
+      gameData.alive = false;
       return;
     }
 
-    // Check pipe collision
     state.pipes.forEach(pipe => {
       const birdX = 50;
       if (birdX + 30 > pipe.x && birdX < pipe.x + PIPE_WIDTH) {
-        if (player.y < pipe.gap - PIPE_GAP / 2 || player.y + 30 > pipe.gap + PIPE_GAP / 2) {
-          player.alive = false;
+        if (gameData.y < pipe.gap - PIPE_GAP / 2 || gameData.y + 30 > pipe.gap + PIPE_GAP / 2) {
+          gameData.alive = false;
         }
       }
     });
   });
 
-  // Update pipes
   state.pipes.forEach(pipe => {
     pipe.x -= PIPE_SPEED;
 
     if (!pipe.passed && pipe.x + PIPE_WIDTH < 50) {
       pipe.passed = true;
-      if (state.player1.alive) state.player1.score++;
-      if (state.player2.alive) state.player2.score++;
+      if (state.player1.gameData.alive) state.player1.score++;
+      if (state.player2.gameData.alive) state.player2.score++;
     }
   });
 
-  // Add new pipes
   if (state.pipes[state.pipes.length - 1].x < 600) {
     state.pipes.push({
       x: state.pipes[state.pipes.length - 1].x + 250,
@@ -105,34 +109,33 @@ export function updateFlappyBirdGame(state: FlappyBirdGameState): void {
     });
   }
 
-  // Remove old pipes
   state.pipes = state.pipes.filter(pipe => pipe.x > -PIPE_WIDTH);
 
-  // Check win condition
-  if (!state.player1.alive && !state.player2.alive) {
+  if (!state.player1.gameData.alive && !state.player2.gameData.alive) {
     state.status = 'finished';
     state.winner = state.player1.score >= state.player2.score ? state.player1.id : state.player2.id;
-  } else if (!state.player1.alive) {
+  } else if (!state.player1.gameData.alive) {
     state.status = 'finished';
     state.winner = state.player2.id;
-  } else if (!state.player2.alive) {
+  } else if (!state.player2.gameData.alive) {
     state.status = 'finished';
     state.winner = state.player1.id;
   }
 }
 
 export function flappyBirdJump(player: FlappyBirdGameState['player1']): void {
-  if (player.alive) {
-    player.velocity = JUMP_STRENGTH;
+  if (player.gameData.alive) {
+    player.gameData.velocity = JUMP_STRENGTH;
   }
 }
 
 export function updateFlappyBirdBotAI(state: FlappyBirdGameState, botIsPlayer2: boolean): void {
   const bot = botIsPlayer2 ? state.player2 : state.player1;
-  if (!bot.alive) return;
+  const gameData = bot.gameData;
+  if (!gameData.alive) return;
 
   const nextPipe = state.pipes.find(pipe => pipe.x > 50);
-  if (nextPipe && bot.y > nextPipe.gap - 50) {
+  if (nextPipe && gameData.y > nextPipe.gap - 50) {
     flappyBirdJump(bot);
   }
 }

@@ -1,32 +1,5 @@
 import type { Server as SocketIOServer } from "socket.io";
 
-export interface TetrisGameState {
-  matchId: string;
-  gameType: 'tetris';
-  player1: {
-    id: string;
-    name: string;
-    board: number[][];
-    currentPiece: Piece | null;
-    nextPiece: Piece;
-    score: number;
-    linesCleared: number;
-    gameOver: boolean;
-  };
-  player2: {
-    id: string;
-    name: string;
-    board: number[][];
-    currentPiece: Piece | null;
-    nextPiece: Piece;
-    score: number;
-    linesCleared: number;
-    gameOver: boolean;
-  };
-  status: 'playing' | 'finished';
-  winner?: string;
-}
-
 interface Piece {
   shape: number[][];
   x: number;
@@ -34,17 +7,46 @@ interface Piece {
   type: number;
 }
 
+interface TetrisPlayer {
+  board: number[][];
+  currentPiece: Piece | null;
+  nextPiece: Piece;
+  linesCleared: number;
+  gameOver: boolean;
+}
+
+export interface TetrisGameState {
+  matchId: string;
+  gameType: 'tetris';
+  player1: {
+    id: string;
+    name: string;
+    socketId?: string;
+    score: number;
+    gameData: TetrisPlayer;
+  };
+  player2: {
+    id: string;
+    name: string;
+    socketId?: string;
+    score: number;
+    gameData: TetrisPlayer;
+  };
+  status: 'playing' | 'finished';
+  winner?: string;
+}
+
 const BOARD_WIDTH = 10;
 const BOARD_HEIGHT = 20;
 
 const TETROMINOS = [
-  [[1, 1, 1, 1]],           // I
-  [[1, 1], [1, 1]],         // O
-  [[0, 1, 0], [1, 1, 1]],   // T
-  [[1, 1, 0], [0, 1, 1]],   // S
-  [[0, 1, 1], [1, 1, 0]],   // Z
-  [[1, 0, 0], [1, 1, 1]],   // L
-  [[0, 0, 1], [1, 1, 1]],   // J
+  [[1, 1, 1, 1]],
+  [[1, 1], [1, 1]],
+  [[0, 1, 0], [1, 1, 1]],
+  [[1, 1, 0], [0, 1, 1]],
+  [[0, 1, 1], [1, 1, 0]],
+  [[1, 0, 0], [1, 1, 1]],
+  [[0, 0, 1], [1, 1, 1]],
 ];
 
 function createEmptyBoard(): number[][] {
@@ -68,22 +70,26 @@ export function createTetrisMatch(player1Id: string, player2Id: string, player1N
     player1: {
       id: player1Id,
       name: player1Name,
-      board: createEmptyBoard(),
-      currentPiece: createRandomPiece(),
-      nextPiece: createRandomPiece(),
       score: 0,
-      linesCleared: 0,
-      gameOver: false,
+      gameData: {
+        board: createEmptyBoard(),
+        currentPiece: createRandomPiece(),
+        nextPiece: createRandomPiece(),
+        linesCleared: 0,
+        gameOver: false,
+      },
     },
     player2: {
       id: player2Id,
       name: player2Name,
-      board: createEmptyBoard(),
-      currentPiece: createRandomPiece(),
-      nextPiece: createRandomPiece(),
       score: 0,
-      linesCleared: 0,
-      gameOver: false,
+      gameData: {
+        board: createEmptyBoard(),
+        currentPiece: createRandomPiece(),
+        nextPiece: createRandomPiece(),
+        linesCleared: 0,
+        gameOver: false,
+      },
     },
     status: 'playing',
   };
@@ -124,7 +130,7 @@ function clearLines(board: number[][]): number {
       board.splice(y, 1);
       board.unshift(Array(BOARD_WIDTH).fill(0));
       linesCleared++;
-      y++; // Check the same row again
+      y++;
     }
   }
   return linesCleared;
@@ -134,42 +140,43 @@ export function updateTetrisGame(state: TetrisGameState): void {
   if (state.status !== 'playing') return;
 
   [state.player1, state.player2].forEach(player => {
-    if (player.gameOver || !player.currentPiece) return;
+    const gameData = player.gameData;
+    if (gameData.gameOver || !gameData.currentPiece) return;
 
-    // Move piece down
-    player.currentPiece.y++;
+    gameData.currentPiece.y++;
     
-    if (!canPlacePiece(player.board, player.currentPiece)) {
-      player.currentPiece.y--;
-      placePiece(player.board, player.currentPiece);
+    if (!canPlacePiece(gameData.board, gameData.currentPiece)) {
+      gameData.currentPiece.y--;
+      placePiece(gameData.board, gameData.currentPiece);
       
-      const lines = clearLines(player.board);
-      player.linesCleared += lines;
+      const lines = clearLines(gameData.board);
+      gameData.linesCleared += lines;
       player.score += lines * 100 * (lines > 1 ? lines : 1);
       
-      player.currentPiece = player.nextPiece;
-      player.nextPiece = createRandomPiece();
+      gameData.currentPiece = gameData.nextPiece;
+      gameData.nextPiece = createRandomPiece();
       
-      if (!canPlacePiece(player.board, player.currentPiece)) {
-        player.gameOver = true;
+      if (!canPlacePiece(gameData.board, gameData.currentPiece)) {
+        gameData.gameOver = true;
       }
     }
   });
 
-  if (state.player1.gameOver || state.player2.gameOver) {
+  if (state.player1.gameData.gameOver || state.player2.gameData.gameOver) {
     state.status = 'finished';
-    if (state.player1.gameOver && state.player2.gameOver) {
+    if (state.player1.gameData.gameOver && state.player2.gameData.gameOver) {
       state.winner = state.player1.score >= state.player2.score ? state.player1.id : state.player2.id;
     } else {
-      state.winner = state.player1.gameOver ? state.player2.id : state.player1.id;
+      state.winner = state.player1.gameData.gameOver ? state.player2.id : state.player1.id;
     }
   }
 }
 
 export function moveTetrisPiece(player: TetrisGameState['player1'], direction: 'left' | 'right' | 'down' | 'rotate'): void {
-  if (!player.currentPiece || player.gameOver) return;
+  const gameData = player.gameData;
+  if (!gameData.currentPiece || gameData.gameOver) return;
 
-  const piece = { ...player.currentPiece };
+  const piece = { ...gameData.currentPiece };
 
   if (direction === 'left') piece.x--;
   else if (direction === 'right') piece.x++;
@@ -178,16 +185,16 @@ export function moveTetrisPiece(player: TetrisGameState['player1'], direction: '
     piece.shape = piece.shape[0].map((_, i) => piece.shape.map(row => row[i]).reverse());
   }
 
-  if (canPlacePiece(player.board, piece)) {
-    player.currentPiece = piece;
+  if (canPlacePiece(gameData.board, piece)) {
+    gameData.currentPiece = piece;
   }
 }
 
 export function updateTetrisBotAI(state: TetrisGameState, botIsPlayer2: boolean): void {
   const bot = botIsPlayer2 ? state.player2 : state.player1;
-  if (bot.gameOver || !bot.currentPiece) return;
+  const gameData = bot.gameData;
+  if (gameData.gameOver || !gameData.currentPiece) return;
 
-  // Simple AI: try to fill lowest rows
   if (Math.random() < 0.3) {
     moveTetrisPiece(bot, 'rotate');
   } else if (Math.random() < 0.5) {

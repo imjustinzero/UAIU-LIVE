@@ -96,8 +96,8 @@ export function updateSnakeGame(state: SnakeGameState): void {
       return;
     }
 
-    // Check self collision
-    if (gameData.snake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+    // Check self collision (skip head at index 0)
+    if (gameData.snake.slice(1).some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
       gameData.alive = false;
       return;
     }
