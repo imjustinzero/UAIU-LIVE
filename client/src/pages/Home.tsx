@@ -39,6 +39,7 @@ export default function Home() {
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingTimer, setMatchmakingTimer] = useState(10);
   const [inGame, setInGame] = useState(false);
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<string>('pong');
   const [availableGames, setAvailableGames] = useState<Game[]>([]);
   const { toast } = useToast();
@@ -101,9 +102,12 @@ export default function Home() {
         console.log('Connected to server');
       });
 
-      newSocket.on('matchFound', () => {
+      newSocket.on('matchFound', (data?: { matchId?: string; gameType?: string }) => {
         setMatchmaking(false);
         setInGame(true);
+        if (data?.matchId) {
+          setCurrentMatchId(data.matchId);
+        }
         toast({
           title: "Match Found!",
           description: "Get ready to play!",
@@ -112,6 +116,7 @@ export default function Home() {
 
       newSocket.on('matchEnded', (result: { winnerId: string; player1Credits: number; player2Credits: number; player1Id: string; player2Id: string }) => {
         setInGame(false);
+        setCurrentMatchId(null);
         const won = result.winnerId === user.id;
         const isPlayer1 = result.player1Id === user.id;
         const newCredits = isPlayer1 ? result.player1Credits : result.player2Credits;
@@ -416,6 +421,8 @@ export default function Home() {
                     <GameCanvas
                       socket={socket}
                       userId={user.id}
+                      matchId={currentMatchId}
+                      gameType={selectedGame}
                       onMatchStart={() => setInGame(true)}
                       onMatchEnd={() => setInGame(false)}
                     />
