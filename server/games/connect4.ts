@@ -7,6 +7,7 @@ export interface Connect4GameState {
   gameType: 'connect4';
   board: number[][];
   currentTurn: string;
+  lastMoveTime?: number;
   player1: {
     id: string;
     name: string;
@@ -34,6 +35,7 @@ export function createConnect4Match(player1Id: string, player2Id: string, player
     gameType: 'connect4',
     board: Array(ROWS).fill(null).map(() => Array(COLS).fill(0)),
     currentTurn: player1Id,
+    lastMoveTime: 0,
     player1: { id: player1Id, name: player1Name, score: 0, gameData: { color: 1 } },
     player2: { id: player2Id, name: player2Name, score: 0, gameData: { color: 2 } },
     status: 'playing',
@@ -41,28 +43,42 @@ export function createConnect4Match(player1Id: string, player2Id: string, player
 }
 
 export function dropPiece(state: Connect4GameState, col: number, playerId: string): boolean {
-  if (state.status !== 'playing' || state.currentTurn !== playerId) return false;
-  if (col < 0 || col >= COLS) return false;
+  console.log(`[Connect4] dropPiece: col=${col}, playerId=${playerId}, currentTurn=${state.currentTurn}`);
+  
+  if (state.status !== 'playing' || state.currentTurn !== playerId) {
+    console.log(`[Connect4] ❌ Invalid move: status=${state.status}, currentTurn=${state.currentTurn}`);
+    return false;
+  }
+  if (col < 0 || col >= COLS) {
+    console.log(`[Connect4] ❌ Invalid column: ${col}`);
+    return false;
+  }
 
   for (let row = ROWS - 1; row >= 0; row--) {
     if (state.board[row][col] === 0) {
       const color = playerId === state.player1.id ? state.player1.gameData.color : state.player2.gameData.color;
       state.board[row][col] = color;
+      state.lastMoveTime = Date.now();
+      console.log(`[Connect4] ✅ Piece dropped at [${row},${col}] color=${color}`);
       
       if (checkWin(state.board, row, col, color)) {
         state.status = 'finished';
         state.winner = playerId;
         const winner = playerId === state.player1.id ? state.player1 : state.player2;
         winner.score = 10;
+        console.log(`[Connect4] 🏆 WINNER! ${playerId} won with 4 in a row!`);
       } else if (isBoardFull(state.board)) {
         state.status = 'finished';
         state.winner = state.player1.id;
+        console.log(`[Connect4] 🤝 Board full! Player1 wins by default`);
       } else {
         state.currentTurn = playerId === state.player1.id ? state.player2.id : state.player1.id;
+        console.log(`[Connect4] ⏭️ Next turn: ${state.currentTurn}`);
       }
       return true;
     }
   }
+  console.log(`[Connect4] ❌ Column ${col} is full`);
   return false;
 }
 

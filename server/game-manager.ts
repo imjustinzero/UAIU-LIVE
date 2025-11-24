@@ -66,7 +66,11 @@ const gameControllers: Record<GameType, GameController> = {
     updateGame: () => {}, // Turn-based, no continuous update
     updateBotAI: (state, botIsPlayer2) => {
       const bot = botIsPlayer2 ? state.player2 : state.player1;
-      if (state.currentTurn === bot.id) {
+      const now = Date.now();
+      const timeSinceLastMove = now - (state.lastMoveTime || 0);
+      
+      // Only make a move if it's bot's turn and at least 1 second has passed since last move
+      if (state.currentTurn === bot.id && timeSinceLastMove > 1000) {
         const col = connect4.getConnect4BotMove(state);
         connect4.dropPiece(state, col, bot.id);
       }
