@@ -15,6 +15,7 @@ export interface QueuedPlayer {
   name: string;
   gameType: GameType;
   betAmount: number;
+  timeLimit: number;
   joinedAt: number;
 }
 
@@ -126,10 +127,11 @@ export class GameManager {
     // Broadcast queue update to all clients
     this.broadcastQueueUpdate(io);
 
-    // Try to match with another player who has the same bet amount
+    // Try to match with another player who has the same bet amount and time limit
     const matchingPlayer = queue.find(p => 
       p.userId !== player.userId && 
-      p.betAmount === player.betAmount
+      p.betAmount === player.betAmount &&
+      p.timeLimit === player.timeLimit
     );
     
     if (matchingPlayer) {
@@ -249,6 +251,8 @@ export class GameManager {
     (match as any).botIsPlayer2 = isBot2;
     (match as any).gameType = gameType;
     (match as any).betAmount = p1.betAmount;
+    (match as any).timeLimit = p1.timeLimit;
+    (match as any).startTime = Date.now();
     (match.player1 as any).socketId = p1.socketId;
     (match.player2 as any).socketId = p2.socketId;
     
@@ -289,6 +293,17 @@ export class GameManager {
 
       if (controller.updateBotAI && (match as any).botIsPlayer2) {
         controller.updateBotAI(match, true);
+      }
+
+      // Check time limit
+      const timeLimit = (match as any).timeLimit || 60;
+      const startTime = (match as any).startTime || Date.now();
+      const elapsed = (Date.now() - startTime) / 1000;
+      
+      if (elapsed >= timeLimit && match.status === 'playing') {
+        match.status = 'finished';
+        // Determine winner by score
+        match.winner = match.player1.score >= match.player2.score ? match.player1.id : match.player2.id;
       }
 
       // Emit state to players via socket IDs

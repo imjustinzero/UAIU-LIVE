@@ -366,7 +366,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     (socket as any).userEmail = session.email;
     console.log('Client connected:', socket.id, 'User:', session.userId, session.email);
 
-    socket.on('joinMatchmaking', async (data: { gameType: GameType; betAmount?: number }) => {
+    socket.on('joinMatchmaking', async (data: { gameType: GameType; betAmount?: number; timeLimit?: number }) => {
       try {
         const userId = (socket as any).userId;
         if (!userId) {
@@ -384,6 +384,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         const betAmount = data.betAmount && data.betAmount >= 1 && data.betAmount <= 100 
           ? Math.floor(data.betAmount) 
           : 1;
+
+        // Validate and default time limit (6-20 seconds)
+        const timeLimit = data.timeLimit && data.timeLimit >= 6 && data.timeLimit <= 20
+          ? Math.floor(data.timeLimit)
+          : 15;
 
         if (user.credits < betAmount) {
           socket.emit('error', { message: `Not enough credits. You need ${betAmount} credits to join.` });
