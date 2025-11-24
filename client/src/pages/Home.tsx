@@ -92,6 +92,8 @@ export default function Home() {
         return;
       }
 
+      console.log('Initializing socket with sessionId:', sessionId);
+      
       const newSocket = io(window.location.origin, {
         auth: { sessionId }
       });
@@ -99,7 +101,15 @@ export default function Home() {
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('Connected to server');
+        console.log('✅ Socket connected successfully!', newSocket.id);
+      });
+      
+      newSocket.on('connect_error', (error) => {
+        console.error('❌ Socket connection error:', error);
+      });
+      
+      newSocket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
       });
 
       newSocket.on('matchFound', (data?: { matchId?: string; gameType?: string }) => {

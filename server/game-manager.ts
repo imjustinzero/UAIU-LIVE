@@ -3,12 +3,13 @@ import { storage } from "./storage";
 import * as pong from "./games/pong";
 import * as snake from "./games/snake";
 import * as tetris from "./games/tetris";
+import * as golf from "./games/golf";
 import * as connect4 from "./games/connect4";
 import * as flappybird from "./games/flappybird";
 import * as breakout from "./games/breakout";
 import * as airhockey from "./games/airhockey";
 
-export type GameType = 'pong' | 'snake' | 'tetris' | 'breakout' | 'flappybird' | 'connect4' | 'airhockey';
+export type GameType = 'pong' | 'snake' | 'tetris' | 'golf' | 'breakout' | 'flappybird' | 'connect4' | 'airhockey';
 
 export interface QueuedPlayer {
   userId: string;
@@ -45,6 +46,12 @@ const gameControllers: Record<GameType, GameController> = {
       const player = state.player1.id === playerId ? state.player1 : state.player2;
       tetris.moveTetrisPiece(player, input.direction);
     },
+  },
+  golf: {
+    createMatch: golf.createGolfMatch,
+    updateGame: golf.updateGolfGame,
+    updateBotAI: golf.updateGolfBotAI,
+    handleInput: golf.handleGolfInput,
   },
   connect4: {
     createMatch: connect4.createConnect4Match,
