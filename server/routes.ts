@@ -6,8 +6,8 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import { sql } from "drizzle-orm";
 import type { GameState } from "@shared/schema";
-import { sendSignupNotification, sendPayoutNotification } from "./email-config";
-import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } from "./email-service";
+import { sendPayoutNotification } from "./email-config";
+import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail, sendSignupNotification } from "./email-service";
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -94,7 +94,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       // Send verification and notification emails
       await Promise.all([
         sendVerificationEmail(email, name, verificationToken),
-        sendSignupNotification(email, name),
+        sendSignupNotification(email, name, new Date()),
       ]);
 
       const sessionId = createSession(user.id, user.email);
