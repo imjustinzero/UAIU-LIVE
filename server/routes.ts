@@ -173,6 +173,8 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
   });
 
   await storage.addActionLog({
+    userId: winnerId,
+    userName: isPlayer1Winner ? player1.name : player2.name,
     type: 'match',
     message: `${isPlayer1Winner ? player1.name : player2.name} defeated ${isPlayer1Winner ? player2.name : player1.name} ${isPlayer1Winner ? match.player1.score : match.player2.score}-${isPlayer1Winner ? match.player2.score : match.player1.score}`,
   });
@@ -235,6 +237,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({ email, name, password: hashedPassword });
 
       await storage.addActionLog({
+        userId: user.id,
+        userName: name,
         type: 'signup',
         message: `${name} joined UAIU Pong!`,
       });
@@ -272,6 +276,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({ message: 'Login failed' });
+    }
+  });
+
+  app.get('/api/auth/me', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.json(user);
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ message: 'Failed to get user' });
     }
   });
 
@@ -323,6 +343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateUserCredits(userId, 0);
 
       await storage.addActionLog({
+        userId: user.id,
+        userName: user.name,
         type: 'payout',
         message: `${user.name} requested payout of ${amount.toFixed(1)} credits via ${paymentMethod}`,
       });

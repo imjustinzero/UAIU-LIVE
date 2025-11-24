@@ -35,8 +35,35 @@ export default function Home() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('pong-user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    const sessionId = localStorage.getItem('pong-session');
+    
+    if (savedUser && sessionId) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      
+      fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${sessionId}`,
+        },
+      })
+        .then(res => {
+          if (!res.ok) {
+            localStorage.removeItem('pong-user');
+            localStorage.removeItem('pong-session');
+            setUser(null);
+            return null;
+          }
+          return res.json();
+        })
+        .then(freshUser => {
+          if (freshUser) {
+            setUser(freshUser);
+            localStorage.setItem('pong-user', JSON.stringify(freshUser));
+          }
+        })
+        .catch(err => {
+          console.error('Failed to refresh user data:', err);
+        });
     }
   }, []);
 

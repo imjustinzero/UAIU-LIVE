@@ -5,9 +5,15 @@ import {
   type InsertMatch,
   type PayoutRequest,
   type InsertPayoutRequest,
-  type ActionLogEntry
+  type ActionLogEntry,
+  type InsertActionLog,
+  users,
+  matches,
+  payoutRequests,
+  actionLog,
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -23,118 +29,76 @@ export interface IStorage {
   createPayoutRequest(request: InsertPayoutRequest): Promise<PayoutRequest>;
   
   getActionLog(limit: number): Promise<ActionLogEntry[]>;
-  addActionLog(entry: Omit<ActionLogEntry, 'id' | 'timestamp'>): Promise<void>;
+  addActionLog(entry: InsertActionLog): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private matches: Map<string, Match>;
-  private payoutRequests: Map<string, PayoutRequest>;
-  private actionLog: ActionLogEntry[];
-
-  constructor() {
-    this.users = new Map();
-    this.matches = new Map();
-    this.payoutRequests = new Map();
-    this.actionLog = [];
-  }
-
+export class DbStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email,
-    );
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const now = new Date();
-    const user: User = {
-      ...insertUser,
-      id,
-      credits: 10,
-      matchesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      totalEarnings: 0,
-      createdAt: now,
-    };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async updateUserCredits(userId: string, credits: number): Promise<void> {
-    const user = this.users.get(userId);
-    if (user) {
-      user.credits = credits;
-    }
+    await db.update(users)
+      .set({ credits })
+      .where(eq(users.id, userId));
   }
 
-  async updateUserStats(userId: string, stats: { wins?: number; losses?: number; matchesPlayed?: number; totalEarnings?: number }): Promise<void> {
-    const user = this.users.get(userId);
-    if (user) {
-      if (stats.wins !== undefined) user.wins = stats.wins;
-      if (stats.losses !== undefined) user.losses = stats.losses;
-      if (stats.matchesPlayed !== undefined) user.matchesPlayed = stats.matchesPlayed;
-      if (stats.totalEarnings !== undefined) user.totalEarnings = stats.totalEarnings;
-    }
+  async updateUserStats(userId: string, stats: { 
+    wins?: number; 
+    losses?: number; 
+    matchesPlayed?: number; 
+    totalEarnings?: number 
+  }): Promise<void> {
+    await db.update(users)
+      .set(stats)
+      .where(eq(users.id, userId));
   }
 
   async getLeaderboard(limit: number): Promise<User[]> {
-    return Array.from(this.users.values())
-      .sort((a, b) => b.credits - a.credits)
-      .slice(0, limit);
+    return await db.select()
+      .from(users)
+      .orderBy(desc(users.credits))
+      .limit(limit);
   }
 
   async createMatch(insertMatch: InsertMatch): Promise<Match> {
-    const id = randomUUID();
-    const match: Match = {
-      ...insertMatch,
-      id,
-      timestamp: new Date(),
-    };
-    this.matches.set(id, match);
+    const [match] = await db.insert(matches).values(insertMatch).returning();
     return match;
   }
 
   async getRecentMatches(limit: number): Promise<Match[]> {
-    return Array.from(this.matches.values())
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, limit);
+    return await db.select()
+      .from(matches)
+      .orderBy(desc(matches.timestamp))
+      .limit(limit);
   }
 
   async createPayoutRequest(insertRequest: InsertPayoutRequest): Promise<PayoutRequest> {
-    const id = randomUUID();
-    const request: PayoutRequest = {
-      ...insertRequest,
-      id,
-      processed: false,
-      timestamp: new Date(),
-    };
-    this.payoutRequests.set(id, request);
+    const [request] = await db.insert(payoutRequests).values(insertRequest).returning();
     return request;
   }
 
   async getActionLog(limit: number): Promise<ActionLogEntry[]> {
-    return this.actionLog
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit);
+    return await db.select()
+      .from(actionLog)
+      .orderBy(desc(actionLog.timestamp))
+      .limit(limit);
   }
 
-  async addActionLog(entry: Omit<ActionLogEntry, 'id' | 'timestamp'>): Promise<void> {
-    this.actionLog.push({
-      ...entry,
-      id: randomUUID(),
-      timestamp: Date.now(),
-    });
-    
-    if (this.actionLog.length > 100) {
-      this.actionLog = this.actionLog.slice(0, 100);
-    }
+  async addActionLog(entry: InsertActionLog): Promise<void> {
+    await db.insert(actionLog).values(entry);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();
