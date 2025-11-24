@@ -28,9 +28,7 @@ const GAME_NAMES: Record<string, string> = {
 };
 
 export function MatchmakingLobby({ queuedPlayers, currentUserId, onJoinMatch, userCredits }: MatchmakingLobbyProps) {
-  const availablePlayers = queuedPlayers.filter(p => p.userId !== currentUserId);
-
-  if (availablePlayers.length === 0) {
+  if (queuedPlayers.length === 0) {
     return (
       <Card className="p-6">
         <div className="text-center space-y-3">
@@ -51,50 +49,64 @@ export function MatchmakingLobby({ queuedPlayers, currentUserId, onJoinMatch, us
           <Users className="w-5 h-5 text-primary" />
           <h3 className="text-lg font-semibold">Live Match Requests</h3>
           <Badge variant="secondary" className="ml-auto">
-            {availablePlayers.length}
+            {queuedPlayers.length}
           </Badge>
         </div>
 
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
-          {availablePlayers.map((player) => (
-            <Card
-              key={player.userId}
-              className="p-4 hover-elevate"
-              data-testid={`match-request-${player.userId}`}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Gamepad2 className="w-4 h-4 text-primary flex-shrink-0" />
-                    <span className="font-semibold truncate">{player.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-xs">
-                      {GAME_NAMES[player.gameType] || player.gameType}
-                    </Badge>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Gem className="w-3 h-3" />
-                      <span>{player.betAmount} credits</span>
+          {queuedPlayers.map((player) => {
+            const isOwnRequest = player.userId === currentUserId;
+            return (
+              <Card
+                key={player.userId}
+                className={`p-4 ${isOwnRequest ? 'border-primary border-2' : 'hover-elevate'}`}
+                data-testid={`match-request-${player.userId}`}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Gamepad2 className="w-4 h-4 text-primary flex-shrink-0" />
+                      <span className="font-semibold truncate">{player.name}</span>
+                      {isOwnRequest && (
+                        <Badge variant="default" className="text-xs">
+                          Your Request
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs">
+                        {GAME_NAMES[player.gameType] || player.gameType}
+                      </Badge>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Gem className="w-3 h-3" />
+                        <span>{player.betAmount} credits</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <Button
-                  onClick={() => onJoinMatch(player.userId)}
-                  size="sm"
-                  disabled={userCredits < player.betAmount}
-                  data-testid={`button-join-${player.userId}`}
-                >
-                  Join
-                </Button>
-              </div>
-              {userCredits < player.betAmount && (
-                <p className="text-xs text-destructive mt-2">
-                  Need {player.betAmount} credits
-                </p>
-              )}
-            </Card>
-          ))}
+                  {isOwnRequest ? (
+                    <Badge variant="secondary" className="whitespace-nowrap">
+                      Waiting...
+                    </Badge>
+                  ) : (
+                    <Button
+                      onClick={() => onJoinMatch(player.userId)}
+                      size="sm"
+                      disabled={userCredits < player.betAmount}
+                      data-testid={`button-join-${player.userId}`}
+                    >
+                      Join
+                    </Button>
+                  )}
+                </div>
+                {!isOwnRequest && userCredits < player.betAmount && (
+                  <p className="text-xs text-destructive mt-2">
+                    Need {player.betAmount} credits
+                  </p>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </div>
     </Card>
