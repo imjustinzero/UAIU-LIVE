@@ -196,12 +196,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.get('/api/games', async (req, res) => {
     try {
-      // Only show Pong, Tetris, Snake, and Breakout (4 games)
       const games = [
         { id: 'pong', name: 'Pong', description: 'Classic paddle battle', players: '1v1', difficulty: 'Easy' },
         { id: 'tetris', name: 'Tetris', description: 'Battle mode competition', players: '1v1', difficulty: 'Hard' },
         { id: 'snake', name: 'Snake', description: 'Multiplayer survival race', players: '1v1', difficulty: 'Medium' },
         { id: 'breakout', name: 'Breakout', description: 'Brick breaking duel', players: '1v1', difficulty: 'Medium' },
+        { id: 'flappybird', name: 'Flappy Bird', description: 'Survival race challenge', players: '1v1', difficulty: 'Hard' },
+        { id: 'connect4', name: 'Connect 4', description: 'Strategic drop game', players: '1v1', difficulty: 'Easy' },
       ];
       res.json(games);
     } catch (error) {
