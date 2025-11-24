@@ -11,7 +11,6 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { ActionLog } from "@/components/ActionLog";
 import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
-import { RadioPlayer } from "@/components/RadioPlayer";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
 import logoImg from "@assets/IMG_2786_1763969320612.jpeg";
 
@@ -564,9 +563,6 @@ export default function Home() {
           onPayoutSuccess={handlePayoutSuccess}
         />
       )}
-
-
-      <RadioPlayer />
     </div>
   );
 }

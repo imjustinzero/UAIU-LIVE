@@ -1,7 +1,7 @@
 # UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. The platform features an integrated HTML5 radio player streaming 360 Radio. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
+UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
 
 ## Available Games
 1. **Pong**: Classic vertical paddle game with real-time physics
@@ -17,7 +17,7 @@ I prefer simple language and detailed explanations. I want iterative development
 ## System Architecture
 
 ### UI/UX Decisions
-The frontend is built with React and TypeScript, styled using Tailwind CSS with a custom vibrant gaming color scheme (emerald green primary, cyan accent). It features responsive design for mobile and desktop, high-contrast elements, and clear typography. Key UI components include `GameCanvas`, `AuthModal`, `Leaderboard`, `ActionLog`, `PayoutModal`, and `RadioPlayer`. The radio player uses a native HTML5 audio element streaming from `https://ssl.sonicpanel.com/8172/stream` with play/pause controls positioned at the top-right of the screen.
+The frontend is built with React and TypeScript, styled using Tailwind CSS with a custom vibrant gaming color scheme (emerald green primary, cyan accent). It features responsive design for mobile and desktop, high-contrast elements, and clear typography. Key UI components include `GameCanvas`, `AuthModal`, `Leaderboard`, `ActionLog`, and `PayoutModal`.
 
 ### Technical Implementations
 - **Frontend**: React + TypeScript with Vite, Tailwind CSS, Socket.IO Client, TanStack Query, Shadcn UI Components.
@@ -62,4 +62,3 @@ The Snake bot AI has been carefully balanced to provide challenging but beatable
 - **Bcrypt**: For secure password hashing.
 - **TanStack Query**: For API data fetching and caching on the client-side.
 - **Shadcn UI**: For UI components.
-- **360 Radio**: HTML5 audio stream from `https://ssl.sonicpanel.com/8172/stream`.
