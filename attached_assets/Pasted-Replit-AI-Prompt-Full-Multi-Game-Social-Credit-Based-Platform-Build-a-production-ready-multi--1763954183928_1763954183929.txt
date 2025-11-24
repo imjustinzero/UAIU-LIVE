@@ -1,0 +1,109 @@
+Replit AI Prompt — Full Multi-Game, Social, Credit-Based Platform
+
+
+Build a production-ready, multi-game arcade platform using Node.js + Express + Socket.IO for backend and HTML/CSS/JS for frontend. The platform must be fully mobile-optimized, responsive, and embeddable in a website via iframe. Include server-side game logic for fair play.
+
+
+Core Features
+
+
+1️⃣ Account & User System
+
+* Users must create an account with email and name; email is required to log in.
+* Notify uaiulive@gmail.com on new signup (include email and timestamp).
+* Store credits, matches played, wins/losses, total earnings, and subscription status.
+* Email verification for account credibility.
+
+
+2️⃣ Credits & Payments
+
+* Users can purchase credits via Stripe: one-time payments (e.g., $1 → 10 credits) or subscription (monthly for bonus credits).
+* Credits cannot be manually added; only via verified Stripe payments.
+* Display real-time credit balance on the frontend.
+* Implement a credit burn system: 1 credit per match, winner gets 1.6 credits, loser loses 1, 0.4 credits burned.
+
+
+3️⃣ Monthly Subscription / VIP Membership
+
+* Optional recurring monthly subscription for bonus credits, exclusive cosmetic items, or priority matchmaking.
+* Display subscription status in user profile.
+* Integrate Stripe subscription payments alongside one-time purchases.
+
+
+4️⃣ Multiplayer Matchmaking & Gameplay
+
+* Multiplayer, 1v1 real-time games with server-side physics: Pong, Snake, Tetris, Breakout, Flappy Bird, Connect 4, Air Hockey.
+* Users press Play → credit deducted → added to matchmaking queue.
+* Multiple simultaneous matches supported.
+* Optional AI fallback opponent if no human is available.
+* Mobile-friendly touch controls and keyboard support.
+* Switch games seamlessly without losing credits or stats.
+
+
+5️⃣ Social & Community Features
+
+* Player profiles with stats, badges, and achievements.
+* Friends / challenge system for inviting or playing friends.
+* Leaderboards: daily, weekly, all-time.
+* Light chat or emoji reactions in lobbies or matches.
+* Share buttons for social media.
+
+
+6️⃣ Retention & Engagement
+
+* Daily login bonuses.
+* Mini-missions or challenges (e.g., “win 3 matches today”).
+* Seasonal or monthly tournaments.
+* Achievements for milestones, streaks, or skill-based accomplishments.
+* Real-time notifications for wins, new matches, and leaderboard changes.
+
+
+7️⃣ UX / Frontend
+
+* Mobile-first, fully responsive, high-contrast visuals.
+* Glowing buttons, smooth animations.
+* Game canvas optimized for vertical or horizontal gameplay depending on game
+* Live stats: players online, active matches, top scorers.
+
+
+8️⃣ Security & Fair Play
+
+* Server-side game logic to prevent cheating.
+* Matchmaking based on skill or random pairing.
+* Track match history, credit transactions, and payout requests.
+* Prevent duplicate payouts and exploit attempts.
+
+
+9️⃣ Backend / Technical
+
+* Node.js + Express + Socket.IO handles match state, physics, credits, matchmaking, subscription logic, and real-time updates.
+* Persistent storage via database (MongoDB or Firebase) for accounts, credits, match history, and subscriptions.
+* Admin logging for credit purchases, match outcomes, payouts, and new signups.
+* Support multiple simultaneous matches with low latency.
+
+
+10️⃣ Deployment & Embedding
+
+* Frontend fully HTML/JS/CSS, backend Node.js + Socket.IO.
+* Deployable on Replit, Render, or any Node.js hosting.
+* Fully embeddable via iframe on other sites.
+
+
+Bonus / Extra Features (Optional but Recommended)
+
+* Cosmetic items for paddles, snakes, balls, etc.
+* Seasonal / event-specific games.
+* Persistent achievements and badges across all games.
+* Referral program to encourage growth.
+* Real-time notifications and alerts for events, wins, or new matches.
+
+
+* Complete, copy-paste-ready project: 
+    * server.js (backend)
+    * public/index.html (frontend)
+    * public/client.js (frontend JS with Socket.IO and game logic)
+    * public/style.css (visuals)
+* 
+* Include all logic for credits, subscriptions, matchmaking, leaderboard, multiple games, AI fallback, mobile controls, and social features.
+* Mobile-friendly, visually polished, and production-ready.
+
