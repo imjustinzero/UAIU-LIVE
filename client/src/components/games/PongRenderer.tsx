@@ -33,6 +33,7 @@ interface PongGameState {
 interface PongRendererProps {
   gameState: PongGameState | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
+  userId: string | null;
 }
 
 const CANVAS_WIDTH = 600;
@@ -41,7 +42,7 @@ const PADDLE_WIDTH = 100;
 const PADDLE_HEIGHT = 15;
 const BALL_SIZE = 12;
 
-export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
+export function PongRenderer({ gameState, canvasRef, userId }: PongRendererProps) {
   const animationFrameRef = useRef<number>();
 
   useEffect(() => {
@@ -81,22 +82,29 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      const player1Y = CANVAS_HEIGHT - 40;
-      const player2Y = 40;
+      const isPlayer1 = gameState.player1.id === userId;
+      const player = isPlayer1 ? gameState.player1 : gameState.player2;
+      const opponent = isPlayer1 ? gameState.player2 : gameState.player1;
+
+      const myPaddleY = CANVAS_HEIGHT - 40;
+      const opponentPaddleY = 40;
       
-      drawPaddle(gameState.player1.gameData.paddleX, player1Y, true);
-      drawPaddle(gameState.player2.gameData.paddleX, player2Y, false);
+      drawPaddle(player.gameData.paddleX, myPaddleY, true);
+      drawPaddle(opponent.gameData.paddleX, opponentPaddleY, false);
+
+      const ballX = isPlayer1 ? gameState.ball.x : CANVAS_WIDTH - gameState.ball.x;
+      const ballY = isPlayer1 ? gameState.ball.y : CANVAS_HEIGHT - gameState.ball.y;
 
       const ballGradient = ctx.createRadialGradient(
-        gameState.ball.x, gameState.ball.y, 0,
-        gameState.ball.x, gameState.ball.y, BALL_SIZE
+        ballX, ballY, 0,
+        ballX, ballY, BALL_SIZE
       );
       ballGradient.addColorStop(0, '#fff');
       ballGradient.addColorStop(0.4, '#00ff41');
       ballGradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
       ctx.fillStyle = ballGradient;
       ctx.beginPath();
-      ctx.arc(gameState.ball.x, gameState.ball.y, BALL_SIZE, 0, Math.PI * 2);
+      ctx.arc(ballX, ballY, BALL_SIZE, 0, Math.PI * 2);
       ctx.fill();
       
       ctx.shadowBlur = 20;
@@ -107,17 +115,17 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
       ctx.fillStyle = '#00ff41';
       ctx.font = 'bold 48px JetBrains Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(gameState.player1.score.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 100);
+      ctx.fillText(player.score.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 100);
       
       ctx.fillStyle = '#00f0ff';
-      ctx.fillText(gameState.player2.score.toString(), CANVAS_WIDTH / 2, 100);
+      ctx.fillText(opponent.score.toString(), CANVAS_WIDTH / 2, 100);
 
       ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.font = '14px Inter, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(gameState.player1.name, 20, CANVAS_HEIGHT - 20);
+      ctx.fillText(player.name, 20, CANVAS_HEIGHT - 20);
       ctx.textAlign = 'right';
-      ctx.fillText(gameState.player2.name, CANVAS_WIDTH - 20, 30);
+      ctx.fillText(opponent.name, CANVAS_WIDTH - 20, 30);
 
       animationFrameRef.current = requestAnimationFrame(render);
     };
@@ -129,7 +137,7 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameState, canvasRef]);
+  }, [gameState, canvasRef, userId]);
 
   return null;
 }

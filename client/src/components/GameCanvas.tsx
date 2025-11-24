@@ -455,7 +455,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           className="border-2 border-primary rounded-lg shadow-[0_0_30px_rgba(0,255,65,0.3)] max-w-full h-auto"
           style={{ aspectRatio: `${config.width}/${config.height}` }}
         />
-        {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} />}
+        {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} userId={userId} />}
         {gameType === 'snake' && <SnakeRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'tetris' && <TetrisRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'breakout' && <BreakoutRenderer gameState={gameState} canvasRef={canvasRef} userId={userId} />}
