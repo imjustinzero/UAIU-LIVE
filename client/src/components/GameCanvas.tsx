@@ -14,11 +14,14 @@ export function GameCanvas({ socket, userId, onMatchStart, onMatchEnd }: GameCan
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+  const gameStateRef = useRef<GameState | null>(null);
+  const animationFrameRef = useRef<number>();
 
   useEffect(() => {
     if (!socket) return;
 
     socket.on('gameState', (state: GameState) => {
+      gameStateRef.current = state;
       setGameState(state);
       if (state.status === 'playing' && onMatchStart) {
         onMatchStart();
@@ -35,9 +38,9 @@ export function GameCanvas({ socket, userId, onMatchStart, onMatchEnd }: GameCan
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !gameState) return;
+    if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
     const CANVAS_WIDTH = 600;
@@ -45,18 +48,6 @@ export function GameCanvas({ socket, userId, onMatchStart, onMatchEnd }: GameCan
     const PADDLE_WIDTH = 100;
     const PADDLE_HEIGHT = 15;
     const BALL_SIZE = 12;
-
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    ctx.strokeStyle = '#00ff41';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    ctx.moveTo(0, CANVAS_HEIGHT / 2);
-    ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
 
     const drawPaddle = (x: number, y: number, isPlayer: boolean) => {
       const gradient = ctx.createLinearGradient(x, y, x + PADDLE_WIDTH, y + PADDLE_HEIGHT);
@@ -70,40 +61,74 @@ export function GameCanvas({ socket, userId, onMatchStart, onMatchEnd }: GameCan
       ctx.strokeRect(x, y, PADDLE_WIDTH, PADDLE_HEIGHT);
     };
 
-    const player1Y = CANVAS_HEIGHT - 40;
-    const player2Y = 40;
-    
-    drawPaddle(gameState.player1.y, player1Y, true);
-    drawPaddle(gameState.player2.y, player2Y, false);
+    const render = () => {
+      const state = gameStateRef.current;
+      if (!state) {
+        animationFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
 
-    const gradient = ctx.createRadialGradient(
-      gameState.ball.x, gameState.ball.y, 0,
-      gameState.ball.x, gameState.ball.y, BALL_SIZE
-    );
-    gradient.addColorStop(0, '#fff');
-    gradient.addColorStop(0.5, '#00ff41');
-    gradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(gameState.ball.x, gameState.ball.y, BALL_SIZE, 0, Math.PI * 2);
-    ctx.fill();
+      // Clear and draw background
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    ctx.fillStyle = '#00ff41';
-    ctx.font = 'bold 48px JetBrains Mono, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(gameState.player1.score.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 100);
-    
-    ctx.fillStyle = '#00f0ff';
-    ctx.fillText(gameState.player2.score.toString(), CANVAS_WIDTH / 2, 100);
+      // Draw center line
+      ctx.strokeStyle = '#00ff41';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(0, CANVAS_HEIGHT / 2);
+      ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.font = '14px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(gameState.player1.name, 20, CANVAS_HEIGHT - 20);
-    ctx.textAlign = 'right';
-    ctx.fillText(gameState.player2.name, CANVAS_WIDTH - 20, 30);
+      const player1Y = CANVAS_HEIGHT - 40;
+      const player2Y = 40;
+      
+      drawPaddle(state.player1.y, player1Y, true);
+      drawPaddle(state.player2.y, player2Y, false);
 
-  }, [gameState]);
+      // Draw ball
+      const gradient = ctx.createRadialGradient(
+        state.ball.x, state.ball.y, 0,
+        state.ball.x, state.ball.y, BALL_SIZE
+      );
+      gradient.addColorStop(0, '#fff');
+      gradient.addColorStop(0.5, '#00ff41');
+      gradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(state.ball.x, state.ball.y, BALL_SIZE, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw scores
+      ctx.fillStyle = '#00ff41';
+      ctx.font = 'bold 48px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(state.player1.score.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 100);
+      
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillText(state.player2.score.toString(), CANVAS_WIDTH / 2, 100);
+
+      // Draw player names
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(state.player1.name, 20, CANVAS_HEIGHT - 20);
+      ctx.textAlign = 'right';
+      ctx.fillText(state.player2.name, CANVAS_WIDTH - 20, 30);
+
+      animationFrameRef.current = requestAnimationFrame(render);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(render);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const handlePaddleMove = (direction: 'left' | 'right', action: 'press' | 'release') => {
     if (!socket || !userId) return;

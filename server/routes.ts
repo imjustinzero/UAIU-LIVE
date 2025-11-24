@@ -102,9 +102,15 @@ function updateGamePhysics(match: Match, io: SocketIOServer): void {
     const paddleCenter = match.player2.paddleX + PADDLE_WIDTH / 2;
     let hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
     
-    // If bot will win, give it better angles
-    if (isBot2 && botWillWin) {
-      hitPosition *= 1.3; // Increase angle variation for bot
+    // Track hits for bot difficulty progression
+    if (isBot2) {
+      (match as any).totalHits = ((match as any).totalHits || 0) + 1;
+      
+      // After warmup period, if bot will win, give it better angles
+      const totalHits = (match as any).totalHits;
+      if (botWillWin && totalHits > 6) {
+        hitPosition *= 1.3; // Increase angle variation for bot
+      }
     }
     
     match.ball.vx = hitPosition * BALL_SPEED * 1.5;
@@ -118,10 +124,15 @@ function updateGamePhysics(match: Match, io: SocketIOServer): void {
     const paddleCenter = match.player1.paddleX + PADDLE_WIDTH / 2;
     let hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
     
-    // If bot will win and this is player 1's paddle, make it harder
-    if (isBot2 && botWillWin) {
-      // Reduce control for player when bot is supposed to win
-      hitPosition *= 0.7;
+    // Track hits for bot difficulty progression
+    if (isBot2) {
+      (match as any).totalHits = ((match as any).totalHits || 0) + 1;
+      
+      // After warmup, if bot will win, make it harder for player
+      const totalHits = (match as any).totalHits;
+      if (botWillWin && totalHits > 6) {
+        hitPosition *= 0.7; // Reduce control for player
+      }
     }
     
     match.ball.vx = hitPosition * BALL_SPEED * 1.5;
@@ -262,6 +273,7 @@ function startMatch(player1: { userId: string; socketId: string; name: string },
   const botWillWin = isBot2 && Math.random() < BOT_WIN_RATE;
   (match as any).botWillWin = botWillWin;
   (match as any).botIsPlayer2 = isBot2;
+  (match as any).totalHits = 0; // Track total hits for gradual difficulty increase
   
   activeMatches.set(match.id, match);
   playerToMatchMap.set(player1.userId, match.id);
@@ -304,16 +316,32 @@ function startMatch(player1: { userId: string; socketId: string; name: string },
 // Bot paddle AI - tracks ball with some intelligence
 function updateBotPaddle(match: Match): void {
   const botWillWin = (match as any).botWillWin;
+  const totalHits = (match as any).totalHits || 0;
   const targetX = match.ball.x;
   const currentX = match.player2.paddleX + PADDLE_WIDTH / 2;
   const diff = targetX - currentX;
   
-  // Bot skill level: if bot will win, track perfectly; otherwise, introduce errors
-  const skill = botWillWin ? 1.0 : 0.6;
+  // Gradual difficulty: Give player 5-8 hits before bot gets harder
+  const warmupHits = 6;
+  const isWarmup = totalHits < warmupHits;
+  
+  let skill: number;
+  if (isWarmup) {
+    // During warmup, bot plays at low skill regardless
+    skill = 0.4;
+  } else if (botWillWin) {
+    // After warmup, bot increases skill if it should win
+    const progressionHits = Math.min(totalHits - warmupHits, 10);
+    skill = 0.7 + (progressionHits * 0.03); // Gradually increase from 0.7 to 1.0
+  } else {
+    // Bot that should lose stays mediocre
+    skill = 0.5;
+  }
+  
   const moveSpeed = PADDLE_SPEED * skill;
   
   // Add randomness for realism
-  const randomOffset = (Math.random() - 0.5) * 20 * (1 - skill);
+  const randomOffset = (Math.random() - 0.5) * 30 * (1 - skill);
   const adjustedDiff = diff + randomOffset;
   
   if (Math.abs(adjustedDiff) > 5) {
