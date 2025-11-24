@@ -14,6 +14,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { RadioPlayer } from "@/components/RadioPlayer";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
 import { CreditPurchaseModal } from "@/components/CreditPurchaseModal";
+import logoImg from "@assets/IMG_2786_1763969320612.jpeg";
 
 interface User {
   id: string;
@@ -280,7 +281,7 @@ export default function Home() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <img 
-                src="/attached_assets/IMG_2786_1763969320612.jpeg" 
+                src={logoImg} 
                 alt="UAU - Universal AI Unlimited" 
                 className="h-12 md:h-16 w-auto"
               />
