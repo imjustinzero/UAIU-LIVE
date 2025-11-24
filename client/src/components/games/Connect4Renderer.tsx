@@ -93,10 +93,24 @@ export function Connect4Renderer({ gameState, canvasRef }: Connect4RendererProps
       }
 
       const isPlayer1Turn = gameState.currentTurn === gameState.player1.id;
+      
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
+      
       ctx.fillStyle = isPlayer1Turn ? '#00ff41' : '#00f0ff';
-      ctx.font = 'bold 20px JetBrains Mono, monospace';
+      ctx.font = 'bold 24px JetBrains Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(isPlayer1Turn ? `${gameState.player1.name}'s Turn` : `${gameState.player2.name}'s Turn`, CANVAS_WIDTH / 2, 25);
+      ctx.fillText(isPlayer1Turn ? `${gameState.player1.name}'s Turn` : `${gameState.player2.name}'s Turn`, CANVAS_WIDTH / 2, 32);
+      
+      if (gameState.status === 'finished' && gameState.winner) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, CANVAS_HEIGHT / 2 - 40, CANVAS_WIDTH, 80);
+        
+        const winnerName = gameState.winner === gameState.player1.id ? gameState.player1.name : gameState.player2.name;
+        ctx.fillStyle = gameState.winner === gameState.player1.id ? '#00ff41' : '#00f0ff';
+        ctx.font = 'bold 36px JetBrains Mono, monospace';
+        ctx.fillText(`${winnerName} WINS!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      }
 
       ctx.fillStyle = '#00ff41';
       ctx.font = '14px Inter, sans-serif';

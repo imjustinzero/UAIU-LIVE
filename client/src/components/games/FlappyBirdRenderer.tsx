@@ -93,20 +93,24 @@ export function FlappyBirdRenderer({ gameState, canvasRef }: FlappyBirdRendererP
       drawBird(gameState.player1.gameData.y, gameState.player1.gameData.alive, '#00ff41', 50);
       drawBird(gameState.player2.gameData.y, gameState.player2.gameData.alive, '#00f0ff', 100);
 
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, 10, 180, 70);
+      ctx.fillRect(CANVAS_WIDTH - 190, 10, 180, 70);
+
       ctx.fillStyle = '#00ff41';
+      ctx.font = 'bold 24px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(gameState.player1.name, 20, 35);
       ctx.font = 'bold 32px JetBrains Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(gameState.player1.score.toString(), CANVAS_WIDTH / 2 - 50, 50);
+      ctx.fillText(gameState.player1.score.toString(), 20, 70);
       
       ctx.fillStyle = '#00f0ff';
-      ctx.fillText(gameState.player2.score.toString(), CANVAS_WIDTH / 2 + 50, 50);
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.font = '12px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(gameState.player1.name, 10, CANVAS_HEIGHT - 10);
       ctx.textAlign = 'right';
-      ctx.fillText(gameState.player2.name, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
+      ctx.font = 'bold 24px JetBrains Mono, monospace';
+      ctx.fillText(gameState.player2.name, CANVAS_WIDTH - 20, 35);
+      ctx.font = 'bold 32px JetBrains Mono, monospace';
+      ctx.fillText(gameState.player2.score.toString(), CANVAS_WIDTH - 20, 70);
+
 
       animationFrameRef.current = requestAnimationFrame(render);
     };

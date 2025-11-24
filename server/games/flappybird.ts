@@ -26,12 +26,13 @@ export interface FlappyBirdGameState {
   winner?: string;
 }
 
-const GRAVITY = 0.5;
-const JUMP_STRENGTH = -10;
+const GRAVITY = 0.6;
+const JUMP_STRENGTH = -11;
 const PIPE_WIDTH = 60;
-const PIPE_GAP = 150;
-const PIPE_SPEED = 3;
+const PIPE_GAP = 160;
+const PIPE_SPEED = 4;
 const CANVAS_HEIGHT = 600;
+const BIRD_SIZE = 30;
 
 export function createFlappyBirdMatch(player1Id: string, player2Id: string, player1Name: string, player2Name: string): FlappyBirdGameState {
   return {
@@ -58,9 +59,9 @@ export function createFlappyBirdMatch(player1Id: string, player2Id: string, play
       },
     },
     pipes: [
-      { x: 400, gap: 200, passed: false },
-      { x: 650, gap: 250, passed: false },
-      { x: 900, gap: 180, passed: false },
+      { x: 350, gap: 220, passed: false },
+      { x: 570, gap: 270, passed: false },
+      { x: 790, gap: 200, passed: false },
     ],
     status: 'playing',
   };
@@ -76,15 +77,15 @@ export function updateFlappyBirdGame(state: FlappyBirdGameState): void {
     gameData.velocity += GRAVITY;
     gameData.y += gameData.velocity;
 
-    if (gameData.y < 0 || gameData.y > CANVAS_HEIGHT - 30) {
+    if (gameData.y < 0 || gameData.y > CANVAS_HEIGHT - BIRD_SIZE) {
       gameData.alive = false;
       return;
     }
 
     state.pipes.forEach(pipe => {
-      const birdX = 50;
-      if (birdX + 30 > pipe.x && birdX < pipe.x + PIPE_WIDTH) {
-        if (gameData.y < pipe.gap - PIPE_GAP / 2 || gameData.y + 30 > pipe.gap + PIPE_GAP / 2) {
+      const birdX = player === state.player1 ? 50 : 100;
+      if (birdX + BIRD_SIZE > pipe.x && birdX < pipe.x + PIPE_WIDTH) {
+        if (gameData.y < pipe.gap - PIPE_GAP / 2 || gameData.y + BIRD_SIZE > pipe.gap + PIPE_GAP / 2) {
           gameData.alive = false;
         }
       }
@@ -94,17 +95,17 @@ export function updateFlappyBirdGame(state: FlappyBirdGameState): void {
   state.pipes.forEach(pipe => {
     pipe.x -= PIPE_SPEED;
 
-    if (!pipe.passed && pipe.x + PIPE_WIDTH < 50) {
+    if (!pipe.passed && pipe.x + PIPE_WIDTH < 100) {
       pipe.passed = true;
-      if (state.player1.gameData.alive) state.player1.score++;
-      if (state.player2.gameData.alive) state.player2.score++;
+      if (state.player1.gameData.alive) state.player1.score += 10;
+      if (state.player2.gameData.alive) state.player2.score += 10;
     }
   });
 
-  if (state.pipes[state.pipes.length - 1].x < 600) {
+  if (state.pipes[state.pipes.length - 1].x < 550) {
     state.pipes.push({
-      x: state.pipes[state.pipes.length - 1].x + 250,
-      gap: 150 + Math.random() * 150,
+      x: state.pipes[state.pipes.length - 1].x + 220,
+      gap: 180 + Math.random() * 120,
       passed: false,
     });
   }
@@ -134,8 +135,13 @@ export function updateFlappyBirdBotAI(state: FlappyBirdGameState, botIsPlayer2: 
   const gameData = bot.gameData;
   if (!gameData.alive) return;
 
-  const nextPipe = state.pipes.find(pipe => pipe.x > 50);
-  if (nextPipe && gameData.y > nextPipe.gap - 50) {
-    flappyBirdJump(bot);
+  const birdX = botIsPlayer2 ? 100 : 50;
+  const nextPipe = state.pipes.find(pipe => pipe.x + PIPE_WIDTH > birdX);
+  
+  if (nextPipe) {
+    const targetY = nextPipe.gap;
+    if (gameData.y > targetY - 20) {
+      flappyBirdJump(bot);
+    }
   }
 }
