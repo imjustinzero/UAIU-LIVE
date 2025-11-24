@@ -15,6 +15,8 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 24, 2025)
+- **Email System Fixed**: Resend integration configured with fallback to default domain when custom domain unavailable
+- **Resend Limitation**: Account currently in test mode - verification emails only deliver to uaiulive@gmail.com until domain verified
 - **Profile System**: Users now have profile pages with editable information, stats display, and email verification
 - **Email Verification Required**: New users start with 0 credits and must verify email to receive their first free credit
 - **Profile Features**: View/edit name, resend verification emails, detailed statistics (win rate, earnings, matches)
@@ -68,6 +70,7 @@ The Snake bot AI has been carefully balanced to provide challenging but beatable
 
 ## External Dependencies
 - **Stripe**: For credit purchases and webhook-based automatic credit fulfillment.
+- **Resend**: For transactional emails (verification, welcome, admin notifications). Currently configured with fallback sender (onboarding@resend.dev). Account in test mode - only sends to uaiulive@gmail.com until domain verified at https://resend.com/domains.
 - **Socket.IO**: For real-time bidirectional communication between client and server.
 - **PostgreSQL**: Relational database for persistent storage, managed with Drizzle ORM.
 - **Bcrypt**: For secure password hashing.

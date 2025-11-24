@@ -6,8 +6,12 @@ export async function sendVerificationEmail(email: string, name: string, token: 
     const { client, fromEmail } = await getUncachableResendClient();
     const verificationUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/verify-email?token=${token}`;
     
-    await client.emails.send({
-      from: fromEmail,
+    // Use Resend's default domain if custom domain isn't verified
+    const sender = fromEmail.includes('gmail.com') ? 'UAIU Arcade <onboarding@resend.dev>' : fromEmail;
+    console.log(`📧 Verification sender: ${sender} (config: ${fromEmail})`);
+    
+    const result = await client.emails.send({
+      from: sender,
       to: email,
       subject: 'Verify Your UAIU Pong Account',
       html: `
@@ -42,7 +46,7 @@ export async function sendVerificationEmail(email: string, name: string, token: 
       `,
     });
     
-    console.log(`✅ Verification email sent to ${email}`);
+    console.log(`✅ Verification email sent to ${email}`, result);
   } catch (error) {
     console.error('❌ Failed to send verification email:', error);
     throw error;
@@ -53,8 +57,11 @@ export async function sendSignupNotification(email: string, name: string, timest
   try {
     const { client, fromEmail } = await getUncachableResendClient();
     
-    await client.emails.send({
-      from: fromEmail,
+    // Use Resend's default domain if custom domain isn't verified
+    const sender = fromEmail.includes('gmail.com') ? 'UAIU Arcade <onboarding@resend.dev>' : fromEmail;
+    
+    const result = await client.emails.send({
+      from: sender,
       to: 'uaiulive@gmail.com',
       subject: `New Signup: ${name}`,
       html: `
@@ -78,7 +85,7 @@ export async function sendSignupNotification(email: string, name: string, timest
       `,
     });
     
-    console.log(`✅ Signup notification sent for ${email}`);
+    console.log(`✅ Signup notification sent for ${email}`, result);
   } catch (error) {
     console.error('❌ Failed to send signup notification:', error);
   }
@@ -88,8 +95,11 @@ export async function sendWelcomeEmail(email: string, name: string) {
   try {
     const { client, fromEmail } = await getUncachableResendClient();
     
+    // Use Resend's default domain if custom domain isn't verified
+    const sender = fromEmail.includes('gmail.com') ? 'UAIU Arcade <onboarding@resend.dev>' : fromEmail;
+    
     await client.emails.send({
-      from: fromEmail,
+      from: sender,
       to: email,
       subject: '🎮 Welcome to UAIU Pong!',
       html: `
