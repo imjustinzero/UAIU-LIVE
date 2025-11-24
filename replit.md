@@ -15,11 +15,12 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 24, 2025)
-- **Email System Fixed**: Resend integration configured with fallback to default domain when custom domain unavailable
-- **Resend Limitation**: Account currently in test mode - verification emails only deliver to uaiulive@gmail.com until domain verified
-- **Profile System**: Users now have profile pages with editable information, stats display, and email verification
-- **Email Verification Required**: New users start with 0 credits and must verify email to receive their first free credit
-- **Profile Features**: View/edit name, resend verification emails, detailed statistics (win rate, earnings, matches)
+- **Email Verification Removed**: New users now receive 1 credit immediately upon signup - no email verification required
+- **Simplified Onboarding**: Users can start playing instantly after registration
+- **Profile System**: Users now have profile pages with editable information and detailed statistics
+- **Profile Features**: View/edit name, detailed statistics (win rate, earnings, matches)
+- **Security Update**: Removed verification endpoints to prevent potential exploits
+- **Email System**: Admin signup notifications still work (sent to uaiulive@gmail.com)
 - Leaderboard is now hidden from non-logged-in users for exclusivity
 - AI bots now appear as real players with creative random names (e.g., "Blue Unicorn", "Zeus the Tetris God", "Cosmic Champion")
 - Bot matchmaking delay reduced from 10 seconds to 1 second for instant-feeling matches
@@ -47,11 +48,11 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 ### Feature Specifications
 - **Real-Time Multiplayer**: Sub-50ms latency for responsive gameplay.
 - **Credit Economy**: Purchase via Stripe, win/lose credits in matches, request payouts.
-- **Profile System**: User profiles with editable information, verification status, and detailed statistics.
-- **Email Verification**: Required for new users to receive their first free credit (1 credit awarded upon verification).
+- **Profile System**: User profiles with editable information and detailed statistics.
+- **Instant Onboarding**: New users receive 1 free credit immediately upon signup (no email verification required).
 - **Leaderboard**: Real-time rankings by total credits (visible only to logged-in users).
 - **Action Log**: Live feed of platform activities.
-- **Authentication**: Secure session-based authentication with email verification.
+- **Authentication**: Secure session-based authentication.
 - **AI Matchmaking**: Automatic match with AI bot if no opponent found in 1 second. Bots appear as real players with creative names.
 
 ### System Design Choices
@@ -70,7 +71,7 @@ The Snake bot AI has been carefully balanced to provide challenging but beatable
 
 ## External Dependencies
 - **Stripe**: For credit purchases and webhook-based automatic credit fulfillment.
-- **Resend**: For transactional emails (verification, welcome, admin notifications). Currently configured with fallback sender (onboarding@resend.dev). Account in test mode - only sends to uaiulive@gmail.com until domain verified at https://resend.com/domains.
+- **Resend**: For admin notifications (signup notifications sent to uaiulive@gmail.com). Currently configured with fallback sender (onboarding@resend.dev). Account in test mode - only sends to uaiulive@gmail.com until domain verified at https://resend.com/domains.
 - **Socket.IO**: For real-time bidirectional communication between client and server.
 - **PostgreSQL**: Relational database for persistent storage, managed with Drizzle ORM.
 - **Bcrypt**: For secure password hashing.
