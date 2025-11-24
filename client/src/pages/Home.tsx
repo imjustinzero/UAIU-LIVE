@@ -13,7 +13,6 @@ import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
 import { RadioPlayer } from "@/components/RadioPlayer";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
-import { CreditPurchaseModal } from "@/components/CreditPurchaseModal";
 import logoImg from "@assets/IMG_2786_1763969320612.jpeg";
 
 interface User {
@@ -40,7 +39,6 @@ export default function Home() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
-  const [showCreditModal, setShowCreditModal] = useState(false);
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingTimer, setMatchmakingTimer] = useState(10);
   const [inGame, setInGame] = useState(false);
@@ -236,7 +234,7 @@ export default function Home() {
   }, [matchmaking, inGame]);
 
   const handleAddCredits = () => {
-    setShowCreditModal(true);
+    window.location.href = 'https://buy.stripe.com/8x26oIa5OacYb46eVCcMM02';
   };
 
   const handlePayoutSuccess = () => {
@@ -565,10 +563,6 @@ export default function Home() {
         />
       )}
 
-      <CreditPurchaseModal
-        open={showCreditModal}
-        onClose={() => setShowCreditModal(false)}
-      />
 
       <RadioPlayer />
     </div>
