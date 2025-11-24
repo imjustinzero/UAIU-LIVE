@@ -127,11 +127,10 @@ export class GameManager {
     // Broadcast queue update to all clients
     this.broadcastQueueUpdate(io);
 
-    // Try to match with another player who has the same bet amount and time limit
+    // Try to match with another player who has the same bet amount
     const matchingPlayer = queue.find(p => 
       p.userId !== player.userId && 
-      p.betAmount === player.betAmount &&
-      p.timeLimit === player.timeLimit
+      p.betAmount === player.betAmount
     );
     
     if (matchingPlayer) {
@@ -153,6 +152,7 @@ export class GameManager {
             name: 'AI Bot',
             gameType: player.gameType,
             betAmount: stillInQueue.betAmount,
+            timeLimit: stillInQueue.timeLimit,
             joinedAt: Date.now(),
           };
           this.startMatch(stillInQueue, botPlayer, io, player.gameType);
@@ -173,8 +173,8 @@ export class GameManager {
     }
   }
 
-  getAllQueuedPlayers(): QueuedPlayer[] {
-    const allPlayers: QueuedPlayer[] = [];
+  getAllQueuedPlayers(): Omit<QueuedPlayer, 'socketId'>[] {
+    const allPlayers: Omit<QueuedPlayer, 'socketId'>[] = [];
     this.matchmakingQueues.forEach(queue => {
       allPlayers.push(...queue);
     });
@@ -219,6 +219,7 @@ export class GameManager {
       name: userName,
       gameType: targetPlayer.gameType,
       betAmount: targetPlayer.betAmount,
+      timeLimit: targetPlayer.timeLimit,
       joinedAt: Date.now(),
     };
 
@@ -236,6 +237,7 @@ export class GameManager {
       name: p.name,
       gameType: p.gameType,
       betAmount: p.betAmount,
+      timeLimit: p.timeLimit,
       joinedAt: p.joinedAt,
     }));
     io.emit('queueUpdate', sanitizedQueue);
@@ -248,11 +250,10 @@ export class GameManager {
     const match = controller.createMatch(p1.userId, p2.userId, p1.name, p2.name);
     const isBot2 = p2.userId === 'AI_BOT';
     
-    (match as any).botIsPlayer2 = isBot2;
-    (match as any).gameType = gameType;
-    (match as any).betAmount = p1.betAmount;
-    (match as any).timeLimit = p1.timeLimit;
-    (match as any).startTime = Date.now();
+    // Store match metadata
+    match.botIsPlayer2 = isBot2;
+    match.gameType = gameType;
+    match.betAmount = p1.betAmount;
     (match.player1 as any).socketId = p1.socketId;
     (match.player2 as any).socketId = p2.socketId;
     
@@ -284,26 +285,15 @@ export class GameManager {
         return;
       }
 
-      const gameType: GameType = (match as any).gameType || 'pong';
+      const gameType: GameType = match.gameType || 'pong';
       const controller = gameControllers[gameType];
       
       if (controller.updateGame) {
         controller.updateGame(match);
       }
 
-      if (controller.updateBotAI && (match as any).botIsPlayer2) {
+      if (controller.updateBotAI && match.botIsPlayer2) {
         controller.updateBotAI(match, true);
-      }
-
-      // Check time limit
-      const timeLimit = (match as any).timeLimit || 60;
-      const startTime = (match as any).startTime || Date.now();
-      const elapsed = (Date.now() - startTime) / 1000;
-      
-      if (elapsed >= timeLimit && match.status === 'playing') {
-        match.status = 'finished';
-        // Determine winner by score
-        match.winner = match.player1.score >= match.player2.score ? match.player1.id : match.player2.id;
       }
 
       // Emit state to players via socket IDs

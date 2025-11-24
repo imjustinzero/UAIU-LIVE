@@ -45,7 +45,6 @@ export default function Home() {
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<string>('pong');
   const [betAmount, setBetAmount] = useState<number>(1);
-  const [timeLimit, setTimeLimit] = useState<number>(15);
   const [availableGames, setAvailableGames] = useState<Game[]>([]);
   const [queuedPlayers, setQueuedPlayers] = useState<any[]>([]);
   const { toast } = useToast();
@@ -202,10 +201,10 @@ export default function Home() {
 
     setMatchmaking(true);
     setMatchmakingTimer(10);
-    socket?.emit('joinMatchmaking', { gameType: selectedGame, betAmount, timeLimit });
+    socket?.emit('joinMatchmaking', { gameType: selectedGame, betAmount });
     toast({
       title: "Finding Match...",
-      description: `Searching for ${availableGames.find(g => g.id === selectedGame)?.name || 'Pong'} opponent (Bet: ${betAmount} credits, ${timeLimit}s)`,
+      description: `Searching for ${availableGames.find(g => g.id === selectedGame)?.name || 'Pong'} opponent (Bet: ${betAmount} credits)`,
     });
   };
 
@@ -462,39 +461,6 @@ export default function Home() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             Bet between 1-100 credits (max: {Math.min(100, user.credits)} based on your balance)
-                          </p>
-                        </div>
-
-                        <div className="space-y-3">
-                          <h3 className="text-sm font-medium text-center">Match Duration</h3>
-                          <div className="flex items-center justify-center gap-3">
-                            <Button
-                              onClick={() => setTimeLimit(Math.max(6, timeLimit - 1))}
-                              variant="outline"
-                              size="icon"
-                              disabled={timeLimit <= 6}
-                              data-testid="button-decrease-time"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </Button>
-                            <Card className="px-8 py-4 bg-primary/10">
-                              <div className="text-3xl font-mono font-bold text-primary" data-testid="text-time-limit">
-                                {timeLimit}
-                              </div>
-                              <div className="text-xs text-muted-foreground">seconds</div>
-                            </Card>
-                            <Button
-                              onClick={() => setTimeLimit(Math.min(20, timeLimit + 1))}
-                              variant="outline"
-                              size="icon"
-                              disabled={timeLimit >= 20}
-                              data-testid="button-increase-time"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Choose match duration: 6-20 seconds
                           </p>
                         </div>
                       </div>
