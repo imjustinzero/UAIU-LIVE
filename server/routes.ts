@@ -176,11 +176,12 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
   const isPlayer1Winner = winnerId === match.player1.userId;
   
   // Credit distribution:
-  // - Winner gets +1.6 credits (net +0.6 after 1 credit entry fee)
-  // - Loser gets -1 credit (loses entry fee, total -2 including entry)
-  // - Result: 0.4 credits burned per match
-  const player1NewCredits = isPlayer1Winner ? player1.credits + 1.6 : player1.credits - 1;
-  const player2NewCredits = isBot2 ? 0 : (isPlayer1Winner ? player2!.credits - 1 : player2!.credits + 1.6);
+  // - Both players already paid 1 credit entry fee when joining
+  // - Winner receives 1.6 credits (net +0.6 after entry fee)
+  // - Loser receives nothing (net -1 from entry fee)
+  // - Result: 0.4 credits burned per match as platform fee
+  const player1NewCredits = isPlayer1Winner ? player1.credits + 1.6 : player1.credits;
+  const player2NewCredits = isBot2 ? 0 : (isPlayer1Winner ? player2!.credits : player2!.credits + 1.6);
 
   await storage.updateUserCredits(match.player1.userId, player1NewCredits);
   if (!isBot2) {
@@ -604,6 +605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
 
+        // Deduct 1 credit entry fee upfront
         await storage.updateUserCredits(userId, user.credits - 1);
         socket.emit('creditsUpdated', user.credits - 1);
 

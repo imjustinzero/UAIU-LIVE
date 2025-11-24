@@ -189,7 +189,7 @@ export function GameCanvas({ socket, userId, onMatchStart, onMatchEnd }: GameCan
                 {gameState.winner === userId ? 'VICTORY!' : 'DEFEAT'}
               </h3>
               <p className="text-xl text-white/80">
-                {gameState.winner === userId ? '+1.6 Credits' : '-1 Credit'}
+                {gameState.winner === userId ? '+1.6 Credits (Net +0.6)' : '-1 Credit'}
               </p>
             </div>
           </div>

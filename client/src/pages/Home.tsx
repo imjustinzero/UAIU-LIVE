@@ -97,7 +97,6 @@ export default function Home() {
       newSocket.on('matchEnded', (result: { winnerId: string; player1Credits: number; player2Credits: number }) => {
         setInGame(false);
         const won = result.winnerId === user.id;
-        const creditsChange = won ? 1.6 : -1;
         
         setUser(prev => prev ? {
           ...prev,
@@ -111,8 +110,8 @@ export default function Home() {
         toast({
           title: won ? "Victory!" : "Defeat",
           description: won 
-            ? `You won! +${creditsChange.toFixed(1)} credits` 
-            : `You lost. ${creditsChange.toFixed(1)} credits`,
+            ? `You won! +1.6 credits (net +0.6)` 
+            : `You lost (entry fee -1 credit)`,
           variant: won ? "default" : "destructive",
         });
       });
