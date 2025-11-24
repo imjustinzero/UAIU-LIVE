@@ -94,13 +94,15 @@ export default function Home() {
         });
       });
 
-      newSocket.on('matchEnded', (result: { winnerId: string; player1Credits: number; player2Credits: number }) => {
+      newSocket.on('matchEnded', (result: { winnerId: string; player1Credits: number; player2Credits: number; player1Id: string; player2Id: string }) => {
         setInGame(false);
         const won = result.winnerId === user.id;
+        const isPlayer1 = result.player1Id === user.id;
+        const newCredits = isPlayer1 ? result.player1Credits : result.player2Credits;
         
         setUser(prev => prev ? {
           ...prev,
-          credits: won ? result.player1Credits : result.player2Credits,
+          credits: newCredits,
           wins: won ? prev.wins + 1 : prev.wins,
           losses: won ? prev.losses : prev.losses + 1,
           matchesPlayed: prev.matchesPlayed + 1,

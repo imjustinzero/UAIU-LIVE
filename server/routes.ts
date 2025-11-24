@@ -225,6 +225,8 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
 
   io.to(match.player1.socketId).emit('matchEnded', {
     winnerId,
+    player1Id: match.player1.userId,
+    player2Id: match.player2.userId,
     player1Credits: player1NewCredits,
     player2Credits: player2NewCredits,
   });
@@ -232,6 +234,8 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
   if (!isBot2) {
     io.to(match.player2.socketId).emit('matchEnded', {
       winnerId,
+      player1Id: match.player1.userId,
+      player2Id: match.player2.userId,
       player1Credits: player1NewCredits,
       player2Credits: player2NewCredits,
     });
