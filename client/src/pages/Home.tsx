@@ -390,7 +390,7 @@ export default function Home() {
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {availableGames.map((game) => (
+                        {availableGames.filter(g => ['pong', 'tetris', 'snake', 'breakout'].includes(g.id)).map((game) => (
                           <Card
                             key={game.id}
                             className={`p-4 cursor-pointer transition-all hover-elevate ${
