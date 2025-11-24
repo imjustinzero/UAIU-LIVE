@@ -24,9 +24,11 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
   const gameStateRef = useRef<any | null>(null);
 
   useEffect(() => {
+    console.log('[GameCanvas] Mounted with:', { userId, matchId, gameType, hasSocket: !!socket });
     if (!socket) return;
 
     socket.on('gameState', (state: any) => {
+      console.log('[GameCanvas] 🎮 Received gameState:', state?.status, state?.gameType);
       gameStateRef.current = state;
       setGameState(state);
       if (state.status === 'playing' && onMatchStart) {
@@ -38,6 +40,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
     });
 
     return () => {
+      console.log('[GameCanvas] Unmounting');
       socket.off('gameState');
     };
   }, [socket, onMatchStart, onMatchEnd]);
@@ -454,6 +457,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           height={config.height}
           className="border-2 border-primary rounded-lg shadow-[0_0_30px_rgba(0,255,65,0.3)] max-w-full h-auto"
           style={{ aspectRatio: `${config.width}/${config.height}` }}
+          data-testid="game-canvas"
         />
         {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} userId={userId} />}
         {gameType === 'snake' && <SnakeRenderer gameState={gameState} canvasRef={canvasRef} />}

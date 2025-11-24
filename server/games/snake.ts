@@ -147,6 +147,12 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
   const gameData = bot.gameData;
   if (!gameData.alive) return;
 
+  // Bot makes decisions less frequently (only every 3 frames)
+  if (state.frameCounter % 30 !== 0) return;
+
+  // Add some randomness - bot makes mistakes 30% of the time
+  if (Math.random() < 0.3) return;
+
   const head = gameData.snake[0];
   const nearestFood = state.food.reduce((nearest, food) => {
     const dist = Math.abs(food.x - head.x) + Math.abs(food.y - head.y);
@@ -178,7 +184,12 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
   });
 
   if (safeDirections.length > 0) {
-    gameData.direction = safeDirections[0];
+    // Sometimes pick a random safe direction instead of the best one
+    if (Math.random() < 0.4 && safeDirections.length > 1) {
+      gameData.direction = safeDirections[Math.floor(Math.random() * safeDirections.length)];
+    } else {
+      gameData.direction = safeDirections[0];
+    }
   } else {
     const allDirections: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
     const desperateDirections = allDirections.filter(dir => {

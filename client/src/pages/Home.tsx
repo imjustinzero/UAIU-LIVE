@@ -118,12 +118,14 @@ export default function Home() {
       });
 
       newSocket.on('matchFound', (data?: { matchId?: string; gameType?: string }) => {
-        console.log('[CLIENT] Received matchFound event:', data);
+        console.log('[CLIENT] ✅ matchFound event received:', data);
+        console.log('[CLIENT] Setting inGame=true, matchId=', data?.matchId);
         setMatchmaking(false);
         setInGame(true);
         if (data?.matchId) {
           setCurrentMatchId(data.matchId);
         }
+        console.log('[CLIENT] State updated - waiting for gameState event...');
         toast({
           title: "Match Found!",
           description: "Get ready to play!",

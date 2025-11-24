@@ -48,6 +48,13 @@ The system employs a client-server architecture. The server manages all critical
 
 All games feature server-authoritative logic to prevent cheating. Game state is synchronized at 60 FPS via Socket.IO. Bot AI provides single-player experience when matchmaking queue is empty after 10 seconds.
 
+#### Snake Bot AI Balancing
+The Snake bot AI has been carefully balanced to provide challenging but beatable gameplay:
+- Bot makes decisions every 30 frames (reduced reaction speed)
+- Bot skips decisions 30% of the time (simulates mistakes)
+- Bot picks random safe directions 40% of the time instead of optimal moves
+- Matches typically last 15-30 seconds, giving players time to strategize and compete
+
 ## External Dependencies
 - **Stripe**: For credit purchases and webhook-based automatic credit fulfillment.
 - **Socket.IO**: For real-time bidirectional communication between client and server.
