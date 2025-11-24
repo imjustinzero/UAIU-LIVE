@@ -27,11 +27,11 @@ declare module 'http' {
     rawBody: unknown
   }
 }
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf;
-  }
-}));
+
+// NOTE: Stripe webhook route is registered BEFORE express.json()
+// in server/routes.ts to preserve raw Buffer for webhook signature verification
+// All other routes get express.json() middleware applied there
+
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {

@@ -1,12 +1,14 @@
 import type { Express } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import type { GameState } from "@shared/schema";
 import { sendSignupNotification, sendPayoutNotification } from "./email-config";
-import { registerStripeWebhook } from "./stripe-config";
 import { createSession, getSession, requireAuth } from "./session-middleware";
+import { initStripe } from "./stripe-init";
+import { WebhookHandlers } from "./webhookHandlers";
 
 interface PlayerInMatch {
   userId: string;
@@ -218,7 +220,46 @@ function getGameState(match: Match, player1Name: string, player2Name: string): G
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  registerStripeWebhook(app);
+  // Initialize Stripe and get webhook UUID
+  const stripeInit = await initStripe();
+
+  // Register Stripe webhook route BEFORE express.json()
+  // This route needs raw Buffer for signature verification
+  if (stripeInit) {
+    app.post(
+      '/api/stripe/webhook/:uuid',
+      express.raw({ type: 'application/json' }),
+      async (req, res) => {
+        const signature = req.headers['stripe-signature'];
+
+        if (!signature) {
+          return res.status(400).json({ error: 'Missing stripe-signature' });
+        }
+
+        try {
+          const sig = Array.isArray(signature) ? signature[0] : signature;
+
+          if (!Buffer.isBuffer(req.body)) {
+            const errorMsg = 'STRIPE WEBHOOK ERROR: req.body is not a Buffer';
+            console.error(errorMsg);
+            return res.status(500).json({ error: 'Webhook processing error' });
+          }
+
+          const { uuid } = req.params;
+          await WebhookHandlers.processWebhook(req.body as Buffer, sig, uuid);
+
+          res.status(200).json({ received: true });
+        } catch (error: any) {
+          console.error('Webhook error:', error.message);
+          res.status(400).json({ error: 'Webhook processing error' });
+        }
+      }
+    );
+    console.log('✅ Stripe webhook endpoint registered at /api/stripe/webhook/:uuid');
+  }
+
+  // NOW apply JSON middleware for all other routes
+  app.use(express.json());
 
   app.post('/api/auth/signup', async (req, res) => {
     try {
