@@ -1,0 +1,108 @@
+Build a production-ready, top-down 2D golf game that integrates into the UAIU.live platform. Use Node.js + Express + Socket.IO for the backend and HTML/CSS/JS for the frontend. The game should support real-time 1v1 multiplayer matches, with AI opponents if no human player is available. It should work seamlessly with the existing credit system and mobile-friendly UI.
+Core Features
+
+
+
+1️⃣ Game Mechanics
+
+2D top-down golf course with obstacles (trees, sand, water hazards).
+
+Player controls: aim direction, shot power (click/drag or swipe for mobile).
+
+Physics-based ball movement (distance, bounce, friction, obstacles).
+
+Hole scoring: par, strokes, winner determined by lowest strokes.
+
+Optional simple graphics: green fairways, flag, and ball animations.
+
+
+
+2️⃣ Multiplayer / AI
+
+1v1 matches: two human players take turns.
+
+AI fallback: if no human available, AI plays with 80% win probability for fairness.
+
+Turn-based logic handled server-side via Socket.IO to prevent cheating.
+
+Multiple matches can run simultaneously.
+
+
+
+3️⃣ Credit System Integration
+
+Each match costs 1 credit to enter.
+
+Winner receives 1.6 credits, loser loses 1 credit, 0.4 credits burned.
+
+Credits updated real-time and reflected on user profile and leaderboard.
+
+
+
+4️⃣ Matchmaking & Leaderboards
+
+Players enter a queue by pressing “Play Golf.”
+
+Match starts automatically when two players are available.
+
+Leaderboard tracks: wins, losses, total credits, and streaks.
+
+Action log shows match results in real-time.
+
+
+
+5️⃣ UI / Frontend
+
+Fully mobile-friendly: touch controls for aiming and power.
+
+Bright, high-contrast UI with glowing buttons and smooth animations.
+
+Embedded into UAIU.live via iframe or script tag.
+
+Show live stats: current players online, matches in progress.
+
+Optional: share match results to social media.
+
+
+
+6️⃣ Backend / Server
+
+Node.js + Express + Socket.IO handles:
+
+Turn management
+
+Ball physics calculations
+
+Credit updates
+
+Matchmaking queue
+
+AI moves
+
+Logging all events (matches, credits, wins/losses)
+
+
+
+7️⃣ Optional Enhancements
+
+Different course layouts (easy/medium/hard).
+
+Cosmetic items (ball skins, flags).
+
+Tournament mode (multi-hole matches).
+
+Real-time notifications for wins, streaks, and leaderboard changes.
+
+Output Requirements
+
+server.js (backend)
+
+public/index.html (frontend UI and Canvas)
+
+public/client.js (frontend JS with game logic, turn handling, AI)
+
+public/style.css (visuals)
+
+Fully copy-paste ready, mobile-optimized, production-ready.
+
+Integrates seamlessly with existing UAIU.live credit and leaderboard systems.

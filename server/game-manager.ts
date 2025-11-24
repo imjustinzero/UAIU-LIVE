@@ -1,5 +1,6 @@
 import type { Server as SocketIOServer } from "socket.io";
 import { storage } from "./storage";
+import * as pong from "./games/pong";
 import * as snake from "./games/snake";
 import * as tetris from "./games/tetris";
 import * as connect4 from "./games/connect4";
@@ -26,8 +27,10 @@ export interface GameController {
 
 const gameControllers: Record<GameType, GameController> = {
   pong: {
-    createMatch: () => null, // Handled separately in routes.ts for now
-    updateGame: () => {},
+    createMatch: pong.createPongMatch,
+    updateGame: pong.updatePongGame,
+    updateBotAI: pong.updatePongBotAI,
+    handleInput: pong.handlePongInput,
   },
   snake: {
     createMatch: snake.createSnakeMatch,

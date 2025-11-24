@@ -16,7 +16,7 @@ import { gameManager, type GameType } from "./game-manager";
 
 // Legacy Pong functions removed - all game logic now in GameManager
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
   // Initialize Stripe and get webhook UUID
   const stripeInit = await initStripe();
 
@@ -254,17 +254,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
+  // Use the HTTP server passed in from runApp
   const io = new SocketIOServer(httpServer, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
     }
   });
+  
+  console.log('Socket.IO server initialized on shared HTTP server');
 
   // GameManager handles all matchmaking including bot fallback
 
   io.on('connection', (socket: Socket) => {
+    console.log('=== SOCKET CONNECTION ATTEMPT ===');
+    console.log('Socket ID:', socket.id);
+    console.log('================================');
     const sessionId = (socket.handshake.auth as any).sessionId;
     if (!sessionId) {
       console.error('Socket connection rejected: No sessionId in auth');
@@ -343,5 +348,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  return httpServer;
+  // Socket.IO is now attached to the HTTP server passed in from runApp
+  // No need to return the server
 }

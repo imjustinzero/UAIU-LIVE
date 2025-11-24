@@ -1,22 +1,30 @@
 import { useEffect, useRef } from "react";
 
+interface PongPlayerData {
+  paddleX: number;
+  paddleVelocity: number;
+}
+
 interface PongGameState {
   matchId: string;
+  gameType: 'pong';
   player1: {
     id: string;
     name: string;
-    y: number;
     score: number;
+    gameData: PongPlayerData;
   };
   player2: {
     id: string;
     name: string;
-    y: number;
     score: number;
+    gameData: PongPlayerData;
   };
   ball: {
     x: number;
     y: number;
+    vx: number;
+    vy: number;
   };
   status: string;
   winner?: string;
@@ -56,7 +64,7 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
     };
 
     const render = () => {
-      if (!gameState) {
+      if (!gameState || !gameState.ball) {
         animationFrameRef.current = requestAnimationFrame(render);
         return;
       }
@@ -76,8 +84,8 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
       const player1Y = CANVAS_HEIGHT - 40;
       const player2Y = 40;
       
-      drawPaddle(gameState.player1.y, player1Y, true);
-      drawPaddle(gameState.player2.y, player2Y, false);
+      drawPaddle(gameState.player1.gameData.paddleX, player1Y, true);
+      drawPaddle(gameState.player2.gameData.paddleX, player2Y, false);
 
       const gradient = ctx.createRadialGradient(
         gameState.ball.x, gameState.ball.y, 0,

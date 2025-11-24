@@ -65,10 +65,10 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
     if (gameType === 'pong') {
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         setPressedKeys(prev => new Set(prev).add(e.key));
-        socket.emit('paddleMove', { direction: 'left' });
+        handleInput({ direction: 'left' });
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
         setPressedKeys(prev => new Set(prev).add(e.key));
-        socket.emit('paddleMove', { direction: 'right' });
+        handleInput({ direction: 'right' });
       }
     } else if (gameType === 'snake') {
       if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
@@ -101,7 +101,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           next.delete(e.key);
           return next;
         });
-        socket.emit('paddleMove', { direction: 'stop' });
+        handleInput({ direction: 'stop' });
       }
     }
   };
@@ -212,27 +212,27 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             className="flex-1 h-16 text-xl font-bold"
             onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('left'));
-              socket.emit('paddleMove', { direction: 'left' });
+              handleInput({ direction: 'left' });
             }}
             onMouseUp={() => {
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
-              socket.emit('paddleMove', { direction: 'stop' });
+              handleInput({ direction: 'stop' });
             }}
             onMouseLeave={() => {
               if (pressedKeys.has('left')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
-                socket.emit('paddleMove', { direction: 'stop' });
+                handleInput({ direction: 'stop' });
               }
             }}
             onTouchStart={(e) => {
               e.preventDefault();
               setPressedKeys(prev => new Set(prev).add('left'));
-              socket.emit('paddleMove', { direction: 'left' });
+              handleInput({ direction: 'left' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
-              socket.emit('paddleMove', { direction: 'stop' });
+              handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-paddle-left"
@@ -245,27 +245,27 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             className="flex-1 h-16 text-xl font-bold"
             onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('right'));
-              socket.emit('paddleMove', { direction: 'right' });
+              handleInput({ direction: 'right' });
             }}
             onMouseUp={() => {
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
-              socket.emit('paddleMove', { direction: 'stop' });
+              handleInput({ direction: 'stop' });
             }}
             onMouseLeave={() => {
               if (pressedKeys.has('right')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
-                socket.emit('paddleMove', { direction: 'stop' });
+                handleInput({ direction: 'stop' });
               }
             }}
             onTouchStart={(e) => {
               e.preventDefault();
               setPressedKeys(prev => new Set(prev).add('right'));
-              socket.emit('paddleMove', { direction: 'right' });
+              handleInput({ direction: 'right' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
-              socket.emit('paddleMove', { direction: 'stop' });
+              handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-paddle-right"
