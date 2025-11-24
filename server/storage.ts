@@ -55,7 +55,7 @@ export class MemStorage implements IStorage {
     const user: User = {
       ...insertUser,
       id,
-      credits: 0,
+      credits: 10,
       matchesPlayed: 0,
       wins: 0,
       losses: 0,
