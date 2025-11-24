@@ -166,7 +166,7 @@ export default function Home() {
         newSocket.close();
       };
     }
-  }, [user?.id]);
+  }, [user ? true : false]);
 
   const handleAuthSuccess = (newUser: User) => {
     setUser(newUser);
