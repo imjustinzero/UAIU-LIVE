@@ -1,0 +1,166 @@
+import type { Server as SocketIOServer } from "socket.io";
+
+export interface SnakeGameState {
+  matchId: string;
+  gameType: 'snake';
+  player1: {
+    id: string;
+    name: string;
+    snake: { x: number; y: number }[];
+    direction: 'up' | 'down' | 'left' | 'right';
+    score: number;
+    alive: boolean;
+  };
+  player2: {
+    id: string;
+    name: string;
+    snake: { x: number; y: number }[];
+    direction: 'up' | 'down' | 'left' | 'right';
+    score: number;
+    alive: boolean;
+  };
+  food: { x: number; y: number }[];
+  status: 'playing' | 'finished';
+  winner?: string;
+}
+
+const GRID_SIZE = 20;
+const GRID_WIDTH = 30;
+const GRID_HEIGHT = 40;
+
+export function createSnakeMatch(player1Id: string, player2Id: string, player1Name: string, player2Name: string): SnakeGameState {
+  return {
+    matchId: `snake-${Date.now()}-${Math.random()}`,
+    gameType: 'snake',
+    player1: {
+      id: player1Id,
+      name: player1Name,
+      snake: [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }],
+      direction: 'right',
+      score: 0,
+      alive: true,
+    },
+    player2: {
+      id: player2Id,
+      name: player2Name,
+      snake: [{ x: 20, y: 30 }, { x: 21, y: 30 }, { x: 22, y: 30 }],
+      direction: 'left',
+      score: 0,
+      alive: true,
+    },
+    food: generateFood(3),
+    status: 'playing',
+  };
+}
+
+function generateFood(count: number): { x: number; y: number }[] {
+  const food: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    food.push({
+      x: Math.floor(Math.random() * GRID_WIDTH),
+      y: Math.floor(Math.random() * GRID_HEIGHT),
+    });
+  }
+  return food;
+}
+
+export function updateSnakeGame(state: SnakeGameState): void {
+  if (state.status !== 'playing') return;
+
+  // Move both snakes
+  [state.player1, state.player2].forEach((player) => {
+    if (!player.alive) return;
+
+    const head = player.snake[0];
+    let newHead = { ...head };
+
+    switch (player.direction) {
+      case 'up': newHead.y -= 1; break;
+      case 'down': newHead.y += 1; break;
+      case 'left': newHead.x -= 1; break;
+      case 'right': newHead.x += 1; break;
+    }
+
+    // Check wall collision
+    if (newHead.x < 0 || newHead.x >= GRID_WIDTH || newHead.y < 0 || newHead.y >= GRID_HEIGHT) {
+      player.alive = false;
+      return;
+    }
+
+    // Check self collision
+    if (player.snake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+      player.alive = false;
+      return;
+    }
+
+    // Check other player collision
+    const otherPlayer = player === state.player1 ? state.player2 : state.player1;
+    if (otherPlayer.snake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+      player.alive = false;
+      return;
+    }
+
+    player.snake.unshift(newHead);
+
+    // Check food collision
+    const foodIndex = state.food.findIndex(f => f.x === newHead.x && f.y === newHead.y);
+    if (foodIndex !== -1) {
+      player.score += 10;
+      state.food.splice(foodIndex, 1);
+      state.food.push(...generateFood(1));
+    } else {
+      player.snake.pop();
+    }
+  });
+
+  // Check win conditions
+  if (!state.player1.alive && !state.player2.alive) {
+    state.status = 'finished';
+    state.winner = state.player1.score >= state.player2.score ? state.player1.id : state.player2.id;
+  } else if (!state.player1.alive) {
+    state.status = 'finished';
+    state.winner = state.player2.id;
+  } else if (!state.player2.alive) {
+    state.status = 'finished';
+    state.winner = state.player1.id;
+  }
+}
+
+export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): void {
+  const bot = botIsPlayer2 ? state.player2 : state.player1;
+  if (!bot.alive) return;
+
+  const head = bot.snake[0];
+  const nearestFood = state.food.reduce((nearest, food) => {
+    const dist = Math.abs(food.x - head.x) + Math.abs(food.y - head.y);
+    const nearestDist = Math.abs(nearest.x - head.x) + Math.abs(nearest.y - head.y);
+    return dist < nearestDist ? food : nearest;
+  });
+
+  // Simple AI: move toward nearest food while avoiding walls and self
+  const possibleDirections: Array<'up' | 'down' | 'left' | 'right'> = [];
+
+  if (head.x < nearestFood.x && bot.direction !== 'left') possibleDirections.push('right');
+  if (head.x > nearestFood.x && bot.direction !== 'right') possibleDirections.push('left');
+  if (head.y < nearestFood.y && bot.direction !== 'up') possibleDirections.push('down');
+  if (head.y > nearestFood.y && bot.direction !== 'down') possibleDirections.push('up');
+
+  // Filter out dangerous directions
+  const safeDirections = possibleDirections.filter(dir => {
+    let testHead = { ...head };
+    switch (dir) {
+      case 'up': testHead.y -= 1; break;
+      case 'down': testHead.y += 1; break;
+      case 'left': testHead.x -= 1; break;
+      case 'right': testHead.x += 1; break;
+    }
+
+    if (testHead.x < 0 || testHead.x >= GRID_WIDTH || testHead.y < 0 || testHead.y >= GRID_HEIGHT) return false;
+    if (bot.snake.some(segment => segment.x === testHead.x && segment.y === testHead.y)) return false;
+    return true;
+  });
+
+  if (safeDirections.length > 0) {
+    bot.direction = safeDirections[0];
+  }
+}

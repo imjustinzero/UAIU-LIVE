@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import type { GameState } from "@shared/schema";
 import { sendSignupNotification, sendPayoutNotification } from "./email-config";
+import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } from "./email-service";
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -414,22 +415,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await storage.createUser({ email, name, password: hashedPassword });
+      const verificationToken = generateVerificationToken();
+      
+      const user = await storage.createUser({ 
+        email, 
+        name, 
+        password: hashedPassword,
+      });
+
+      // Set verification token
+      await storage.updateUser(user.id, { emailVerificationToken: verificationToken });
 
       await storage.addActionLog({
         userId: user.id,
         userName: name,
         type: 'signup',
-        message: `${name} joined UAIU Pong!`,
+        message: `${name} joined UAIU Arcade!`,
       });
 
-      await sendSignupNotification(email, name);
+      // Send verification and notification emails
+      await Promise.all([
+        sendVerificationEmail(email, name, verificationToken),
+        sendSignupNotification(email, name),
+      ]);
 
       const sessionId = createSession(user.id, user.email);
       res.json({ ...user, sessionId });
     } catch (error) {
       console.error('Signup error:', error);
       res.status(500).json({ message: 'Signup failed' });
+    }
+  });
+
+  app.get('/api/auth/verify-email', async (req, res) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: 'Invalid verification token' });
+      }
+
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(404).json({ message: 'Invalid or expired verification token' });
+      }
+
+      await storage.updateUser(user.id, {
+        emailVerified: true,
+        emailVerificationToken: null,
+      });
+
+      await sendWelcomeEmail(user.email, user.name);
+
+      res.json({ message: 'Email verified successfully!' });
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.status(500).json({ message: 'Verification failed' });
     }
   });
 

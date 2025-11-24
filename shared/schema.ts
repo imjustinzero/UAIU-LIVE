@@ -27,6 +27,7 @@ export const users = pgTable("users", {
 
 export const matches = pgTable("matches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gameType: text("game_type").notNull().default('pong'),
   player1Id: varchar("player1_id").notNull(),
   player2Id: varchar("player2_id").notNull(),
   player1Name: text("player1_name").notNull(),

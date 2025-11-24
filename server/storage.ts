@@ -18,7 +18,9 @@ import { eq, desc } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(userId: string, updates: Partial<User>): Promise<void>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   updateUserStats(userId: string, stats: { wins?: number; losses?: number; matchesPlayed?: number; totalEarnings?: number }): Promise<void>;
   getLeaderboard(limit: number): Promise<User[]>;
@@ -43,9 +45,20 @@ export class DbStorage implements IStorage {
     return user;
   }
 
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<void> {
+    await db.update(users)
+      .set(updates)
+      .where(eq(users.id, userId));
   }
 
   async updateUserCredits(userId: string, credits: number): Promise<void> {
