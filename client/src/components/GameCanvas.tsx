@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCw } from "luc
 import { PongRenderer, PONG_CANVAS_CONFIG } from "@/components/games/PongRenderer";
 import { SnakeRenderer, SNAKE_CANVAS_CONFIG } from "@/components/games/SnakeRenderer";
 import { TetrisRenderer, TETRIS_CANVAS_CONFIG } from "@/components/games/TetrisRenderer";
-import GolfRenderer, { GOLF_CANVAS_CONFIG } from "@/components/games/GolfRenderer";
 
 interface GameCanvasProps {
   socket: any;
@@ -19,8 +18,6 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<any | null>(null);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
-  const [golfAimAngle, setGolfAimAngle] = useState(0);
-  const [golfPower, setGolfPower] = useState(150);
   const gameStateRef = useRef<any | null>(null);
 
   useEffect(() => {
@@ -50,8 +47,6 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         return SNAKE_CANVAS_CONFIG;
       case 'tetris':
         return TETRIS_CANVAS_CONFIG;
-      case 'golf':
-        return GOLF_CANVAS_CONFIG;
       default:
         return PONG_CANVAS_CONFIG;
     }
@@ -209,81 +204,6 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           </Button>
         </div>
       );
-    } else if (gameType === 'golf') {
-      const myTurn = gameState && gameState.currentPlayerId === userId;
-      const myPlayer = gameState?.player1?.id === userId ? gameState.player1 : gameState?.player2;
-      const ballMoving = myPlayer?.gameData?.ball?.isMoving || false;
-      
-      return (
-        <div className="flex flex-col gap-4 w-full max-w-md">
-          <div className="text-center text-white">
-            <div className="text-sm opacity-80">Aim: {Math.round(golfAimAngle)}°</div>
-            <div className="text-sm opacity-80">Power: {golfPower}</div>
-            {myTurn && !ballMoving && <div className="text-xs text-primary mt-1">Your Turn!</div>}
-            {!myTurn && <div className="text-xs opacity-60 mt-1">Opponent's Turn</div>}
-            {ballMoving && <div className="text-xs opacity-60 mt-1">Ball Moving...</div>}
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              size="lg"
-              className="h-16 text-xl font-bold"
-              onClick={() => setGolfAimAngle(prev => (prev - 15 + 360) % 360)}
-              disabled={!gameState || gameState.status !== 'playing' || !myTurn || ballMoving}
-              data-testid="button-golf-aim-left"
-            >
-              <ChevronLeft className="w-8 h-8 mr-2" />
-              AIM LEFT
-            </Button>
-            <Button
-              size="lg"
-              className="h-16 text-xl font-bold"
-              onClick={() => setGolfAimAngle(prev => (prev + 15) % 360)}
-              disabled={!gameState || gameState.status !== 'playing' || !myTurn || ballMoving}
-              data-testid="button-golf-aim-right"
-            >
-              AIM RIGHT
-              <ChevronRight className="w-8 h-8 ml-2" />
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              size="lg"
-              className="h-16 text-xl font-bold"
-              onClick={() => setGolfPower(prev => Math.max(50, prev - 25))}
-              disabled={!gameState || gameState.status !== 'playing' || !myTurn || ballMoving}
-              data-testid="button-golf-power-down"
-            >
-              <ChevronDown className="w-8 h-8 mr-2" />
-              LESS
-            </Button>
-            <Button
-              size="lg"
-              className="h-16 text-xl font-bold"
-              onClick={() => setGolfPower(prev => Math.min(300, prev + 25))}
-              disabled={!gameState || gameState.status !== 'playing' || !myTurn || ballMoving}
-              data-testid="button-golf-power-up"
-            >
-              MORE
-              <ChevronUp className="w-8 h-8 ml-2" />
-            </Button>
-          </div>
-          
-          <Button
-            size="lg"
-            className="h-20 text-2xl font-bold bg-primary hover:bg-primary/90"
-            onClick={() => {
-              const angleInRadians = (golfAimAngle - 90) * (Math.PI / 180);
-              handleInput({ action: 'shoot', angle: angleInRadians, power: golfPower });
-            }}
-            disabled={!gameState || gameState.status !== 'playing' || !myTurn || ballMoving}
-            data-testid="button-golf-shoot"
-          >
-            ⛳ SHOOT
-          </Button>
-        </div>
-      );
     } else if (gameType === 'pong') {
       return (
         <div className="flex gap-4 w-full max-w-md">
@@ -372,7 +292,6 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'snake' && <SnakeRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'tetris' && <TetrisRenderer gameState={gameState} canvasRef={canvasRef} />}
-        {gameType === 'golf' && <GolfRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameState?.status === 'finished' && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-lg">
             <div className="text-center">

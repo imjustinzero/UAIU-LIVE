@@ -199,11 +199,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         { id: 'pong', name: 'Pong', description: 'Classic paddle battle', players: '1v1', difficulty: 'Easy' },
         { id: 'snake', name: 'Snake', description: 'Multiplayer survival race', players: '1v1', difficulty: 'Medium' },
         { id: 'tetris', name: 'Tetris', description: 'Battle mode competition', players: '1v1', difficulty: 'Hard' },
-        { id: 'golf', name: 'Mini Golf', description: 'Turn-based golf challenge', players: '1v1', difficulty: 'Easy' },
         { id: 'breakout', name: 'Breakout', description: 'Brick breaking duel', players: '1v1', difficulty: 'Medium' },
         { id: 'flappybird', name: 'Flappy Bird', description: 'Survival race challenge', players: '1v1', difficulty: 'Hard' },
         { id: 'connect4', name: 'Connect 4', description: 'Strategic drop game', players: '1v1', difficulty: 'Easy' },
-        { id: 'airhockey', name: 'Air Hockey', description: 'Fast-paced puck action', players: '1v1', difficulty: 'Medium' },
       ];
       res.json(games);
     } catch (error) {

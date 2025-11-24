@@ -11,6 +11,7 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { ActionLog } from "@/components/ActionLog";
 import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
+import { RadioPlayer } from "@/components/RadioPlayer";
 
 interface User {
   id: string;
@@ -478,6 +479,8 @@ export default function Home() {
           onPayoutSuccess={handlePayoutSuccess}
         />
       )}
+
+      <RadioPlayer />
     </div>
   );
 }

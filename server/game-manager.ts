@@ -3,13 +3,11 @@ import { storage } from "./storage";
 import * as pong from "./games/pong";
 import * as snake from "./games/snake";
 import * as tetris from "./games/tetris";
-import * as golf from "./games/golf";
 import * as connect4 from "./games/connect4";
 import * as flappybird from "./games/flappybird";
 import * as breakout from "./games/breakout";
-import * as airhockey from "./games/airhockey";
 
-export type GameType = 'pong' | 'snake' | 'tetris' | 'golf' | 'breakout' | 'flappybird' | 'connect4' | 'airhockey';
+export type GameType = 'pong' | 'snake' | 'tetris' | 'breakout' | 'flappybird' | 'connect4';
 
 export interface QueuedPlayer {
   userId: string;
@@ -46,12 +44,6 @@ const gameControllers: Record<GameType, GameController> = {
       const player = state.player1.id === playerId ? state.player1 : state.player2;
       tetris.moveTetrisPiece(player, input.direction);
     },
-  },
-  golf: {
-    createMatch: golf.createGolfMatch,
-    updateGame: golf.updateGolfGame,
-    updateBotAI: golf.updateGolfBotAI,
-    handleInput: golf.handleGolfInput,
   },
   connect4: {
     createMatch: connect4.createConnect4Match,
@@ -91,17 +83,6 @@ const gameControllers: Record<GameType, GameController> = {
       }
     },
   },
-  airhockey: {
-    createMatch: airhockey.createAirHockeyMatch,
-    updateGame: airhockey.updateAirHockeyGame,
-    updateBotAI: airhockey.updateAirHockeyBotAI,
-    handleInput: (state, playerId, input) => {
-      const player = state.player1.id === playerId ? state.player1 : state.player2;
-      if (typeof input.x === 'number' && typeof input.y === 'number') {
-        airhockey.moveAirHockeyPaddle(player, input.x, input.y);
-      }
-    },
-  },
 };
 
 export class GameManager {
@@ -112,7 +93,7 @@ export class GameManager {
 
   constructor() {
     // Initialize queues for all game types
-    const gameTypes: GameType[] = ['pong', 'snake', 'tetris', 'golf', 'breakout', 'flappybird', 'connect4', 'airhockey'];
+    const gameTypes: GameType[] = ['pong', 'snake', 'tetris', 'breakout', 'flappybird', 'connect4'];
     gameTypes.forEach(type => {
       this.matchmakingQueues.set(type, []);
     });
@@ -191,7 +172,7 @@ export class GameManager {
         return;
       }
 
-      const gameType = (match as any).gameType || 'pong';
+      const gameType: GameType = (match as any).gameType || 'pong';
       const controller = gameControllers[gameType];
       
       if (controller.updateGame) {
@@ -228,7 +209,7 @@ export class GameManager {
     const match = this.activeMatches.get(matchId);
     if (!match) return;
 
-    const gameType = (match as any).gameType || 'pong';
+    const gameType: GameType = (match as any).gameType || 'pong';
     const controller = gameControllers[gameType];
 
     if (controller.handleInput) {
