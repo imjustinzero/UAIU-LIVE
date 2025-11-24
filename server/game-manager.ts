@@ -154,13 +154,17 @@ export class GameManager {
       this.playerToMatchMap.set(p2.userId, match.matchId);
     }
 
+    console.log(`[MATCHMAKING] Emitting matchFound to ${p1.name} (socketId: ${p1.socketId}), matchId: ${match.matchId}, gameType: ${gameType}`);
     io.to(p1.socketId).emit('matchFound', { matchId: match.matchId, gameType });
     if (!isBot2) {
+      console.log(`[MATCHMAKING] Emitting matchFound to ${p2.name} (socketId: ${p2.socketId}), matchId: ${match.matchId, gameType}`);
       io.to(p2.socketId).emit('matchFound', { matchId: match.matchId, gameType });
     }
 
-    // Start game loop
-    this.startGameLoop(match.matchId, io);
+    // Delay game start to give clients time to render canvas
+    setTimeout(() => {
+      this.startGameLoop(match.matchId, io);
+    }, 1000);
   }
 
   private startGameLoop(matchId: string, io: SocketIOServer): void {

@@ -114,6 +114,7 @@ export default function Home() {
       });
 
       newSocket.on('matchFound', (data?: { matchId?: string; gameType?: string }) => {
+        console.log('[CLIENT] Received matchFound event:', data);
         setMatchmaking(false);
         setInGame(true);
         if (data?.matchId) {
