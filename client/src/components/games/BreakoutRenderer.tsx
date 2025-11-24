@@ -29,6 +29,7 @@ interface BreakoutGameState {
 interface BreakoutRendererProps {
   gameState: BreakoutGameState | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
+  userId: string | null;
 }
 
 const CANVAS_WIDTH = 400;
@@ -39,7 +40,7 @@ const BALL_SIZE = 10;
 const BRICK_ROWS = 5;
 const BRICK_COLS = 10;
 
-export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps) {
+export function BreakoutRenderer({ gameState, canvasRef, userId }: BreakoutRendererProps) {
   const animationFrameRef = useRef<number>();
 
   useEffect(() => {
@@ -64,7 +65,9 @@ export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps
 
       const brickWidth = CANVAS_WIDTH / BRICK_COLS;
       const brickHeight = 20;
-      const player = gameState.player1;
+      const isPlayer1 = gameState.player1.id === userId;
+      const player = isPlayer1 ? gameState.player1 : gameState.player2;
+      const opponent = isPlayer1 ? gameState.player2 : gameState.player1;
 
       for (let row = 0; row < BRICK_ROWS; row++) {
         for (let col = 0; col < BRICK_COLS; col++) {
@@ -119,7 +122,7 @@ export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps
       ctx.fillStyle = '#00f0ff';
       ctx.font = 'bold 20px JetBrains Mono, monospace';
       ctx.textAlign = 'right';
-      ctx.fillText(`Opponent: ${gameState.player2.score}`, CANVAS_WIDTH - 20, 35);
+      ctx.fillText(`Opponent: ${opponent.score}`, CANVAS_WIDTH - 20, 35);
 
       animationFrameRef.current = requestAnimationFrame(render);
     };
@@ -131,7 +134,7 @@ export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameState, canvasRef]);
+  }, [gameState, canvasRef, userId]);
 
   return null;
 }

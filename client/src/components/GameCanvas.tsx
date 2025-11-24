@@ -475,7 +475,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'snake' && <SnakeRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'tetris' && <TetrisRenderer gameState={gameState} canvasRef={canvasRef} />}
-        {gameType === 'breakout' && <BreakoutRenderer gameState={gameState} canvasRef={canvasRef} />}
+        {gameType === 'breakout' && <BreakoutRenderer gameState={gameState} canvasRef={canvasRef} userId={userId} />}
         {gameType === 'flappybird' && <FlappyBirdRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'connect4' && <Connect4Renderer gameState={gameState} canvasRef={canvasRef} />}
         {gameState?.status === 'finished' && (
