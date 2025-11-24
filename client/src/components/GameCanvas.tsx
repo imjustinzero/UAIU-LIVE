@@ -154,44 +154,72 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
   const renderControls = () => {
     if (gameType === 'snake') {
       return (
-        <div className="grid grid-cols-3 gap-2 w-full max-w-xs">
+        <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
           <div />
           <Button
             size="lg"
-            className="h-16 text-xl font-bold"
-            onClick={() => handleInput({ direction: 'up' })}
+            className="h-20 text-xl font-bold touch-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'up' });
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'up' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-up"
           >
-            <ChevronUp className="w-8 h-8" />
+            <ChevronUp className="w-10 h-10" />
           </Button>
           <div />
           <Button
             size="lg"
-            className="h-16 text-xl font-bold"
-            onClick={() => handleInput({ direction: 'left' })}
+            className="h-20 text-xl font-bold touch-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'left' });
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'left' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-left"
           >
-            <ChevronLeft className="w-8 h-8" />
+            <ChevronLeft className="w-10 h-10" />
           </Button>
           <Button
             size="lg"
-            className="h-16 text-xl font-bold"
-            onClick={() => handleInput({ direction: 'down' })}
+            className="h-20 text-xl font-bold touch-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'down' });
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'down' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-down"
           >
-            <ChevronDown className="w-8 h-8" />
+            <ChevronDown className="w-10 h-10" />
           </Button>
           <Button
             size="lg"
-            className="h-16 text-xl font-bold"
-            onClick={() => handleInput({ direction: 'right' })}
+            className="h-20 text-xl font-bold touch-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'right' });
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleInput({ direction: 'right' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-right"
           >
-            <ChevronRight className="w-8 h-8" />
+            <ChevronRight className="w-10 h-10" />
           </Button>
         </div>
       );
@@ -315,12 +343,14 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         <div className="flex gap-4 w-full max-w-md">
           <Button
             size="lg"
-            className="flex-1 h-16 text-xl font-bold"
-            onMouseDown={() => {
+            className="flex-1 h-20 text-xl font-bold touch-none select-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
             }}
-            onMouseUp={() => {
+            onMouseUp={(e) => {
+              e.preventDefault();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
@@ -340,20 +370,27 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
+            onTouchCancel={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-breakout-left"
           >
-            <ChevronLeft className="w-8 h-8 mr-2" />
+            <ChevronLeft className="w-10 h-10 mr-2" />
             LEFT
           </Button>
           <Button
             size="lg"
-            className="flex-1 h-16 text-xl font-bold"
-            onMouseDown={() => {
+            className="flex-1 h-20 text-xl font-bold touch-none select-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
             }}
-            onMouseUp={() => {
+            onMouseUp={(e) => {
+              e.preventDefault();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
@@ -373,11 +410,16 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
+            onTouchCancel={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-breakout-right"
           >
             RIGHT
-            <ChevronRight className="w-8 h-8 ml-2" />
+            <ChevronRight className="w-10 h-10 ml-2" />
           </Button>
         </div>
       );
