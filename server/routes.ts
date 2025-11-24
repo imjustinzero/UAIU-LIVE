@@ -287,7 +287,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     (socket as any).userEmail = session.email;
     console.log('Client connected:', socket.id, 'User:', session.userId, session.email);
 
-    socket.on('joinMatchmaking', async (data: { gameType: GameType }) => {
+    socket.on('joinMatchmaking', async (data: { gameType: GameType; betAmount?: number }) => {
       try {
         const userId = (socket as any).userId;
         if (!userId) {
@@ -301,15 +301,20 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           return;
         }
 
-        if (user.credits < 1) {
-          socket.emit('error', { message: 'Insufficient credits' });
+        // Validate and default bet amount (1-100 credits)
+        const betAmount = data.betAmount && data.betAmount >= 1 && data.betAmount <= 100 
+          ? Math.floor(data.betAmount) 
+          : 1;
+
+        if (user.credits < betAmount) {
+          socket.emit('error', { message: `Not enough credits. You need ${betAmount} credits to join.` });
           socket.emit('creditsUpdated', user.credits);
           return;
         }
 
-        // Deduct 1 credit entry fee upfront
-        await storage.updateUserCredits(userId, user.credits - 1);
-        socket.emit('creditsUpdated', user.credits - 1);
+        // Deduct bet amount entry fee upfront
+        await storage.updateUserCredits(userId, user.credits - betAmount);
+        socket.emit('creditsUpdated', user.credits - betAmount);
 
         const gameType = data.gameType || 'pong';
 
@@ -318,6 +323,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           userId, 
           socketId: socket.id, 
           name: user.name, 
+          betAmount,
           joinedAt: Date.now(),
           gameType 
         }, io);
@@ -338,7 +344,54 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const userId = (socket as any).userId;
       if (!userId) return;
       
-      gameManager.leaveQueue(userId);
+      gameManager.leaveQueue(userId, io);
+    });
+
+    socket.on('joinSpecificMatch', async (data: { targetUserId: string }) => {
+      try {
+        const userId = (socket as any).userId;
+        if (!userId) {
+          socket.emit('error', { message: 'Unauthorized' });
+          return;
+        }
+
+        const user = await storage.getUser(userId);
+        if (!user) {
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
+
+        // Get target player's bet amount and validate before deducting credits
+        const targetBetAmount = gameManager.getPlayerBetAmount(data.targetUserId);
+        if (!targetBetAmount) {
+          socket.emit('error', { message: 'Match request no longer available' });
+          return;
+        }
+
+        // Validate user has enough credits
+        if (user.credits < targetBetAmount) {
+          socket.emit('error', { message: `Not enough credits. You need ${targetBetAmount} credits.` });
+          socket.emit('creditsUpdated', user.credits);
+          return;
+        }
+
+        // Deduct bet amount upfront
+        await storage.updateUserCredits(userId, user.credits - targetBetAmount);
+        socket.emit('creditsUpdated', user.credits - targetBetAmount);
+
+        // Join the match with socket ID
+        const success = gameManager.joinSpecificMatch(userId, data.targetUserId, user.name, socket.id, io);
+        
+        // Always refund if join fails (race condition or match already started)
+        if (!success) {
+          await storage.updateUserCredits(userId, user.credits);
+          socket.emit('creditsUpdated', user.credits);
+          socket.emit('error', { message: 'Match request no longer available' });
+        }
+      } catch (error) {
+        console.error('Error joining specific match:', error);
+        socket.emit('error', { message: 'Failed to join match' });
+      }
     });
 
     socket.on('disconnect', () => {

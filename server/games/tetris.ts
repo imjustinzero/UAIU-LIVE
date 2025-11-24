@@ -34,6 +34,7 @@ export interface TetrisGameState {
   };
   status: 'playing' | 'finished';
   winner?: string;
+  frameCounter: number;
 }
 
 const BOARD_WIDTH = 10;
@@ -67,6 +68,7 @@ export function createTetrisMatch(player1Id: string, player2Id: string, player1N
   return {
     matchId: `tetris-${Date.now()}-${Math.random()}`,
     gameType: 'tetris',
+    frameCounter: 0,
     player1: {
       id: player1Id,
       name: player1Name,
@@ -138,6 +140,11 @@ function clearLines(board: number[][]): number {
 
 export function updateTetrisGame(state: TetrisGameState): void {
   if (state.status !== 'playing') return;
+
+  state.frameCounter++;
+  
+  // Only move pieces down every 30 frames (2 times per second instead of 60)
+  if (state.frameCounter % 30 !== 0) return;
 
   [state.player1, state.player2].forEach(player => {
     const gameData = player.gameData;

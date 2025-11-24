@@ -26,6 +26,7 @@ export interface SnakeGameState {
   food: { x: number; y: number }[];
   status: 'playing' | 'finished';
   winner?: string;
+  frameCounter: number;
 }
 
 const GRID_SIZE = 20;
@@ -36,6 +37,7 @@ export function createSnakeMatch(player1Id: string, player2Id: string, player1Na
   return {
     matchId: `snake-${Date.now()}-${Math.random()}`,
     gameType: 'snake',
+    frameCounter: 0,
     player1: {
       id: player1Id,
       name: player1Name,
@@ -74,6 +76,11 @@ function generateFood(count: number): { x: number; y: number }[] {
 
 export function updateSnakeGame(state: SnakeGameState): void {
   if (state.status !== 'playing') return;
+
+  state.frameCounter++;
+  
+  // Only move snakes every 10 frames (6 times per second instead of 60)
+  if (state.frameCounter % 10 !== 0) return;
 
   // Move both snakes
   [state.player1, state.player2].forEach((player) => {

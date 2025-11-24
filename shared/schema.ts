@@ -36,6 +36,7 @@ export const matches = pgTable("matches", {
   winnerName: text("winner_name"),
   player1Score: integer("player1_score").notNull().default(0),
   player2Score: integer("player2_score").notNull().default(0),
+  betAmount: real("bet_amount").notNull().default(1),
   creditsBurned: real("credits_burned").notNull().default(0.4),
   status: text("status").notNull().default('playing'),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -3,7 +3,7 @@ import { io, Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2 } from "lucide-react";
+import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import { GameCanvas } from "@/components/GameCanvas";
@@ -12,6 +12,7 @@ import { ActionLog } from "@/components/ActionLog";
 import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
 import { RadioPlayer } from "@/components/RadioPlayer";
+import { MatchmakingLobby } from "@/components/MatchmakingLobby";
 
 interface User {
   id: string;
@@ -42,7 +43,9 @@ export default function Home() {
   const [inGame, setInGame] = useState(false);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<string>('pong');
+  const [betAmount, setBetAmount] = useState<number>(1);
   const [availableGames, setAvailableGames] = useState<Game[]>([]);
+  const [queuedPlayers, setQueuedPlayers] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -155,6 +158,10 @@ export default function Home() {
         setUser(prev => prev ? { ...prev, credits: newCredits } : null);
       });
 
+      newSocket.on('queueUpdate', (players: any[]) => {
+        setQueuedPlayers(players);
+      });
+
       return () => {
         newSocket.close();
       };
@@ -180,10 +187,10 @@ export default function Home() {
   };
 
   const handleJoinMatchmaking = async () => {
-    if (!user || user.credits < 1) {
+    if (!user || user.credits < betAmount) {
       toast({
         title: "Insufficient Credits",
-        description: "You need at least 1 credit to play. Add credits to continue!",
+        description: `You need at least ${betAmount} credits to play. Add credits to continue!`,
         variant: "destructive",
       });
       return;
@@ -191,10 +198,10 @@ export default function Home() {
 
     setMatchmaking(true);
     setMatchmakingTimer(10);
-    socket?.emit('joinMatchmaking', { gameType: selectedGame });
+    socket?.emit('joinMatchmaking', { gameType: selectedGame, betAmount });
     toast({
       title: "Finding Match...",
-      description: `Searching for ${availableGames.find(g => g.id === selectedGame)?.name || 'Pong'} opponent`,
+      description: `Searching for ${availableGames.find(g => g.id === selectedGame)?.name || 'Pong'} opponent (Bet: ${betAmount} credits)`,
     });
   };
 
@@ -231,6 +238,37 @@ export default function Home() {
 
   const handlePayoutSuccess = () => {
     setUser(prev => prev ? { ...prev, credits: 0 } : null);
+  };
+
+  const handleJoinSpecificMatch = async (targetUserId: string) => {
+    if (!socket || !user) return;
+
+    const targetPlayer = queuedPlayers.find(p => p.userId === targetUserId);
+    if (!targetPlayer) {
+      toast({
+        title: "Match Unavailable",
+        description: "This match request is no longer available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (user.credits < targetPlayer.betAmount) {
+      toast({
+        title: "Insufficient Credits",
+        description: `You need ${targetPlayer.betAmount} credits to join this match.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Server will deduct credits and validate
+    socket.emit('joinSpecificMatch', { targetUserId });
+    
+    toast({
+      title: "Joining Match...",
+      description: `Joining ${targetPlayer.name}'s ${targetPlayer.gameType} match (Bet: ${targetPlayer.betAmount} credits)`,
+    });
   };
 
   return (
@@ -347,7 +385,7 @@ export default function Home() {
                       <div className="space-y-2">
                         <h3 className="text-2xl font-display font-bold">Select Your Game</h3>
                         <p className="text-muted-foreground">
-                          Each match costs 1 credit. Winner gets 1.6 credits, loser loses 1 credit.
+                          Winner gets {(betAmount * 1.6).toFixed(1)} credits. Loser loses {betAmount} credits.
                         </p>
                       </div>
 
@@ -387,19 +425,54 @@ export default function Home() {
                         ))}
                       </div>
 
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">Bet Amount</label>
+                          <div className="flex items-center justify-center gap-4">
+                            <Button
+                              onClick={() => setBetAmount(Math.max(1, betAmount - 1))}
+                              variant="outline"
+                              size="icon"
+                              disabled={betAmount <= 1}
+                              data-testid="button-decrease-bet"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <Card className="px-8 py-4 bg-primary/10">
+                              <div className="text-3xl font-mono font-bold text-primary" data-testid="text-bet-amount">
+                                {betAmount}
+                              </div>
+                              <div className="text-xs text-muted-foreground">credits</div>
+                            </Card>
+                            <Button
+                              onClick={() => setBetAmount(Math.min(100, Math.min(user.credits, betAmount + 1)))}
+                              variant="outline"
+                              size="icon"
+                              disabled={betAmount >= 100 || betAmount >= user.credits}
+                              data-testid="button-increase-bet"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Bet between 1-100 credits (max: {Math.min(100, user.credits)} based on your balance)
+                          </p>
+                        </div>
+                      </div>
+
                       <Button
                         onClick={handleJoinMatchmaking}
                         size="lg"
                         className="w-full h-16 text-2xl font-bold"
-                        disabled={user.credits < 1}
+                        disabled={user.credits < betAmount}
                         data-testid="button-play"
                       >
                         <Zap className="w-6 h-6 mr-2" />
                         PLAY {availableGames.find(g => g.id === selectedGame)?.name.toUpperCase() || 'NOW'}
                       </Button>
-                      {user.credits < 1 && (
+                      {user.credits < betAmount && (
                         <p className="text-sm text-destructive">
-                          Insufficient credits. Add more credits to play!
+                          Insufficient credits. You need {betAmount} credits to play!
                         </p>
                       )}
                     </div>
@@ -459,6 +532,12 @@ export default function Home() {
             </div>
 
             <div className="space-y-6 order-3">
+              <MatchmakingLobby
+                queuedPlayers={queuedPlayers}
+                currentUserId={user?.id}
+                onJoinMatch={handleJoinSpecificMatch}
+                userCredits={user?.credits || 0}
+              />
               <ActionLog />
             </div>
           </div>

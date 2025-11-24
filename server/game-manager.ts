@@ -14,6 +14,7 @@ export interface QueuedPlayer {
   socketId: string;
   name: string;
   gameType: GameType;
+  betAmount: number;
   joinedAt: number;
 }
 
@@ -103,22 +104,34 @@ export class GameManager {
     const queue = this.matchmakingQueues.get(player.gameType)!;
     queue.push(player);
 
-    // Try to match with another player
-    if (queue.length >= 2) {
-      const p1 = queue.shift()!;
-      const p2 = queue.shift()!;
-      this.startMatch(p1, p2, io, player.gameType);
+    // Broadcast queue update to all clients
+    this.broadcastQueueUpdate(io);
+
+    // Try to match with another player who has the same bet amount
+    const matchingPlayer = queue.find(p => 
+      p.userId !== player.userId && 
+      p.betAmount === player.betAmount
+    );
+    
+    if (matchingPlayer) {
+      // Remove both players from queue and start match
+      queue.splice(queue.indexOf(player), 1);
+      queue.splice(queue.indexOf(matchingPlayer), 1);
+      this.broadcastQueueUpdate(io);
+      this.startMatch(player, matchingPlayer, io, player.gameType);
     } else {
       // Set timeout for AI opponent
       setTimeout(() => {
         const stillInQueue = queue.find(p => p.userId === player.userId);
         if (stillInQueue) {
           queue.splice(queue.indexOf(stillInQueue), 1);
+          this.broadcastQueueUpdate(io);
           const botPlayer: QueuedPlayer = {
             userId: 'AI_BOT',
             socketId: 'bot-socket',
             name: 'AI Bot',
             gameType: player.gameType,
+            betAmount: stillInQueue.betAmount,
             joinedAt: Date.now(),
           };
           this.startMatch(stillInQueue, botPlayer, io, player.gameType);
@@ -127,13 +140,84 @@ export class GameManager {
     }
   }
 
-  leaveQueue(userId: string): void {
+  leaveQueue(userId: string, io?: SocketIOServer): void {
     this.matchmakingQueues.forEach(queue => {
       const index = queue.findIndex(p => p.userId === userId);
       if (index !== -1) {
         queue.splice(index, 1);
       }
     });
+    if (io) {
+      this.broadcastQueueUpdate(io);
+    }
+  }
+
+  getAllQueuedPlayers(): QueuedPlayer[] {
+    const allPlayers: QueuedPlayer[] = [];
+    this.matchmakingQueues.forEach(queue => {
+      allPlayers.push(...queue);
+    });
+    return allPlayers;
+  }
+
+  getPlayerBetAmount(userId: string): number | null {
+    let betAmount: number | null = null;
+    this.matchmakingQueues.forEach(queue => {
+      const player = queue.find(p => p.userId === userId);
+      if (player) {
+        betAmount = player.betAmount;
+      }
+    });
+    return betAmount;
+  }
+
+  joinSpecificMatch(userId: string, targetUserId: string, userName: string, socketId: string, io: SocketIOServer): boolean {
+    // Find the target player in any queue
+    let targetPlayer: QueuedPlayer | undefined;
+    let targetQueue: QueuedPlayer[] | undefined;
+    
+    this.matchmakingQueues.forEach(queue => {
+      const player = queue.find(p => p.userId === targetUserId);
+      if (player) {
+        targetPlayer = player;
+        targetQueue = queue;
+      }
+    });
+
+    if (!targetPlayer || !targetQueue) {
+      return false;
+    }
+
+    // Remove target player from queue
+    targetQueue.splice(targetQueue.indexOf(targetPlayer), 1);
+
+    // Create joining player with proper socket ID
+    const joiningPlayer: QueuedPlayer = {
+      userId,
+      socketId,
+      name: userName,
+      gameType: targetPlayer.gameType,
+      betAmount: targetPlayer.betAmount,
+      joinedAt: Date.now(),
+    };
+
+    // Start match
+    this.broadcastQueueUpdate(io);
+    this.startMatch(targetPlayer, joiningPlayer, io, targetPlayer.gameType);
+    return true;
+  }
+
+  private broadcastQueueUpdate(io: SocketIOServer): void {
+    const queuedPlayers = this.getAllQueuedPlayers();
+    // Sanitize queue data - don't send socket IDs to clients
+    const sanitizedQueue = queuedPlayers.map(p => ({
+      userId: p.userId,
+      name: p.name,
+      gameType: p.gameType,
+      betAmount: p.betAmount,
+      joinedAt: p.joinedAt,
+    }));
+    io.emit('queueUpdate', sanitizedQueue);
   }
 
   private startMatch(p1: QueuedPlayer, p2: QueuedPlayer, io: SocketIOServer, gameType: GameType): void {
@@ -145,6 +229,7 @@ export class GameManager {
     
     (match as any).botIsPlayer2 = isBot2;
     (match as any).gameType = gameType;
+    (match as any).betAmount = p1.betAmount;
     (match.player1 as any).socketId = p1.socketId;
     (match.player2 as any).socketId = p2.socketId;
     
@@ -227,16 +312,21 @@ export class GameManager {
 
     const isBot2 = (match as any).botIsPlayer2;
     const gameType = (match as any).gameType || 'pong';
+    const betAmount = (match as any).betAmount || 1;
 
-    // Credit settlement
+    // Credit settlement: winner gets betAmount * 1.6, loser loses betAmount
     const player1 = await storage.getUser(match.player1.id);
     const player2 = !isBot2 ? await storage.getUser(match.player2.id) : null;
 
     if (!player1) return;
 
     const isPlayer1Winner = winnerId === match.player1.id;
-    const player1NewCredits = isPlayer1Winner ? player1.credits + 1.6 : player1.credits;
-    const player2NewCredits = isBot2 ? 0 : (isPlayer1Winner ? player2!.credits : player2!.credits + 1.6);
+    const winnerPayout = betAmount * 1.6;
+    
+    // Winner gets back their bet + 60% bonus (net +0.6 * betAmount after the entry fee)
+    // Loser already lost their bet when they joined the queue
+    const player1NewCredits = isPlayer1Winner ? player1.credits + winnerPayout : player1.credits;
+    const player2NewCredits = isBot2 ? 0 : (isPlayer1Winner ? player2!.credits : player2!.credits + winnerPayout);
 
     await storage.updateUserCredits(match.player1.id, player1NewCredits);
     if (!isBot2 && player2) {
@@ -247,7 +337,7 @@ export class GameManager {
       matchesPlayed: player1.matchesPlayed + 1,
       wins: isPlayer1Winner ? player1.wins + 1 : player1.wins,
       losses: isPlayer1Winner ? player1.losses : player1.losses + 1,
-      totalEarnings: isPlayer1Winner ? player1.totalEarnings + 1.6 : player1.totalEarnings,
+      totalEarnings: isPlayer1Winner ? player1.totalEarnings + winnerPayout : player1.totalEarnings,
     });
 
     if (!isBot2 && player2) {
@@ -255,7 +345,7 @@ export class GameManager {
         matchesPlayed: player2.matchesPlayed + 1,
         wins: isPlayer1Winner ? player2.wins : player2.wins + 1,
         losses: isPlayer1Winner ? player2.losses + 1 : player2.losses,
-        totalEarnings: isPlayer1Winner ? player2.totalEarnings : player2.totalEarnings + 1.6,
+        totalEarnings: isPlayer1Winner ? player2.totalEarnings : player2.totalEarnings + winnerPayout,
       });
     }
 
@@ -269,7 +359,8 @@ export class GameManager {
       winnerName: isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name),
       player1Score: match.player1.score || 0,
       player2Score: match.player2.score || 0,
-      creditsBurned: 0.4,
+      betAmount,
+      creditsBurned: betAmount * 0.4,
     });
 
     await storage.addActionLog({
