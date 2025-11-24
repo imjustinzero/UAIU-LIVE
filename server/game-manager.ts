@@ -9,6 +9,44 @@ import * as breakout from "./games/breakout";
 
 export type GameType = 'pong' | 'snake' | 'tetris' | 'breakout' | 'flappybird' | 'connect4';
 
+// Creative bot names to make bots appear as real players
+const BOT_NAMES = [
+  'Blue Unicorn',
+  'Zeus the Tetris God',
+  'Pixel Warrior',
+  'Cosmic Champion',
+  'Shadow Master',
+  'Lightning Strike',
+  'Neon Ninja',
+  'Quantum Queen',
+  'Fire Phoenix',
+  'Ice Dragon',
+  'Thunder King',
+  'Golden Eagle',
+  'Silver Fox',
+  'Crimson Knight',
+  'Emerald Wizard',
+  'Purple Storm',
+  'Diamond Ace',
+  'Ruby Ranger',
+  'Sapphire Sage',
+  'Topaz Tiger',
+  'Mystic Mage',
+  'Cyber Samurai',
+  'Turbo Titan',
+  'Blazing Comet',
+  'Stellar Striker',
+  'Nova Crusher',
+  'Velocity Viper',
+  'Rocket Rebel',
+  'Laser Legend',
+  'Prism Paladin',
+];
+
+function getRandomBotName(): string {
+  return BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+}
+
 export interface QueuedPlayer {
   userId: string;
   socketId: string;
@@ -137,7 +175,7 @@ export class GameManager {
       this.broadcastQueueUpdate(io);
       this.startMatch(player, matchingPlayer, io, player.gameType);
     } else {
-      // Set timeout for AI opponent
+      // Set timeout for AI opponent (1 second for instant-feeling matchmaking)
       setTimeout(() => {
         const stillInQueue = queue.find(p => p.userId === player.userId);
         if (stillInQueue) {
@@ -146,7 +184,7 @@ export class GameManager {
           const botPlayer: QueuedPlayer = {
             userId: 'AI_BOT',
             socketId: 'bot-socket',
-            name: 'AI Bot',
+            name: getRandomBotName(),
             gameType: player.gameType,
             betAmount: stillInQueue.betAmount,
             timeLimit: stillInQueue.timeLimit,
@@ -154,7 +192,7 @@ export class GameManager {
           };
           this.startMatch(stillInQueue, botPlayer, io, player.gameType);
         }
-      }, 10000);
+      }, 1000);
     }
   }
 
@@ -370,14 +408,17 @@ export class GameManager {
       });
     }
 
+    const player2Name = isBot2 ? match.player2.name : player2!.name;
+    const winnerName = isPlayer1Winner ? player1.name : player2Name;
+
     await storage.createMatch({
       gameType,
       player1Id: match.player1.id,
       player2Id: isBot2 ? 'AI_BOT' : match.player2.id,
       player1Name: player1.name,
-      player2Name: isBot2 ? 'AI Bot' : player2!.name,
+      player2Name,
       winnerId,
-      winnerName: isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name),
+      winnerName,
       player1Score: match.player1.score || 0,
       player2Score: match.player2.score || 0,
       betAmount,
@@ -386,9 +427,9 @@ export class GameManager {
 
     await storage.addActionLog({
       userId: winnerId === 'AI_BOT' ? null : winnerId,
-      userName: isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name),
+      userName: winnerName,
       type: 'match',
-      message: `${isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name)} won at ${gameType.toUpperCase()}!`,
+      message: `${winnerName} won at ${gameType.toUpperCase()}!`,
     });
 
     const p1SocketId = (match.player1 as any).socketId;

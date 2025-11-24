@@ -1,7 +1,7 @@
 # UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
+UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 1 second if no opponent is found. AI bots appear as real players with creative names. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
 
 ## Available Games
 1. **Pong**: Classic vertical paddle game with real-time physics
@@ -13,6 +13,13 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 
 ## User Preferences
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
+
+## Recent Changes (November 24, 2025)
+- Leaderboard is now hidden from non-logged-in users for exclusivity
+- Leaderboard data reset to starting values (1 credit per user)
+- AI bots now appear as real players with creative random names (e.g., "Blue Unicorn", "Zeus the Tetris God", "Cosmic Champion")
+- Bot matchmaking delay reduced from 10 seconds to 1 second for instant-feeling matches
+- Breakout paddle controls fixed to use continuous velocity movement like Pong
 
 ## System Architecture
 
@@ -36,17 +43,17 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 ### Feature Specifications
 - **Real-Time Multiplayer**: Sub-50ms latency for responsive gameplay.
 - **Credit Economy**: Purchase via Stripe, win/lose credits in matches, request payouts.
-- **Leaderboard**: Real-time rankings by total credits.
+- **Leaderboard**: Real-time rankings by total credits (visible only to logged-in users).
 - **Action Log**: Live feed of platform activities.
 - **Authentication**: Secure session-based authentication.
-- **AI Matchmaking**: Automatic match with AI bot if no opponent found in 10 seconds.
+- **AI Matchmaking**: Automatic match with AI bot if no opponent found in 1 second. Bots appear as real players with creative names.
 
 ### System Design Choices
 The system employs a client-server architecture. The server manages all critical game logic, credit transactions, and user authentication to ensure fairness and prevent cheating. Data is persisted in a PostgreSQL database, ensuring state consistency across server restarts. Socket.IO is used for low-latency real-time game state synchronization.
 
 ### Game-Specific Implementation Details
 
-All games feature server-authoritative logic to prevent cheating. Game state is synchronized at 60 FPS via Socket.IO. Bot AI provides single-player experience when matchmaking queue is empty after 10 seconds.
+All games feature server-authoritative logic to prevent cheating. Game state is synchronized at 60 FPS via Socket.IO. Bot AI provides single-player experience when matchmaking queue is empty after 1 second, with bots appearing as real players using creative random names.
 
 #### Snake Bot AI Balancing
 The Snake bot AI has been carefully balanced to provide challenging but beatable gameplay:

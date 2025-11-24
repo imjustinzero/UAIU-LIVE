@@ -39,7 +39,7 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [matchmaking, setMatchmaking] = useState(false);
-  const [matchmakingTimer, setMatchmakingTimer] = useState(10);
+  const [matchmakingTimer, setMatchmakingTimer] = useState(1);
   const [inGame, setInGame] = useState(false);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<string>('pong');
@@ -199,7 +199,7 @@ export default function Home() {
     }
 
     setMatchmaking(true);
-    setMatchmakingTimer(10);
+    setMatchmakingTimer(1);
     socket?.emit('joinMatchmaking', { gameType: selectedGame, betAmount });
     toast({
       title: "Finding Match...",
@@ -209,7 +209,7 @@ export default function Home() {
 
   const handleCancelMatchmaking = () => {
     setMatchmaking(false);
-    setMatchmakingTimer(10);
+    setMatchmakingTimer(1);
     socket?.emit('leaveMatchmaking');
   };
 
@@ -370,8 +370,7 @@ export default function Home() {
               </Button>
             </Card>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <Leaderboard />
+            <div className="grid md:grid-cols-1 gap-6">
               <ActionLog />
             </div>
           </div>
