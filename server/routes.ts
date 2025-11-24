@@ -10,6 +10,7 @@ import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } fr
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
+import { gameManager, type GameType } from "./game-manager";
 
 interface PlayerInMatch {
   userId: string;
@@ -536,6 +537,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/games', async (req, res) => {
+    try {
+      const games = [
+        { id: 'pong', name: 'Pong', description: 'Classic paddle battle', players: '1v1', difficulty: 'Easy' },
+        { id: 'snake', name: 'Snake', description: 'Multiplayer survival race', players: '1v1', difficulty: 'Medium' },
+        { id: 'tetris', name: 'Tetris', description: 'Battle mode competition', players: '1v1', difficulty: 'Hard' },
+        { id: 'breakout', name: 'Breakout', description: 'Brick breaking duel', players: '1v1', difficulty: 'Medium' },
+        { id: 'flappybird', name: 'Flappy Bird', description: 'Survival race challenge', players: '1v1', difficulty: 'Hard' },
+        { id: 'connect4', name: 'Connect 4', description: 'Strategic drop game', players: '1v1', difficulty: 'Easy' },
+        { id: 'airhockey', name: 'Air Hockey', description: 'Fast-paced puck action', players: '1v1', difficulty: 'Medium' },
+      ];
+      res.json(games);
+    } catch (error) {
+      console.error('Games list error:', error);
+      res.status(500).json({ message: 'Failed to fetch games' });
+    }
+  });
+
   app.post('/api/payout/request', requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
@@ -630,7 +649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     (socket as any).userEmail = session.email;
     console.log('Client connected:', socket.id, 'User:', session.userId, session.email);
 
-    socket.on('joinMatchmaking', async () => {
+    socket.on('joinMatchmaking', async (data: { gameType: GameType }) => {
       try {
         const userId = (socket as any).userId;
         if (!userId) {
@@ -654,13 +673,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserCredits(userId, user.credits - 1);
         socket.emit('creditsUpdated', user.credits - 1);
 
-        matchmakingQueue.push({ userId, socketId: socket.id, name: user.name, joinedAt: Date.now() });
+        const gameType = data.gameType || 'pong';
 
-        if (matchmakingQueue.length >= 2) {
-          const player1 = matchmakingQueue.shift()!;
-          const player2 = matchmakingQueue.shift()!;
+        // Use new games or fallback to old Pong logic
+        if (gameType !== 'pong') {
+          gameManager.joinQueue({ 
+            userId, 
+            socketId: socket.id, 
+            name: user.name, 
+            joinedAt: Date.now(),
+            gameType 
+          }, io);
+        } else {
+          // Legacy Pong matchmaking
+          matchmakingQueue.push({ userId, socketId: socket.id, name: user.name, joinedAt: Date.now() });
 
-          startMatch(player1, player2, io);
+          if (matchmakingQueue.length >= 2) {
+            const player1 = matchmakingQueue.shift()!;
+            const player2 = matchmakingQueue.shift()!;
+            startMatch(player1, player2, io);
+          }
         }
       } catch (error) {
         console.error('Matchmaking error:', error);
@@ -668,11 +700,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    socket.on('gameInput', (data: { matchId: string; input: any }) => {
+      const userId = (socket as any).userId;
+      if (!userId) return;
+
+      gameManager.handleInput(data.matchId, userId, data.input);
+    });
+
     socket.on('leaveMatchmaking', () => {
       const userId = (socket as any).userId;
       if (!userId) {
         return;
       }
+      
+      // Leave both old Pong queue and new GameManager queues
+      gameManager.leaveQueue(userId);
       
       const index = matchmakingQueue.findIndex(p => p.userId === userId);
       if (index !== -1) {

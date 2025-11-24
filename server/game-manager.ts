@@ -141,6 +141,8 @@ export class GameManager {
     
     (match as any).botIsPlayer2 = isBot2;
     (match as any).gameType = gameType;
+    (match.player1 as any).socketId = p1.socketId;
+    (match.player2 as any).socketId = p2.socketId;
     
     this.activeMatches.set(match.matchId, match);
     this.playerToMatchMap.set(p1.userId, match.matchId);
@@ -177,10 +179,15 @@ export class GameManager {
         controller.updateBotAI(match, true);
       }
 
-      // Emit state to players
-      io.to(match.player1?.socketId || match.matchId).emit('gameState', match);
-      if (match.player2?.socketId && match.player2.socketId !== 'bot-socket') {
-        io.to(match.player2.socketId).emit('gameState', match);
+      // Emit state to players via socket IDs
+      const p1SocketId = (match.player1 as any).socketId;
+      const p2SocketId = (match.player2 as any).socketId;
+      
+      if (p1SocketId) {
+        io.to(p1SocketId).emit('gameState', match);
+      }
+      if (p2SocketId && p2SocketId !== 'bot-socket') {
+        io.to(p2SocketId).emit('gameState', match);
       }
 
       // Check if game finished
@@ -264,16 +271,21 @@ export class GameManager {
       message: `${isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name)} won at ${gameType.toUpperCase()}!`,
     });
 
-    io.to(match.player1.socketId).emit('matchEnded', {
-      winnerId,
-      player1Id: match.player1.id,
-      player2Id: match.player2.id,
-      player1Credits: player1NewCredits,
-      player2Credits: player2NewCredits,
-    });
+    const p1SocketId = (match.player1 as any).socketId;
+    const p2SocketId = (match.player2 as any).socketId;
 
-    if (!isBot2) {
-      io.to(match.player2.socketId).emit('matchEnded', {
+    if (p1SocketId) {
+      io.to(p1SocketId).emit('matchEnded', {
+        winnerId,
+        player1Id: match.player1.id,
+        player2Id: match.player2.id,
+        player1Credits: player1NewCredits,
+        player2Credits: player2NewCredits,
+      });
+    }
+
+    if (!isBot2 && p2SocketId) {
+      io.to(p2SocketId).emit('matchEnded', {
         winnerId,
         player1Id: match.player1.id,
         player2Id: match.player2.id,

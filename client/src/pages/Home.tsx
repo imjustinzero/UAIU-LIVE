@@ -3,7 +3,7 @@ import { io, Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Gem, LogOut, DollarSign, Loader2, Zap } from "lucide-react";
+import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import { GameCanvas } from "@/components/GameCanvas";
@@ -23,6 +23,14 @@ interface User {
   totalEarnings: number;
 }
 
+interface Game {
+  id: string;
+  name: string;
+  description: string;
+  players: string;
+  difficulty: string;
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -31,6 +39,8 @@ export default function Home() {
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingTimer, setMatchmakingTimer] = useState(10);
   const [inGame, setInGame] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<string>('pong');
+  const [availableGames, setAvailableGames] = useState<Game[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,6 +75,12 @@ export default function Home() {
           console.error('Failed to refresh user data:', err);
         });
     }
+
+    // Fetch available games
+    fetch('/api/games')
+      .then(res => res.json())
+      .then(games => setAvailableGames(games))
+      .catch(err => console.error('Failed to fetch games:', err));
   }, []);
 
   useEffect(() => {
@@ -158,10 +174,10 @@ export default function Home() {
 
     setMatchmaking(true);
     setMatchmakingTimer(10);
-    socket?.emit('joinMatchmaking');
+    socket?.emit('joinMatchmaking', { gameType: selectedGame });
     toast({
       title: "Finding Match...",
-      description: "Searching for an opponent",
+      description: `Searching for ${availableGames.find(g => g.id === selectedGame)?.name || 'Pong'} opponent`,
     });
   };
 
@@ -310,13 +326,50 @@ export default function Home() {
               <Card className="p-6">
                 <CardContent className="space-y-6 p-0">
                   {!inGame && !matchmaking && (
-                    <div className="text-center space-y-4">
+                    <div className="text-center space-y-6">
                       <div className="space-y-2">
-                        <h3 className="text-2xl font-display font-bold">Ready to Play?</h3>
+                        <h3 className="text-2xl font-display font-bold">Select Your Game</h3>
                         <p className="text-muted-foreground">
                           Each match costs 1 credit. Winner gets 1.6 credits, loser loses 1 credit.
                         </p>
                       </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {availableGames.map((game) => (
+                          <Card
+                            key={game.id}
+                            className={`p-4 cursor-pointer transition-all hover-elevate ${
+                              selectedGame === game.id 
+                                ? 'ring-2 ring-primary bg-primary/10' 
+                                : 'hover:bg-accent/50'
+                            }`}
+                            onClick={() => setSelectedGame(game.id)}
+                            data-testid={`card-game-${game.id}`}
+                          >
+                            <div className="space-y-2 text-left">
+                              <div className="flex items-center gap-2">
+                                <Gamepad2 className="w-5 h-5 text-primary" />
+                                <h4 className="font-bold text-sm">{game.name}</h4>
+                              </div>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {game.description}
+                              </p>
+                              <div className="flex gap-2 flex-wrap">
+                                <Badge variant="secondary" className="text-xs">
+                                  {game.players}
+                                </Badge>
+                                <Badge 
+                                  variant={game.difficulty === 'Easy' ? 'default' : game.difficulty === 'Medium' ? 'secondary' : 'outline'}
+                                  className="text-xs"
+                                >
+                                  {game.difficulty}
+                                </Badge>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+
                       <Button
                         onClick={handleJoinMatchmaking}
                         size="lg"
@@ -325,7 +378,7 @@ export default function Home() {
                         data-testid="button-play"
                       >
                         <Zap className="w-6 h-6 mr-2" />
-                        PLAY NOW
+                        PLAY {availableGames.find(g => g.id === selectedGame)?.name.toUpperCase() || 'NOW'}
                       </Button>
                       {user.credits < 1 && (
                         <p className="text-sm text-destructive">
