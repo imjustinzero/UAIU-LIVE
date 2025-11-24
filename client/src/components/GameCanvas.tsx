@@ -4,6 +4,9 @@ import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCw } from "luc
 import { PongRenderer, PONG_CANVAS_CONFIG } from "@/components/games/PongRenderer";
 import { SnakeRenderer, SNAKE_CANVAS_CONFIG } from "@/components/games/SnakeRenderer";
 import { TetrisRenderer, TETRIS_CANVAS_CONFIG } from "@/components/games/TetrisRenderer";
+import { BreakoutRenderer, BREAKOUT_CANVAS_CONFIG } from "@/components/games/BreakoutRenderer";
+import { FlappyBirdRenderer, FLAPPYBIRD_CANVAS_CONFIG } from "@/components/games/FlappyBirdRenderer";
+import { Connect4Renderer, CONNECT4_CANVAS_CONFIG } from "@/components/games/Connect4Renderer";
 
 interface GameCanvasProps {
   socket: any;
@@ -47,6 +50,12 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         return SNAKE_CANVAS_CONFIG;
       case 'tetris':
         return TETRIS_CANVAS_CONFIG;
+      case 'breakout':
+        return BREAKOUT_CANVAS_CONFIG;
+      case 'flappybird':
+        return FLAPPYBIRD_CANVAS_CONFIG;
+      case 'connect4':
+        return CONNECT4_CANVAS_CONFIG;
       default:
         return PONG_CANVAS_CONFIG;
     }
@@ -90,11 +99,37 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
       } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
         handleInput({ direction: 'rotate' });
       }
+    } else if (gameType === 'breakout') {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        setPressedKeys(prev => new Set(prev).add(e.key));
+        handleInput({ direction: 'left' });
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        setPressedKeys(prev => new Set(prev).add(e.key));
+        handleInput({ direction: 'right' });
+      }
+    } else if (gameType === 'flappybird') {
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        handleInput({ action: 'jump' });
+      }
+    } else if (gameType === 'connect4') {
+      const numKey = parseInt(e.key);
+      if (numKey >= 1 && numKey <= 7) {
+        handleInput({ column: numKey - 1 });
+      }
     }
   };
 
   const handleKeyUp = (e: KeyboardEvent) => {
     if (gameType === 'pong') {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A' || e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        setPressedKeys(prev => {
+          const next = new Set(prev);
+          next.delete(e.key);
+          return next;
+        });
+        handleInput({ direction: 'stop' });
+      }
+    } else if (gameType === 'breakout') {
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A' || e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
         setPressedKeys(prev => {
           const next = new Set(prev);
@@ -275,6 +310,112 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           </Button>
         </div>
       );
+    } else if (gameType === 'breakout') {
+      return (
+        <div className="flex gap-4 w-full max-w-md">
+          <Button
+            size="lg"
+            className="flex-1 h-16 text-xl font-bold"
+            onMouseDown={() => {
+              setPressedKeys(prev => new Set(prev).add('left'));
+              handleInput({ direction: 'left' });
+            }}
+            onMouseUp={() => {
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
+            onMouseLeave={() => {
+              if (pressedKeys.has('left')) {
+                setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
+                handleInput({ direction: 'stop' });
+              }
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => new Set(prev).add('left'));
+              handleInput({ direction: 'left' });
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
+            disabled={!gameState || gameState.status !== 'playing'}
+            data-testid="button-breakout-left"
+          >
+            <ChevronLeft className="w-8 h-8 mr-2" />
+            LEFT
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1 h-16 text-xl font-bold"
+            onMouseDown={() => {
+              setPressedKeys(prev => new Set(prev).add('right'));
+              handleInput({ direction: 'right' });
+            }}
+            onMouseUp={() => {
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
+            onMouseLeave={() => {
+              if (pressedKeys.has('right')) {
+                setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
+                handleInput({ direction: 'stop' });
+              }
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => new Set(prev).add('right'));
+              handleInput({ direction: 'right' });
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
+              handleInput({ direction: 'stop' });
+            }}
+            disabled={!gameState || gameState.status !== 'playing'}
+            data-testid="button-breakout-right"
+          >
+            RIGHT
+            <ChevronRight className="w-8 h-8 ml-2" />
+          </Button>
+        </div>
+      );
+    } else if (gameType === 'flappybird') {
+      return (
+        <Button
+          size="lg"
+          className="w-full max-w-md h-20 text-2xl font-bold"
+          onClick={() => handleInput({ action: 'jump' })}
+          disabled={!gameState || gameState.status !== 'playing'}
+          data-testid="button-flappybird-jump"
+        >
+          🐦 JUMP
+        </Button>
+      );
+    } else if (gameType === 'connect4') {
+      const myTurn = gameState && gameState.currentTurn === userId;
+      return (
+        <div className="w-full max-w-md">
+          <div className="text-center mb-2 text-white">
+            {myTurn ? <span className="text-primary font-bold">Your Turn!</span> : <span className="opacity-60">Opponent's Turn</span>}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {[0, 1, 2, 3, 4, 5, 6].map((col) => (
+              <Button
+                key={col}
+                size="lg"
+                className="h-16 text-xl font-bold"
+                onClick={() => handleInput({ column: col })}
+                disabled={!gameState || gameState.status !== 'playing' || !myTurn}
+                data-testid={`button-connect4-col-${col}`}
+              >
+                {col + 1}
+              </Button>
+            ))}
+          </div>
+        </div>
+      );
     }
     return null;
   };
@@ -292,6 +433,9 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         {gameType === 'pong' && <PongRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'snake' && <SnakeRenderer gameState={gameState} canvasRef={canvasRef} />}
         {gameType === 'tetris' && <TetrisRenderer gameState={gameState} canvasRef={canvasRef} />}
+        {gameType === 'breakout' && <BreakoutRenderer gameState={gameState} canvasRef={canvasRef} />}
+        {gameType === 'flappybird' && <FlappyBirdRenderer gameState={gameState} canvasRef={canvasRef} />}
+        {gameType === 'connect4' && <Connect4Renderer gameState={gameState} canvasRef={canvasRef} />}
         {gameState?.status === 'finished' && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-lg">
             <div className="text-center">
