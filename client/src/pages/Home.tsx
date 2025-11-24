@@ -388,26 +388,6 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-6">
-            {user && !user.emailVerified && (
-              <Alert variant="destructive" data-testid="alert-verify-email">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  <span>
-                    Please verify your email to receive your first free credit and start playing!
-                  </span>
-                  <Button
-                    onClick={() => navigate('/profile')}
-                    variant="outline"
-                    size="sm"
-                    className="ml-4"
-                    data-testid="button-go-to-profile"
-                  >
-                    Go to Profile
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
             <div className="grid lg:grid-cols-[300px_1fr_300px] gap-6">
               <div className="space-y-6 order-2 lg:order-1">
                 <Leaderboard currentUserId={user.id} />

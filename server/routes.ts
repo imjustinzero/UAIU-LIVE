@@ -73,7 +73,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      const verificationToken = generateVerificationToken();
       
       const user = await storage.createUser({ 
         email, 
@@ -81,8 +80,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         password: hashedPassword,
       });
 
-      // Set verification token
-      await storage.updateUser(user.id, { emailVerificationToken: verificationToken });
+      // Mark email as verified and give 1 free credit immediately
+      await storage.updateUser(user.id, {
+        emailVerified: true,
+      });
+      
+      await storage.updateUserCredits(user.id, 1);
 
       await storage.addActionLog({
         userId: user.id,
@@ -91,27 +94,16 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         message: `${name} joined UAIU Arcade!`,
       });
 
-      // Send verification and notification emails
-      try {
-        console.log('📧 Attempting to send emails for:', email);
-        await Promise.all([
-          sendVerificationEmail(email, name, verificationToken).catch(err => {
-            console.error('❌ Verification email error:', err);
-            throw err;
-          }),
-          sendSignupNotification(email, name, new Date()).catch(err => {
-            console.error('❌ Signup notification error:', err);
-            // Don't throw - admin notifications failing shouldn't block signup
-          }),
-        ]);
-        console.log('✅ All emails sent successfully');
-      } catch (emailError) {
-        console.error('❌ Email sending failed:', emailError);
-        // Continue with signup even if emails fail
-      }
+      // Optionally send admin notification (silently fail if it doesn't work)
+      sendSignupNotification(email, name, new Date()).catch(err => {
+        console.error('❌ Signup notification error:', err);
+      });
 
       const sessionId = createSession(user.id, user.email);
-      res.json({ ...user, sessionId });
+      
+      // Fetch updated user with credits
+      const updatedUser = await storage.getUser(user.id);
+      res.json({ ...updatedUser, sessionId });
     } catch (error) {
       console.error('Signup error:', error);
       res.status(500).json({ message: 'Signup failed' });

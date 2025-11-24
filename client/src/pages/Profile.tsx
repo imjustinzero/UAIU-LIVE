@@ -180,43 +180,11 @@ export default function Profile() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          {!user.emailVerified && (
-            <Alert variant="destructive" data-testid="alert-verify-email">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Please verify your email to receive your first free credit and start playing!
-                <Button
-                  onClick={handleResendVerification}
-                  variant="outline"
-                  size="sm"
-                  className="ml-4"
-                  disabled={resendingEmail}
-                  data-testid="button-resend-verification"
-                >
-                  {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <UserIcon className="w-6 h-6 text-primary" />
-                  Profile Information
-                </div>
-                {user.emailVerified ? (
-                  <Badge variant="default" className="gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Verified
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="gap-1">
-                    <XCircle className="w-3 h-3" />
-                    Unverified
-                  </Badge>
-                )}
+              <CardTitle className="flex items-center gap-2">
+                <UserIcon className="w-6 h-6 text-primary" />
+                Profile Information
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
