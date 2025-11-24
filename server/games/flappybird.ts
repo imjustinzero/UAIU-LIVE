@@ -135,12 +135,16 @@ export function updateFlappyBirdBotAI(state: FlappyBirdGameState, botIsPlayer2: 
   const gameData = bot.gameData;
   if (!gameData.alive) return;
 
+  // Skip decision 13% of time for ~87% win rate
+  if (Math.random() < 0.13) return;
+
   const birdX = botIsPlayer2 ? 100 : 50;
   const nextPipe = state.pipes.find(pipe => pipe.x + PIPE_WIDTH > birdX);
   
   if (nextPipe) {
     const targetY = nextPipe.gap;
-    if (gameData.y > targetY - 20) {
+    // Calibrated offset for balanced difficulty
+    if (gameData.y > targetY - 15) {
       flappyBirdJump(bot);
     }
   }

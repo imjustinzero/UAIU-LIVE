@@ -25,7 +25,7 @@ export function RadioPlayer() {
 
   return (
     <Card 
-      className="fixed bottom-4 right-4 p-3 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg w-80 z-50"
+      className="fixed top-4 right-4 p-3 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg w-80 z-50"
       data-testid="radio-player-container"
     >
       <div ref={containerRef} id="radio-player-360" data-testid="radio-player-embed" />

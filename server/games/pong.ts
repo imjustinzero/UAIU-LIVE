@@ -72,7 +72,7 @@ export function createPongMatch(p1Id: string, p2Id: string, p1Name: string, p2Na
       vy: (Math.random() > 0.5 ? 1 : -1) * BALL_SPEED,
     },
     totalHits: 0,
-    botWillWin: Math.random() < 0.85,
+    botWillWin: Math.random() < 0.87,
     status: 'playing',
   };
 }

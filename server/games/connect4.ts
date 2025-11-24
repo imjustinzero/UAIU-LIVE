@@ -127,14 +127,34 @@ export function getConnect4BotMove(state: Connect4GameState): number {
   const botColor = bot.gameData.color;
   const opponentColor = botColor === 1 ? 2 : 1;
 
+  // 13% chance to make a random move for ~87% win rate
+  if (Math.random() < 0.13) {
+    const validCols = [];
+    for (let col = 0; col < COLS; col++) {
+      if (state.board[0][col] === 0) validCols.push(col);
+    }
+    if (validCols.length > 0) {
+      return validCols[Math.floor(Math.random() * validCols.length)];
+    }
+  }
+
+  // Priority 1: Win if possible
   for (let col = 0; col < COLS; col++) {
     if (canWinInColumn(state.board, col, botColor)) return col;
   }
 
+  // Priority 2: Block opponent win
   for (let col = 0; col < COLS; col++) {
     if (canWinInColumn(state.board, col, opponentColor)) return col;
   }
 
+  // Priority 3: Prefer center columns (stronger strategy)
+  const centerCols = [3, 2, 4, 1, 5, 0, 6];
+  for (const col of centerCols) {
+    if (state.board[0][col] === 0) return col;
+  }
+
+  // Fallback: Any valid column
   const validCols = [];
   for (let col = 0; col < COLS; col++) {
     if (state.board[0][col] === 0) validCols.push(col);
