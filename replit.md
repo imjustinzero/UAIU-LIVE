@@ -14,10 +14,14 @@ Production-ready online multiplayer Pong platform with pay-to-play functionality
 - **Touch Controls**: Full mobile support with touch-based paddle movement
 - **Real-Time Multiplayer**: Sub-50ms latency with Socket.IO for responsive gameplay
 - **Multiple Matches**: Server supports multiple simultaneous matches with isolated game state
+- **AI Bot Matchmaking**: If no opponent found within 10 seconds, automatic match with AI bot
+- **Smart Bot AI**: Bot tracks ball intelligently and wins 85% of matches against players
+- **Countdown Timer**: Visual 10-second countdown while searching for opponents
 
 ### 💰 Credit Economy
-- **Purchase**: $1 = 10 credits via Stripe checkout link
-- **Match Cost**: 1 credit deducted when joining matchmaking queue
+- **Starter Credits**: New users receive 1 free credit upon signup
+- **Purchase**: $1 = 10 credits via Stripe checkout link (automatic via webhook)
+- **Match Cost**: 1 credit deducted when joining matchmaking queue (non-refundable)
 - **Winner Reward**: 1.6 credits awarded to match winner
 - **Loser Penalty**: 1 credit lost by match loser
 - **Burn Rate**: 0.4 credits burned per match (platform fee)
@@ -211,8 +215,8 @@ Server runs on port 5000 (configured for Replit deployment).
 - [ ] **CSRF Protection**: Add CSRF tokens for state-changing operations
 - [ ] **Rate Limiting**: Implement rate limits on auth endpoints to prevent brute force
 - [ ] **Refresh Tokens**: Add long-lived refresh tokens for better UX
-- [ ] **Database**: Migrate from in-memory storage to PostgreSQL
-- [ ] **Stripe Webhook**: Complete webhook integration for auto-credit fulfillment
+- [x] **Database**: ✅ Migrated from in-memory to PostgreSQL with Drizzle ORM
+- [x] **Stripe Webhook**: ✅ Completed webhook integration with stripe-replit-sync (auto-credit fulfillment)
 - [ ] **Email Service**: Configure SMTP/SendGrid for automated notifications
 - [ ] **Logging**: Add structured logging with log aggregation
 - [ ] **Monitoring**: Set up error tracking (Sentry) and performance monitoring
@@ -234,7 +238,7 @@ Server runs on port 5000 (configured for Replit deployment).
 
 ## Known Limitations (MVP)
 1. **In-Memory Sessions**: Server restart logs out all users (acceptable for MVP)
-2. **In-Memory Storage**: Data lost on restart (migrate to database for production)
+2. ~~**In-Memory Storage**: Data lost on restart (migrate to database for production)~~ ✅ **FIXED**: PostgreSQL database with full persistence
 3. **Manual Payouts**: Payout requests require manual approval via email
 4. **No Admin Panel**: Payout management requires database access
 5. **Basic Error Handling**: Production should have more robust error recovery
@@ -318,7 +322,21 @@ shared/
 
 ## Changelog
 
-### 2025-11-24 - Security Hardening
+### 2025-11-24 (Part 2) - AI Bot & UX Improvements
+- ✅ Added 1 free starter credit for new signups (changed from 0)
+- ✅ Implemented AI bot matchmaking with 10-second timeout
+- ✅ Bot AI tracks ball and moves paddle intelligently  
+- ✅ Bot configured to win 85% of matches via physics bias
+- ✅ Added visual countdown timer during matchmaking
+- ✅ Removed 360 Radio widget from UI
+- ✅ Fixed client-side credit display to show +1.6 for winner
+
+### 2025-11-24 (Part 1) - Database Migration & Stripe Integration
+- ✅ Migrated from in-memory storage to PostgreSQL with Drizzle ORM
+- ✅ All data now persists across server restarts (users, matches, payouts, action logs)
+- ✅ Integrated Stripe webhook using stripe-replit-sync for automatic credit fulfillment
+- ✅ Fixed credit economy: Winner +1.6, Loser -1.0, Burn 0.4 credits per match
+- ✅ Added /api/auth/me endpoint for fresh user data sync
 - ✅ Implemented session-based authentication
 - ✅ Added Socket.IO sessionId validation
 - ✅ Protected all credit mutation endpoints

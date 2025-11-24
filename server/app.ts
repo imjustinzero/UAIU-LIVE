@@ -28,9 +28,10 @@ declare module 'http' {
   }
 }
 
-// NOTE: Stripe webhook route is registered BEFORE express.json()
-// in server/routes.ts to preserve raw Buffer for webhook signature verification
-// All other routes get express.json() middleware applied there
+// NOTE: Body parsing middleware is applied PER-ROUTE in server/routes.ts
+// - Stripe webhook uses express.raw() for Buffer payload
+// - All other routes use express.json() for JSON parsing
+// This prevents the webhook signature verification from breaking
 
 app.use(express.urlencoded({ extended: false }));
 

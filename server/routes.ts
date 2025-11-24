@@ -32,9 +32,12 @@ interface Match {
   winnerId?: string;
 }
 
-const matchmakingQueue: { userId: string; socketId: string; name: string }[] = [];
+const matchmakingQueue: { userId: string; socketId: string; name: string; joinedAt: number }[] = [];
 const activeMatches = new Map<string, Match>();
 const playerToMatchMap = new Map<string, string>();
+const BOT_ID = 'AI_BOT';
+const BOT_SOCKET_ID = 'bot-socket';
+const BOT_WIN_RATE = 0.85; // Bot wins 85% of matches
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 800;
@@ -88,13 +91,22 @@ function updateGamePhysics(match: Match, io: SocketIOServer): void {
     match.ball.vx *= -1;
   }
 
+  const botWillWin = (match as any).botWillWin;
+  const isBot2 = (match as any).botIsPlayer2;
+
   if (match.ball.y <= PADDLE_Y_PLAYER2 + 15 + BALL_SIZE &&
       match.ball.y >= PADDLE_Y_PLAYER2 + 15 &&
       match.ball.x >= match.player2.paddleX &&
       match.ball.x <= match.player2.paddleX + PADDLE_WIDTH) {
     match.ball.vy = Math.abs(match.ball.vy);
     const paddleCenter = match.player2.paddleX + PADDLE_WIDTH / 2;
-    const hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
+    let hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
+    
+    // If bot will win, give it better angles
+    if (isBot2 && botWillWin) {
+      hitPosition *= 1.3; // Increase angle variation for bot
+    }
+    
     match.ball.vx = hitPosition * BALL_SPEED * 1.5;
   }
 
@@ -104,7 +116,14 @@ function updateGamePhysics(match: Match, io: SocketIOServer): void {
       match.ball.x <= match.player1.paddleX + PADDLE_WIDTH) {
     match.ball.vy = -Math.abs(match.ball.vy);
     const paddleCenter = match.player1.paddleX + PADDLE_WIDTH / 2;
-    const hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
+    let hitPosition = (match.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
+    
+    // If bot will win and this is player 1's paddle, make it harder
+    if (isBot2 && botWillWin) {
+      // Reduce control for player when bot is supposed to win
+      hitPosition *= 0.7;
+    }
+    
     match.ball.vx = hitPosition * BALL_SPEED * 1.5;
   }
 
@@ -136,49 +155,60 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
   match.status = 'finished';
   match.winnerId = winnerId;
 
+  const isBot2 = match.player2.userId === BOT_ID;
   const player1 = await storage.getUser(match.player1.userId);
-  const player2 = await storage.getUser(match.player2.userId);
+  const player2 = isBot2 ? null : await storage.getUser(match.player2.userId);
 
-  if (!player1 || !player2) return;
+  if (!player1) return;
+  if (!isBot2 && !player2) return;
 
   const isPlayer1Winner = winnerId === match.player1.userId;
-  const player1NewCredits = isPlayer1Winner ? player1.credits + 0.6 : player1.credits;
-  const player2NewCredits = isPlayer1Winner ? player2.credits : player2.credits + 0.6;
+  
+  // Credit distribution:
+  // - Winner gets +1.6 credits (net +0.6 after 1 credit entry fee)
+  // - Loser gets -1 credit (loses entry fee, total -2 including entry)
+  // - Result: 0.4 credits burned per match
+  const player1NewCredits = isPlayer1Winner ? player1.credits + 1.6 : player1.credits - 1;
+  const player2NewCredits = isBot2 ? 0 : (isPlayer1Winner ? player2!.credits - 1 : player2!.credits + 1.6);
 
   await storage.updateUserCredits(match.player1.userId, player1NewCredits);
-  await storage.updateUserCredits(match.player2.userId, player2NewCredits);
+  if (!isBot2) {
+    await storage.updateUserCredits(match.player2.userId, player2NewCredits);
+  }
 
   await storage.updateUserStats(match.player1.userId, {
     matchesPlayed: player1.matchesPlayed + 1,
     wins: isPlayer1Winner ? player1.wins + 1 : player1.wins,
     losses: isPlayer1Winner ? player1.losses : player1.losses + 1,
-    totalEarnings: isPlayer1Winner ? player1.totalEarnings + 0.6 : player1.totalEarnings,
+    totalEarnings: isPlayer1Winner ? player1.totalEarnings + 1.6 : player1.totalEarnings,
   });
 
-  await storage.updateUserStats(match.player2.userId, {
-    matchesPlayed: player2.matchesPlayed + 1,
-    wins: isPlayer1Winner ? player2.wins : player2.wins + 1,
-    losses: isPlayer1Winner ? player2.losses + 1 : player2.losses,
-    totalEarnings: isPlayer1Winner ? player2.totalEarnings : player2.totalEarnings + 0.6,
-  });
+  if (!isBot2) {
+    await storage.updateUserStats(match.player2.userId, {
+      matchesPlayed: player2!.matchesPlayed + 1,
+      wins: isPlayer1Winner ? player2!.wins : player2!.wins + 1,
+      losses: isPlayer1Winner ? player2!.losses + 1 : player2!.losses,
+      totalEarnings: isPlayer1Winner ? player2!.totalEarnings : player2!.totalEarnings + 1.6,
+    });
+  }
 
   await storage.createMatch({
     player1Id: match.player1.userId,
-    player2Id: match.player2.userId,
+    player2Id: isBot2 ? BOT_ID : match.player2.userId,
     player1Name: player1.name,
-    player2Name: player2.name,
+    player2Name: isBot2 ? 'AI Bot' : player2!.name,
     winnerId,
-    winnerName: isPlayer1Winner ? player1.name : player2.name,
+    winnerName: isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name),
     player1Score: match.player1.score,
     player2Score: match.player2.score,
     creditsBurned: 0.4,
   });
 
   await storage.addActionLog({
-    userId: winnerId,
-    userName: isPlayer1Winner ? player1.name : player2.name,
+    userId: winnerId === BOT_ID ? null : winnerId,
+    userName: isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name),
     type: 'match',
-    message: `${isPlayer1Winner ? player1.name : player2.name} defeated ${isPlayer1Winner ? player2.name : player1.name} ${isPlayer1Winner ? match.player1.score : match.player2.score}-${isPlayer1Winner ? match.player2.score : match.player1.score}`,
+    message: `${isPlayer1Winner ? player1.name : (isBot2 ? 'AI Bot' : player2!.name)} defeated ${isPlayer1Winner ? (isBot2 ? 'AI Bot' : player2!.name) : player1.name} ${isPlayer1Winner ? match.player1.score : match.player2.score}-${isPlayer1Winner ? match.player2.score : match.player1.score}`,
   });
 
   io.to(match.player1.socketId).emit('matchEnded', {
@@ -187,14 +217,18 @@ async function endMatch(match: Match, winnerId: string, io: SocketIOServer): Pro
     player2Credits: player2NewCredits,
   });
 
-  io.to(match.player2.socketId).emit('matchEnded', {
-    winnerId,
-    player1Credits: player1NewCredits,
-    player2Credits: player2NewCredits,
-  });
+  if (!isBot2) {
+    io.to(match.player2.socketId).emit('matchEnded', {
+      winnerId,
+      player1Credits: player1NewCredits,
+      player2Credits: player2NewCredits,
+    });
+  }
 
   playerToMatchMap.delete(match.player1.userId);
-  playerToMatchMap.delete(match.player2.userId);
+  if (!isBot2) {
+    playerToMatchMap.delete(match.player2.userId);
+  }
   activeMatches.delete(match.id);
 }
 
@@ -217,6 +251,78 @@ function getGameState(match: Match, player1Name: string, player2Name: string): G
     status: match.status,
     winner: match.winnerId,
   };
+}
+
+// Start a match between two players (can include bot)
+function startMatch(player1: { userId: string; socketId: string; name: string }, player2: { userId: string; socketId: string; name: string }, io: SocketIOServer): void {
+  const match = createMatch(player1, player2);
+  const isBot2 = player2.userId === BOT_ID;
+  
+  // Pre-determine if bot will win (85% chance)
+  const botWillWin = isBot2 && Math.random() < BOT_WIN_RATE;
+  (match as any).botWillWin = botWillWin;
+  (match as any).botIsPlayer2 = isBot2;
+  
+  activeMatches.set(match.id, match);
+  playerToMatchMap.set(player1.userId, match.id);
+  if (!isBot2) {
+    playerToMatchMap.set(player2.userId, match.id);
+  }
+
+  io.to(player1.socketId).emit('matchFound');
+  if (!isBot2) {
+    io.to(player2.socketId).emit('matchFound');
+  }
+
+  const gameLoop = setInterval(async () => {
+    if (match.status === 'finished') {
+      clearInterval(gameLoop);
+      return;
+    }
+
+    // Bot AI: move paddle towards ball
+    if (isBot2) {
+      updateBotPaddle(match);
+    }
+
+    updateGamePhysics(match, io);
+
+    const user1 = await storage.getUser(player1.userId);
+    if (!user1) {
+      clearInterval(gameLoop);
+      return;
+    }
+
+    const gameState = getGameState(match, user1.name, isBot2 ? 'AI Bot' : player2.name);
+    io.to(player1.socketId).emit('gameState', gameState);
+    if (!isBot2) {
+      io.to(player2.socketId).emit('gameState', gameState);
+    }
+  }, 1000 / 60);
+}
+
+// Bot paddle AI - tracks ball with some intelligence
+function updateBotPaddle(match: Match): void {
+  const botWillWin = (match as any).botWillWin;
+  const targetX = match.ball.x;
+  const currentX = match.player2.paddleX + PADDLE_WIDTH / 2;
+  const diff = targetX - currentX;
+  
+  // Bot skill level: if bot will win, track perfectly; otherwise, introduce errors
+  const skill = botWillWin ? 1.0 : 0.6;
+  const moveSpeed = PADDLE_SPEED * skill;
+  
+  // Add randomness for realism
+  const randomOffset = (Math.random() - 0.5) * 20 * (1 - skill);
+  const adjustedDiff = diff + randomOffset;
+  
+  if (Math.abs(adjustedDiff) > 5) {
+    if (adjustedDiff > 0) {
+      match.player2.paddleX = Math.min(match.player2.paddleX + moveSpeed, CANVAS_WIDTH - PADDLE_WIDTH);
+    } else {
+      match.player2.paddleX = Math.max(match.player2.paddleX - moveSpeed, 0);
+    }
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -407,6 +513,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Store io instance globally for bot matchmaking timer
+  (global as any).pongIoInstance = io;
+
+  // Start bot matchmaking timer - check every second for players waiting > 10s
+  setInterval(() => {
+    const now = Date.now();
+    const playersToMatch: typeof matchmakingQueue = [];
+    
+    for (let i = matchmakingQueue.length - 1; i >= 0; i--) {
+      const player = matchmakingQueue[i];
+      if (now - player.joinedAt >= 10000) { // 10 seconds
+        matchmakingQueue.splice(i, 1);
+        playersToMatch.push(player);
+      }
+    }
+    
+    // Create bot matches for players who waited too long
+    playersToMatch.forEach(player => {
+      const bot = { userId: BOT_ID, socketId: BOT_SOCKET_ID, name: 'AI Bot' };
+      startMatch(player, bot, io);
+      console.log(`Bot match started for player ${player.name} after timeout`);
+    });
+  }, 1000); // Check every second
+
   io.on('connection', (socket: Socket) => {
     const sessionId = (socket.handshake.auth as any).sessionId;
     if (!sessionId) {
@@ -449,37 +579,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserCredits(userId, user.credits - 1);
         socket.emit('creditsUpdated', user.credits - 1);
 
-        matchmakingQueue.push({ userId, socketId: socket.id, name: user.name });
+        matchmakingQueue.push({ userId, socketId: socket.id, name: user.name, joinedAt: Date.now() });
 
         if (matchmakingQueue.length >= 2) {
           const player1 = matchmakingQueue.shift()!;
           const player2 = matchmakingQueue.shift()!;
 
-          const match = createMatch(player1, player2);
-          activeMatches.set(match.id, match);
-          playerToMatchMap.set(player1.userId, match.id);
-          playerToMatchMap.set(player2.userId, match.id);
-
-          io.to(player1.socketId).emit('matchFound');
-          io.to(player2.socketId).emit('matchFound');
-
-          const gameLoop = setInterval(async () => {
-            if (match.status === 'finished') {
-              clearInterval(gameLoop);
-              return;
-            }
-
-            updateGamePhysics(match, io);
-
-            const user1 = await storage.getUser(player1.userId);
-            const user2 = await storage.getUser(player2.userId);
-
-            if (user1 && user2) {
-              const gameState = getGameState(match, user1.name, user2.name);
-              io.to(player1.socketId).emit('gameState', gameState);
-              io.to(player2.socketId).emit('gameState', gameState);
-            }
-          }, 1000 / 60);
+          startMatch(player1, player2, io);
         }
       } catch (error) {
         console.error('Matchmaking error:', error);

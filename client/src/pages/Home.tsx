@@ -10,7 +10,6 @@ import { GameCanvas } from "@/components/GameCanvas";
 import { Leaderboard } from "@/components/Leaderboard";
 import { ActionLog } from "@/components/ActionLog";
 import { PayoutModal } from "@/components/PayoutModal";
-import { RadioPlayer } from "@/components/RadioPlayer";
 import { ShareButton } from "@/components/ShareButton";
 
 interface User {
@@ -30,6 +29,7 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [matchmaking, setMatchmaking] = useState(false);
+  const [matchmakingTimer, setMatchmakingTimer] = useState(10);
   const [inGame, setInGame] = useState(false);
   const { toast } = useToast();
 
@@ -97,7 +97,7 @@ export default function Home() {
       newSocket.on('matchEnded', (result: { winnerId: string; player1Credits: number; player2Credits: number }) => {
         setInGame(false);
         const won = result.winnerId === user.id;
-        const creditsChange = won ? 0.6 : -1;
+        const creditsChange = won ? 1.6 : -1;
         
         setUser(prev => prev ? {
           ...prev,
@@ -105,7 +105,7 @@ export default function Home() {
           wins: won ? prev.wins + 1 : prev.wins,
           losses: won ? prev.losses : prev.losses + 1,
           matchesPlayed: prev.matchesPlayed + 1,
-          totalEarnings: prev.totalEarnings + (won ? 0.6 : 0)
+          totalEarnings: prev.totalEarnings + (won ? 1.6 : 0)
         } : null);
 
         toast({
@@ -156,6 +156,7 @@ export default function Home() {
     }
 
     setMatchmaking(true);
+    setMatchmakingTimer(10);
     socket?.emit('joinMatchmaking');
     toast({
       title: "Finding Match...",
@@ -165,8 +166,30 @@ export default function Home() {
 
   const handleCancelMatchmaking = () => {
     setMatchmaking(false);
+    setMatchmakingTimer(10);
     socket?.emit('leaveMatchmaking');
   };
+
+  // Matchmaking countdown timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (matchmaking && !inGame) {
+      interval = setInterval(() => {
+        setMatchmakingTimer(prev => {
+          if (prev <= 1) {
+            // Time's up - server will start bot match
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [matchmaking, inGame]);
 
   const handleAddCredits = () => {
     window.open('https://buy.stripe.com/8x26oIa5OacYb46eVCcMM02', '_blank');
@@ -212,7 +235,7 @@ export default function Home() {
                     onClick={() => setShowPayoutModal(true)}
                     variant="outline"
                     size="sm"
-                    disabled={user.credits < 10}
+                    disabled={user.credits < 1}
                     data-testid="button-request-payout"
                   >
                     <span className="hidden sm:inline">Payout</span>
@@ -316,7 +339,14 @@ export default function Home() {
                       <Loader2 className="w-16 h-16 mx-auto animate-spin text-primary" />
                       <div className="space-y-2">
                         <h3 className="text-2xl font-display font-bold">Finding Opponent...</h3>
-                        <p className="text-muted-foreground">Please wait while we match you with a player</p>
+                        <p className="text-muted-foreground">
+                          {matchmakingTimer > 0 
+                            ? `AI bot will join in ${matchmakingTimer} seconds...`
+                            : "Starting match with AI bot..."}
+                        </p>
+                        <div className="text-6xl font-mono font-bold text-primary" data-testid="text-matchmaking-timer">
+                          {matchmakingTimer}
+                        </div>
                       </div>
                       <Button
                         onClick={handleCancelMatchmaking}
@@ -361,8 +391,6 @@ export default function Home() {
           </div>
         )}
       </main>
-
-      <RadioPlayer />
 
       <AuthModal
         open={showAuthModal}
