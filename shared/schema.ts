@@ -42,6 +42,15 @@ export const payoutRequests = pgTable("payout_requests", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
+export const actionLog = pgTable("action_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  userName: text("user_name").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   credits: true,
@@ -63,19 +72,19 @@ export const insertPayoutRequestSchema = createInsertSchema(payoutRequests).omit
   timestamp: true,
 });
 
+export const insertActionLogSchema = createInsertSchema(actionLog).omit({
+  id: true,
+  timestamp: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
 export type Match = typeof matches.$inferSelect;
 export type InsertPayoutRequest = z.infer<typeof insertPayoutRequestSchema>;
 export type PayoutRequest = typeof payoutRequests.$inferSelect;
-
-export interface ActionLogEntry {
-  id: string;
-  type: 'match' | 'signup' | 'payout' | 'credit';
-  message: string;
-  timestamp: number;
-}
+export type InsertActionLog = z.infer<typeof insertActionLogSchema>;
+export type ActionLogEntry = typeof actionLog.$inferSelect;
 
 export interface GameState {
   matchId: string;
