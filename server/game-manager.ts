@@ -36,6 +36,21 @@ const gameControllers: Record<GameType, GameController> = {
     createMatch: snake.createSnakeMatch,
     updateGame: snake.updateSnakeGame,
     updateBotAI: snake.updateSnakeBotAI,
+    handleInput: (state, playerId, input) => {
+      const player = state.player1.id === playerId ? state.player1 : state.player2;
+      if (input.direction) {
+        const currentDir = player.gameData.direction;
+        const newDir = input.direction;
+        
+        // Prevent reversing into self
+        if (currentDir === 'up' && newDir === 'down') return;
+        if (currentDir === 'down' && newDir === 'up') return;
+        if (currentDir === 'left' && newDir === 'right') return;
+        if (currentDir === 'right' && newDir === 'left') return;
+        
+        player.gameData.direction = newDir;
+      }
+    },
   },
   tetris: {
     createMatch: tetris.createTetrisMatch,
