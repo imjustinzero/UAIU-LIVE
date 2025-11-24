@@ -143,8 +143,8 @@ export function updateTetrisGame(state: TetrisGameState): void {
 
   state.frameCounter++;
   
-  // Only move pieces down every 30 frames (2 times per second instead of 60)
-  if (state.frameCounter % 30 !== 0) return;
+  // Only move pieces down every 45 frames (1.33 times per second for playable speed)
+  if (state.frameCounter % 45 !== 0) return;
 
   [state.player1, state.player2].forEach(player => {
     const gameData = player.gameData;

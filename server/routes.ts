@@ -4,6 +4,7 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
+import { sql } from "drizzle-orm";
 import type { GameState } from "@shared/schema";
 import { sendSignupNotification, sendPayoutNotification } from "./email-config";
 import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } from "./email-service";
@@ -195,13 +196,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.get('/api/games', async (req, res) => {
     try {
+      // Only show Pong, Tetris, Snake, and Breakout (4 games)
       const games = [
         { id: 'pong', name: 'Pong', description: 'Classic paddle battle', players: '1v1', difficulty: 'Easy' },
-        { id: 'snake', name: 'Snake', description: 'Multiplayer survival race', players: '1v1', difficulty: 'Medium' },
         { id: 'tetris', name: 'Tetris', description: 'Battle mode competition', players: '1v1', difficulty: 'Hard' },
+        { id: 'snake', name: 'Snake', description: 'Multiplayer survival race', players: '1v1', difficulty: 'Medium' },
         { id: 'breakout', name: 'Breakout', description: 'Brick breaking duel', players: '1v1', difficulty: 'Medium' },
-        { id: 'flappybird', name: 'Flappy Bird', description: 'Survival race challenge', players: '1v1', difficulty: 'Hard' },
-        { id: 'connect4', name: 'Connect 4', description: 'Strategic drop game', players: '1v1', difficulty: 'Easy' },
       ];
       res.json(games);
     } catch (error) {
@@ -250,6 +250,84 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (error) {
       console.error('Payout error:', error);
       res.status(500).json({ message: 'Payout request failed' });
+    }
+  });
+
+  // Create Stripe checkout session for credit purchases
+  app.post('/api/stripe/create-checkout', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const userEmail = (req as any).userEmail;
+
+      const { priceId } = req.body;
+
+      if (!priceId) {
+        return res.status(400).json({ message: 'Price ID required' });
+      }
+
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+
+      const session = await stripe.checkout.sessions.create({
+        customer_email: userEmail,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: priceId,
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${req.protocol}://${req.get('host')}?credits_added=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}?credits_cancelled=true`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error('Checkout session creation error:', error);
+      res.status(500).json({ message: 'Failed to create checkout session' });
+    }
+  });
+
+  // Get available credit packages
+  app.get('/api/stripe/credit-packages', requireAuth, async (req, res) => {
+    try {
+      console.log('=== FETCHING CREDIT PACKAGES ===');
+      console.log('User ID:', (req as any).userId);
+      console.log('User Email:', (req as any).userEmail);
+      
+      const result = await storage.db.execute(sql`
+        SELECT 
+          p.id as product_id,
+          p.name as product_name,
+          p.description as product_description,
+          p.metadata as product_metadata,
+          pr.id as price_id,
+          pr.unit_amount,
+          pr.currency
+        FROM stripe.products p
+        JOIN stripe.prices pr ON pr.product = p.id
+        WHERE p.metadata->>'type' = 'arcade_credits'
+        AND p.active = true
+        AND pr.active = true
+        ORDER BY pr.unit_amount ASC
+      `);
+
+      console.log(`Query returned ${result.rows.length} products`);
+
+      const packages = result.rows.map((row: any) => ({
+        productId: row.product_id,
+        priceId: row.price_id,
+        name: row.product_name,
+        description: row.product_description,
+        amount: row.unit_amount / 100, // Convert cents to dollars
+        currency: row.currency,
+        credits: parseInt(row.product_metadata?.credits || '0', 10),
+      }));
+
+      console.log(`Returning ${packages.length} packages`);
+      res.json({ packages });
+    } catch (error) {
+      console.error('Failed to fetch credit packages - ERROR:', error);
+      res.status(500).json({ message: 'Failed to fetch credit packages' });
     }
   });
 

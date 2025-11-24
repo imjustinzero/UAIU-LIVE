@@ -13,6 +13,7 @@ import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
 import { RadioPlayer } from "@/components/RadioPlayer";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
+import { CreditPurchaseModal } from "@/components/CreditPurchaseModal";
 
 interface User {
   id: string;
@@ -38,6 +39,7 @@ export default function Home() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [showCreditModal, setShowCreditModal] = useState(false);
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingTimer, setMatchmakingTimer] = useState(10);
   const [inGame, setInGame] = useState(false);
@@ -233,7 +235,7 @@ export default function Home() {
   }, [matchmaking, inGame]);
 
   const handleAddCredits = () => {
-    window.open('https://buy.stripe.com/8x26oIa5OacYb46eVCcMM02', '_blank');
+    setShowCreditModal(true);
   };
 
   const handlePayoutSuccess = () => {
@@ -390,7 +392,7 @@ export default function Home() {
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {availableGames.filter(g => ['pong', 'tetris', 'snake', 'breakout'].includes(g.id)).map((game) => (
+                        {availableGames.map((game) => (
                           <Card
                             key={game.id}
                             className={`p-4 cursor-pointer transition-all hover-elevate ${
@@ -559,6 +561,11 @@ export default function Home() {
           onPayoutSuccess={handlePayoutSuccess}
         />
       )}
+
+      <CreditPurchaseModal
+        open={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+      />
 
       <RadioPlayer />
     </div>

@@ -30,17 +30,24 @@ export class WebhookHandlers {
       const user = await storage.getUserByEmail(customerEmail);
       
       if (user) {
-        const newCredits = user.credits + 10;
+        // Get amount paid in cents, convert to dollars
+        const amountPaidCents = session.amount_total || 0;
+        const amountPaid = amountPaidCents / 100;
+        
+        // Calculate credits: $5 = 50 credits, $10 = 100 credits (10 credits per dollar)
+        const creditsToAdd = Math.floor(amountPaid * 10);
+        
+        const newCredits = user.credits + creditsToAdd;
         await storage.updateUserCredits(user.id, newCredits);
         
         await storage.addActionLog({
           userId: user.id,
           userName: user.name,
           type: 'credit',
-          message: `${user.name} purchased 10 credits for $1.00`,
+          message: `${user.name} purchased ${creditsToAdd} credits for $${amountPaid.toFixed(2)}`,
         });
 
-        console.log(`✅ Added 10 credits to ${user.name} (${customerEmail}). New balance: ${newCredits}`);
+        console.log(`✅ Added ${creditsToAdd} credits to ${user.name} (${customerEmail}). New balance: ${newCredits}`);
       } else {
         console.error(`❌ User not found for email: ${customerEmail}`);
         console.error('💡 User must sign up in the app before purchasing credits');
