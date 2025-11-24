@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { 
   User as UserIcon, 
@@ -13,9 +12,6 @@ import {
   Trophy, 
   Gem, 
   TrendingUp,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
   ArrowLeft
 } from "lucide-react";
 
@@ -37,7 +33,6 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
-  const [resendingEmail, setResendingEmail] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -113,36 +108,6 @@ export default function Profile() {
         description: "Failed to update profile",
         variant: "destructive",
       });
-    }
-  };
-
-  const handleResendVerification = async () => {
-    if (!user) return;
-
-    setResendingEmail(true);
-    try {
-      const sessionId = localStorage.getItem('pong-session');
-      const res = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionId}`,
-        },
-      });
-
-      if (!res.ok) throw new Error('Resend failed');
-
-      toast({
-        title: "Email Sent",
-        description: "Verification email has been sent to your inbox",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to send verification email",
-        variant: "destructive",
-      });
-    } finally {
-      setResendingEmail(false);
     }
   };
 
