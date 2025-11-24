@@ -1,5 +1,6 @@
 interface BreakoutPlayer {
   paddleX: number;
+  paddleVelocity: number;
   ball: { x: number; y: number; vx: number; vy: number };
   bricks: boolean[][];
   lives: number;
@@ -48,6 +49,7 @@ export function createBreakoutMatch(player1Id: string, player2Id: string, player
       score: 0,
       gameData: {
         paddleX: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
+        paddleVelocity: 0,
         ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 100, vx: BALL_SPEED, vy: -BALL_SPEED },
         bricks: createBricks(),
         lives: 3,
@@ -59,6 +61,7 @@ export function createBreakoutMatch(player1Id: string, player2Id: string, player
       score: 0,
       gameData: {
         paddleX: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
+        paddleVelocity: 0,
         ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 100, vx: BALL_SPEED, vy: -BALL_SPEED },
         bricks: createBricks(),
         lives: 3,
@@ -74,6 +77,10 @@ export function updateBreakoutGame(state: BreakoutGameState): void {
   [state.player1, state.player2].forEach(player => {
     const gameData = player.gameData;
     if (gameData.lives <= 0) return;
+
+    // Update paddle position based on velocity
+    gameData.paddleX += gameData.paddleVelocity;
+    gameData.paddleX = Math.max(0, Math.min(CANVAS_WIDTH - PADDLE_WIDTH, gameData.paddleX));
 
     gameData.ball.x += gameData.ball.vx;
     gameData.ball.y += gameData.ball.vy;
@@ -138,12 +145,16 @@ export function updateBreakoutGame(state: BreakoutGameState): void {
   }
 }
 
-export function moveBreakoutPaddle(player: BreakoutGameState['player1'], direction: 'left' | 'right'): void {
-  const gameData = player.gameData;
-  if (direction === 'left') {
-    gameData.paddleX = Math.max(0, gameData.paddleX - PADDLE_SPEED);
-  } else {
-    gameData.paddleX = Math.min(CANVAS_WIDTH - PADDLE_WIDTH, gameData.paddleX + PADDLE_SPEED);
+export function handleBreakoutInput(state: BreakoutGameState, playerId: string, input: any): void {
+  const isPlayer1 = state.player1.id === playerId;
+  const player = isPlayer1 ? state.player1.gameData : state.player2.gameData;
+
+  if (input.direction === 'left') {
+    player.paddleVelocity = -PADDLE_SPEED;
+  } else if (input.direction === 'right') {
+    player.paddleVelocity = PADDLE_SPEED;
+  } else if (input.direction === 'stop') {
+    player.paddleVelocity = 0;
   }
 }
 
@@ -153,12 +164,17 @@ export function updateBreakoutBotAI(state: BreakoutGameState, botIsPlayer2: bool
   if (gameData.lives <= 0) return;
 
   // Calibrated tracking for ~87% win rate: larger dead zone + occasional delays
-  if (Math.random() < 0.13) return; // Skip move 13% of time
+  if (Math.random() < 0.13) {
+    gameData.paddleVelocity = 0;
+    return;
+  }
   
   const paddleCenter = gameData.paddleX + PADDLE_WIDTH / 2;
   if (gameData.ball.x < paddleCenter - 8) {
-    moveBreakoutPaddle(bot, 'left');
+    gameData.paddleVelocity = -PADDLE_SPEED;
   } else if (gameData.ball.x > paddleCenter + 8) {
-    moveBreakoutPaddle(bot, 'right');
+    gameData.paddleVelocity = PADDLE_SPEED;
+  } else {
+    gameData.paddleVelocity = 0;
   }
 }

@@ -98,10 +98,7 @@ const gameControllers: Record<GameType, GameController> = {
     updateGame: breakout.updateBreakoutGame,
     updateBotAI: breakout.updateBreakoutBotAI,
     handleInput: (state, playerId, input) => {
-      const player = state.player1.id === playerId ? state.player1 : state.player2;
-      if (input.direction) {
-        breakout.moveBreakoutPaddle(player, input.direction);
-      }
+      breakout.handleBreakoutInput(state, playerId, input);
     },
   },
 };
