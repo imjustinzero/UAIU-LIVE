@@ -11,11 +11,14 @@ export default {
         sm: ".1875rem", /* 3px */
       },
       colors: {
-        // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
         input: "hsl(var(--input) / <alpha-value>)",
+        'neon-green': '#00ff41',
+        'neon-cyan': '#00f0ff',
+        'neon-purple': '#bf00ff',
+        'game-glow': '#00ff41',
         card: {
           DEFAULT: "hsl(var(--card) / <alpha-value>)",
           foreground: "hsl(var(--card-foreground) / <alpha-value>)",
@@ -83,9 +86,10 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
+        sans: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],
         serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
+        display: ["Space Grotesk", "var(--font-sans)", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
