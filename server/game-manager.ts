@@ -112,7 +112,7 @@ export class GameManager {
 
   constructor() {
     // Initialize queues for all game types
-    const gameTypes: GameType[] = ['pong', 'snake', 'tetris', 'breakout', 'flappybird', 'connect4', 'airhockey'];
+    const gameTypes: GameType[] = ['pong', 'snake', 'tetris', 'golf', 'breakout', 'flappybird', 'connect4', 'airhockey'];
     gameTypes.forEach(type => {
       this.matchmakingQueues.set(type, []);
     });

@@ -33,7 +33,6 @@ interface GolfPlayerData {
   finished: boolean;
   currentTurn: boolean;
   hasShotThisTurn: boolean;
-  turnJustSwitched: boolean; // Set when turn switches, cleared next frame
 }
 
 export interface GolfGameState {
@@ -59,6 +58,7 @@ export interface GolfGameState {
   };
   obstacles: Obstacle[];
   currentPlayerId: string;
+  previousPlayerId?: string; // Track previous turn to detect actual turn changes
   status: 'playing' | 'finished';
   winner?: string;
   botWillWin?: boolean;
@@ -121,8 +121,7 @@ export function createGolfMatch(p1Id: string, p2Id: string, p1Name: string, p2Na
         strokes: 0,
         finished: false,
         currentTurn: true,
-        hasShotThisTurn: false,
-        turnJustSwitched: false
+        hasShotThisTurn: false
       }
     },
     player2: {
@@ -140,13 +139,13 @@ export function createGolfMatch(p1Id: string, p2Id: string, p1Name: string, p2Na
         strokes: 0,
         finished: false,
         currentTurn: false,
-        hasShotThisTurn: false,
-        turnJustSwitched: false
+        hasShotThisTurn: false
       }
     },
     hole: { x: holeX, y: holeY },
     obstacles,
     currentPlayerId: p1Id,
+    previousPlayerId: undefined, // No previous turn yet
     status: 'playing',
     botWillWin: Math.random() < 0.8
   };
@@ -203,6 +202,50 @@ export function updateGolfBotAI(state: GolfGameState, botIsPlayer2: boolean) {
   });
 }
 
+// Helper function to advance turn to next unfinished player or end match
+function advanceTurn(state: GolfGameState): void {
+  // Save current player ID before advancing
+  const oldPlayerId = state.currentPlayerId;
+  state.previousPlayerId = oldPlayerId;
+  
+  const p1Finished = state.player1.gameData.finished;
+  const p2Finished = state.player2.gameData.finished;
+  
+  if (p1Finished && p2Finished) {
+    // Both finished - match will end in game end check
+    return;
+  }
+  
+  if (!p1Finished && !p2Finished) {
+    // Both still playing - alternate turns
+    state.currentPlayerId = state.currentPlayerId === state.player1.id ? state.player2.id : state.player1.id;
+  } else if (!p1Finished && p2Finished) {
+    // Only P1 can play
+    state.currentPlayerId = state.player1.id;
+  } else if (p1Finished && !p2Finished) {
+    // Only P2 can play
+    state.currentPlayerId = state.player2.id;
+  }
+  
+  // Update current turn flags
+  state.player1.gameData.currentTurn = state.currentPlayerId === state.player1.id;
+  state.player2.gameData.currentTurn = state.currentPlayerId === state.player2.id;
+  
+  // If player didn't change (one player remaining), reset their hasShotThisTurn immediately
+  if (oldPlayerId === state.currentPlayerId) {
+    const currentPlayer = state.currentPlayerId === state.player1.id ? state.player1.gameData : state.player2.gameData;
+    currentPlayer.hasShotThisTurn = false;
+    // Clear previousPlayerId so the normal reset logic doesn't trigger
+    state.previousPlayerId = undefined;
+  }
+  
+  // Guard: ensure currentPlayerId never points to a finished player
+  const currentPlayer = state.currentPlayerId === state.player1.id ? state.player1.gameData : state.player2.gameData;
+  if (currentPlayer.finished && (!p1Finished || !p2Finished)) {
+    console.error('CRITICAL BUG: currentPlayerId points to finished player', state.currentPlayerId, state);
+  }
+}
+
 function checkObstacleCollision(ball: GolfBall, obstacles: Obstacle[], player: GolfPlayerData): void {
   for (const obstacle of obstacles) {
     const dx = ball.x - obstacle.x;
@@ -238,14 +281,14 @@ function checkObstacleCollision(ball: GolfBall, obstacles: Obstacle[], player: G
 export function updateGolfGame(state: GolfGameState) {
   if (state.status !== 'playing') return;
   
-  // Clear hasShotThisTurn if turn just switched in previous frame
-  if (state.player1.gameData.turnJustSwitched) {
+  // Reset hasShotThisTurn ONLY if turn actually changed (previousPlayerId !== currentPlayerId)
+  // Clear previousPlayerId immediately after reset to prevent repeated resets
+  if (state.previousPlayerId && state.previousPlayerId !== state.currentPlayerId) {
+    // Turn has changed - reset shot flag for both players
     state.player1.gameData.hasShotThisTurn = false;
-    state.player1.gameData.turnJustSwitched = false;
-  }
-  if (state.player2.gameData.turnJustSwitched) {
     state.player2.gameData.hasShotThisTurn = false;
-    state.player2.gameData.turnJustSwitched = false;
+    // Clear previousPlayerId to prevent this from triggering again
+    state.previousPlayerId = undefined;
   }
   
   const players = [state.player1.gameData, state.player2.gameData];
@@ -305,40 +348,12 @@ export function updateGolfGame(state: GolfGameState) {
     }
   }
   
-  // Switch turns when ball stops (allow turn switch even if current player finished)
+  // Switch turns when ball stops (only if current player has shot or is finished)
   if (!anyMoving) {
-    const currentIsP1 = state.currentPlayerId === state.player1.id;
-    const currentPlayer = currentIsP1 ? state.player1.gameData : state.player2.gameData;
-    const otherPlayer = currentIsP1 ? state.player2.gameData : state.player1.gameData;
-    
-    // Only reset shot flag after turn successfully switches
-    // This prevents bot from shooting multiple times in same turn
-    
-    // Determine next turn - set turnJustSwitched flag instead of resetting hasShotThisTurn immediately
-    if (!state.player1.gameData.finished && !state.player2.gameData.finished) {
-      // Both still playing - normal turn switch
-      state.currentPlayerId = currentIsP1 ? state.player2.id : state.player1.id;
-      state.player1.gameData.currentTurn = state.currentPlayerId === state.player1.id;
-      state.player2.gameData.currentTurn = state.currentPlayerId === state.player2.id;
-      // Mark that turn just switched - hasShotThisTurn will be reset next frame
-      state.player1.gameData.turnJustSwitched = true;
-      state.player2.gameData.turnJustSwitched = true;
-    } else if (state.player1.gameData.finished && !state.player2.gameData.finished) {
-      // Player 1 finished, player 2 continues
-      state.currentPlayerId = state.player2.id;
-      state.player1.gameData.currentTurn = false;
-      state.player2.gameData.currentTurn = true;
-      state.player1.gameData.turnJustSwitched = true;
-      state.player2.gameData.turnJustSwitched = true;
-    } else if (!state.player1.gameData.finished && state.player2.gameData.finished) {
-      // Player 2 finished, player 1 continues
-      state.currentPlayerId = state.player1.id;
-      state.player1.gameData.currentTurn = true;
-      state.player2.gameData.currentTurn = false;
-      state.player1.gameData.turnJustSwitched = true;
-      state.player2.gameData.turnJustSwitched = true;
+    const currentPlayer = state.currentPlayerId === state.player1.id ? state.player1.gameData : state.player2.gameData;
+    if (currentPlayer.hasShotThisTurn || currentPlayer.finished) {
+      advanceTurn(state);
     }
-    // If both finished, leave flags as-is and let game end check handle it
   }
   
   // Check for game end

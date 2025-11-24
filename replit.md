@@ -1,7 +1,11 @@
-# UAIU Pong - Multiplayer Pay-to-Play Platform
+# UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU Pong is a production-ready online multiplayer Pong platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches, and request payouts. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
+UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
+
+## Available Games
+1. **Pong**: Classic vertical paddle game with real-time physics
+2. **Golf**: Turn-based mini-golf with obstacles (trees, sand, water), stroke-count scoring, and intelligent bot AI with per-turn latch system
 
 ## User Preferences
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
@@ -14,7 +18,9 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 ### Technical Implementations
 - **Frontend**: React + TypeScript with Vite, Tailwind CSS, Socket.IO Client, TanStack Query, Shadcn UI Components.
 - **Backend**: Express server with REST API, Socket.IO for real-time communication, PostgreSQL with Drizzle ORM for data persistence, Bcrypt for password hashing, session-based authentication.
-- **Game Mechanics**: Server-side physics for ball movement, collision detection, and scoring; vertical Pong layout; touch controls; real-time multiplayer with sub-50ms latency; AI Bot matchmaking with intelligent bot AI.
+- **Game Mechanics**: Server-side physics for ball movement, collision detection, and scoring across multiple game types; touch controls; real-time multiplayer with sub-50ms latency; AI Bot matchmaking with intelligent bot AI.
+  - **Pong**: Vertical layout, paddle collision, wall bounces, continuous action
+  - **Golf**: Turn-based, physics-based ball movement, obstacle collision (trees bounce, sand slows, water resets with penalty), hole detection, lowest stroke count wins, per-turn latch prevents multi-shot bugs
 - **Credit Economy**: Users receive 1 free credit upon signup. Matches cost 1 credit to join. Winners receive 1.6 credits, losers lose 1 credit, with 0.4 credits burned as a platform fee.
 - **Security**: Session-based authentication with token validation, server-authoritative game logic and credit mutations, Socket.IO handshake validation, secure payout requests.
 - **Data Models**: `User`, `Match`, `ActionLog`, and `PayoutRequest` are defined with clear schemas.
@@ -29,6 +35,16 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 
 ### System Design Choices
 The system employs a client-server architecture. The server manages all critical game logic, credit transactions, and user authentication to ensure fairness and prevent cheating. Data is persisted in a PostgreSQL database, ensuring state consistency across server restarts. Socket.IO is used for low-latency real-time game state synchronization.
+
+### Game-Specific Implementation Details
+
+**Golf Game Architecture:**
+- **Turn System**: Players alternate shots, turn switches when ball stops moving
+- **Per-Turn Latch**: `turnJustSwitched` flag ensures hasShotThisTurn resets one frame after turn switch, preventing bot multi-shot bugs
+- **Bot AI**: Shoots once per turn with 90% accuracy if winning, 70% otherwise
+- **Obstacles**: Trees (bounce with velocity reduction), sand (slow movement), water (reset to start with penalty stroke)
+- **Match Completion**: Both players finish → lowest stroke count wins → automatic credit settlement via GameManager.endMatch
+- **Auto-Finish**: Players exceeding 10 strokes auto-finish to prevent infinite games
 
 ## External Dependencies
 - **Stripe**: For credit purchases and webhook-based automatic credit fulfillment.
