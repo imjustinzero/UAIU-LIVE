@@ -158,15 +158,8 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           <div />
           <Button
             size="lg"
-            className="h-20 text-xl font-bold touch-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'up' });
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'up' });
-            }}
+            className="h-20 text-xl font-bold"
+            onClick={() => handleInput({ direction: 'up' })}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-up"
           >
@@ -175,15 +168,8 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           <div />
           <Button
             size="lg"
-            className="h-20 text-xl font-bold touch-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'left' });
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'left' });
-            }}
+            className="h-20 text-xl font-bold"
+            onClick={() => handleInput({ direction: 'left' })}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-left"
           >
@@ -191,15 +177,8 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           </Button>
           <Button
             size="lg"
-            className="h-20 text-xl font-bold touch-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'down' });
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'down' });
-            }}
+            className="h-20 text-xl font-bold"
+            onClick={() => handleInput({ direction: 'down' })}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-down"
           >
@@ -207,15 +186,8 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           </Button>
           <Button
             size="lg"
-            className="h-20 text-xl font-bold touch-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'right' });
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              handleInput({ direction: 'right' });
-            }}
+            className="h-20 text-xl font-bold"
+            onClick={() => handleInput({ direction: 'right' })}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-snake-right"
           >
