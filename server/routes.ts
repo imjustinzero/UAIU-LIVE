@@ -92,10 +92,23 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       });
 
       // Send verification and notification emails
-      await Promise.all([
-        sendVerificationEmail(email, name, verificationToken),
-        sendSignupNotification(email, name, new Date()),
-      ]);
+      try {
+        console.log('📧 Attempting to send emails for:', email);
+        await Promise.all([
+          sendVerificationEmail(email, name, verificationToken).catch(err => {
+            console.error('❌ Verification email error:', err);
+            throw err;
+          }),
+          sendSignupNotification(email, name, new Date()).catch(err => {
+            console.error('❌ Signup notification error:', err);
+            // Don't throw - admin notifications failing shouldn't block signup
+          }),
+        ]);
+        console.log('✅ All emails sent successfully');
+      } catch (emailError) {
+        console.error('❌ Email sending failed:', emailError);
+        // Continue with signup even if emails fail
+      }
 
       const sessionId = createSession(user.id, user.email);
       res.json({ ...user, sessionId });

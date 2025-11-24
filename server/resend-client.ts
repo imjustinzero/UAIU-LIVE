@@ -31,9 +31,15 @@ async function getCredentials() {
 }
 
 export async function getUncachableResendClient() {
-  const {apiKey, fromEmail} = await getCredentials();
-  return {
-    client: new Resend(apiKey),
-    fromEmail: fromEmail || 'onboarding@resend.dev'
-  };
+  try {
+    const {apiKey, fromEmail} = await getCredentials();
+    console.log('📧 Resend client initialized with from:', fromEmail);
+    return {
+      client: new Resend(apiKey),
+      fromEmail: fromEmail || 'onboarding@resend.dev'
+    };
+  } catch (error) {
+    console.error('❌ Failed to initialize Resend client:', error);
+    throw error;
+  }
 }
