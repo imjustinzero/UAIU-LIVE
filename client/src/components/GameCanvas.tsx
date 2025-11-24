@@ -234,8 +234,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-tetris-down"
           >
-            <ChevronDown className="w-8 h-8 mr-2" />
-            FAST DROP
+            <ChevronDown className="w-8 h-8" />
           </Button>
         </div>
       );
@@ -244,7 +243,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
         <div className="flex gap-4 w-full max-w-md">
           <Button
             size="lg"
-            className="flex-1 h-16 text-xl font-bold"
+            className="flex-1 h-20 text-xl font-bold touch-none select-none"
             onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
@@ -261,23 +260,24 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             }}
             onTouchStart={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-paddle-left"
           >
-            <ChevronLeft className="w-8 h-8 mr-2" />
-            LEFT
+            <ChevronLeft className="w-10 h-10" />
           </Button>
           <Button
             size="lg"
-            className="flex-1 h-16 text-xl font-bold"
+            className="flex-1 h-20 text-xl font-bold touch-none select-none"
             onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
@@ -294,19 +294,20 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             }}
             onTouchStart={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-paddle-right"
           >
-            RIGHT
-            <ChevronRight className="w-8 h-8 ml-2" />
+            <ChevronRight className="w-10 h-10" />
           </Button>
         </div>
       );
@@ -318,15 +319,18 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             className="flex-1 h-20 text-xl font-bold touch-none select-none"
             onMouseDown={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
             }}
             onMouseUp={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
-            onMouseLeave={() => {
+            onMouseLeave={(e) => {
+              e.stopPropagation();
               if (pressedKeys.has('left')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
                 handleInput({ direction: 'stop' });
@@ -334,39 +338,44 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             }}
             onTouchStart={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
             onTouchCancel={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-breakout-left"
           >
-            <ChevronLeft className="w-10 h-10 mr-2" />
-            LEFT
+            <ChevronLeft className="w-10 h-10" />
           </Button>
           <Button
             size="lg"
             className="flex-1 h-20 text-xl font-bold touch-none select-none"
             onMouseDown={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
             }}
             onMouseUp={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
-            onMouseLeave={() => {
+            onMouseLeave={(e) => {
+              e.stopPropagation();
               if (pressedKeys.has('right')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
                 handleInput({ direction: 'stop' });
@@ -374,24 +383,26 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
             }}
             onTouchStart={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
             onTouchCancel={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
             disabled={!gameState || gameState.status !== 'playing'}
             data-testid="button-breakout-right"
           >
-            RIGHT
-            <ChevronRight className="w-10 h-10 ml-2" />
+            <ChevronRight className="w-10 h-10" />
           </Button>
         </div>
       );
@@ -404,7 +415,7 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           disabled={!gameState || gameState.status !== 'playing'}
           data-testid="button-flappybird-jump"
         >
-          🐦 JUMP
+          <ChevronUp className="w-10 h-10" />
         </Button>
       );
     } else if (gameType === 'connect4') {
