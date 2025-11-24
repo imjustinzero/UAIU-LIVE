@@ -279,9 +279,11 @@ export default function Home() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-3xl md:text-4xl font-display font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                UAIU PONG
-              </h1>
+              <img 
+                src="/attached_assets/IMG_2786_1763969320612.jpeg" 
+                alt="UAU - Universal AI Unlimited" 
+                className="h-12 md:h-16 w-auto"
+              />
               {user && (
                 <Badge variant="secondary" className="text-base font-semibold hidden sm:flex">
                   {user.name}
