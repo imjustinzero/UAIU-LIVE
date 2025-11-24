@@ -13,6 +13,15 @@ export const users = pgTable("users", {
   wins: integer("wins").notNull().default(0),
   losses: integer("losses").notNull().default(0),
   totalEarnings: real("total_earnings").notNull().default(0),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
+  stripeCustomerId: text("stripe_customer_id"),
+  subscriptionId: text("subscription_id"),
+  subscriptionStatus: text("subscription_status"),
+  subscriptionEndsAt: timestamp("subscription_ends_at"),
+  lastLoginAt: timestamp("last_login_at"),
+  loginStreak: integer("login_streak").notNull().default(0),
+  lastDailyBonus: timestamp("last_daily_bonus"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -51,6 +60,46 @@ export const actionLog = pgTable("action_log", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
+export const friendships = pgTable("friendships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  friendId: varchar("friend_id").notNull(),
+  status: text("status").notNull().default('pending'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const achievements = pgTable("achievements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  achievementType: text("achievement_type").notNull(),
+  achievementName: text("achievement_name").notNull(),
+  achievementDescription: text("achievement_description").notNull(),
+  unlockedAt: timestamp("unlocked_at").notNull().defaultNow(),
+});
+
+export const dailyMissions = pgTable("daily_missions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  missionType: text("mission_type").notNull(),
+  missionDescription: text("mission_description").notNull(),
+  progress: integer("progress").notNull().default(0),
+  targetProgress: integer("target_progress").notNull(),
+  reward: integer("reward").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").notNull().default(false),
+  data: text("data"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   credits: true,
@@ -58,6 +107,15 @@ export const insertUserSchema = createInsertSchema(users).omit({
   wins: true,
   losses: true,
   totalEarnings: true,
+  emailVerified: true,
+  emailVerificationToken: true,
+  stripeCustomerId: true,
+  subscriptionId: true,
+  subscriptionStatus: true,
+  subscriptionEndsAt: true,
+  lastLoginAt: true,
+  loginStreak: true,
+  lastDailyBonus: true,
   createdAt: true,
 });
 
@@ -77,6 +135,30 @@ export const insertActionLogSchema = createInsertSchema(actionLog).omit({
   timestamp: true,
 });
 
+export const insertFriendshipSchema = createInsertSchema(friendships).omit({
+  id: true,
+  status: true,
+  createdAt: true,
+});
+
+export const insertAchievementSchema = createInsertSchema(achievements).omit({
+  id: true,
+  unlockedAt: true,
+});
+
+export const insertDailyMissionSchema = createInsertSchema(dailyMissions).omit({
+  id: true,
+  progress: true,
+  completed: true,
+  createdAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  read: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
@@ -85,6 +167,14 @@ export type InsertPayoutRequest = z.infer<typeof insertPayoutRequestSchema>;
 export type PayoutRequest = typeof payoutRequests.$inferSelect;
 export type InsertActionLog = z.infer<typeof insertActionLogSchema>;
 export type ActionLogEntry = typeof actionLog.$inferSelect;
+export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+export type Friendship = typeof friendships.$inferSelect;
+export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
+export type Achievement = typeof achievements.$inferSelect;
+export type InsertDailyMission = z.infer<typeof insertDailyMissionSchema>;
+export type DailyMission = typeof dailyMissions.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
 
 export interface GameState {
   matchId: string;
