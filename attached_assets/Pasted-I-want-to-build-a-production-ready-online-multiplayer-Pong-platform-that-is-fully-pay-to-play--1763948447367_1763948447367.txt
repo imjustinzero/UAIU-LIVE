@@ -1,0 +1,92 @@
+I want to build a **production-ready, online multiplayer Pong platform** that is fully pay-to-play, credit-based, and embed-ready for my website uaiu.live. Please generate complete Node.js + Socket.IO backend and HTML/JS/CSS frontend that satisfies these exact specifications:
+
+---
+
+### 1️⃣ Account System
+- Users **must create an account** with email and name.
+- Email is required to login.
+- Notify **uaiulive@gmail.com** when a new user signs up (include email and timestamp).
+- Store **credits**, **matches played**, **wins/losses**, and **total earnings** per account.
+- Frontend must be fully embeddable as an **HTML iframe** for uaiu.live.
+
+---
+
+### 2️⃣ Credits & Payments
+- Users pay **$1 via Stripe** to receive **10 credits**.
+- Use this Stripe checkout link:
+`https://buy.stripe.com/8x26oIa5OacYb46eVCcMM02`
+- Credits **cannot be manually added**; only via Stripe payment verification (use a webhook or placeholder in code).
+- The frontend should display current **credit balance** in real-time.
+- Each **match costs 1 credit** to enter.
+
+---
+
+### 3️⃣ Matchmaking & Gameplay
+- Multiplayer **1v1 vertical Pong**:
+- Player 1 at bottom, Player 2 at top.
+- Paddle moves left/right, touch-friendly for mobile.
+- Ball physics handled **server-side** to prevent cheating.
+- **Matchmaking queue**:
+- Users press “Play” → 1 credit deducted → added to queue.
+- When two users are available → match starts automatically.
+- Multiple matches can run simultaneously.
+- **Credits logic**:
+- Winner receives **1.6 credits**.
+- Loser loses **1 credit**.
+- **0.4 credits are burned** automatically.
+- Update **real-time leaderboard and action log** for every match.
+
+---
+
+### 4️⃣ Claim Payout System
+- Users can **request payout**.
+- When requesting:
+- All credits are **reset to zero**.
+- Users submit **CashApp, Venmo, or other payment info**.
+- Submission is sent to **uaiulive@gmail.com** via email.
+- Prevent duplicate payouts and exploits.
+
+---
+
+### 5️⃣ UI / Frontend
+- Login / create account modal.
+- Stripe $1 → 10 credits button.
+- Play button for matchmaking.
+- Real-time leaderboard and action log.
+- Share button for social media.
+- Embedded **360 Radio** player.
+- Bright, high-contrast UI for mobile and desktop.
+- Paddle movement buttons visible below the game canvas for touch control.
+- Smooth animations and glowing buttons.
+
+---
+
+### 6️⃣ Backend / Server
+- Use **Node.js + Express + Socket.IO**.
+- Handle all **match state, ball physics, credits, matchmaking, and payouts server-side**.
+- Prevent cheating, credit exploits, or multiple plays without deduction.
+- Support **multiple simultaneous matches**.
+- Log all events: credits added, match results, payouts, and new signups.
+- Include **comments where Stripe keys, email settings, and server URL configuration is needed**.
+
+---
+
+### 7️⃣ Deployment & Embedding
+- Frontend should be fully **HTML/JS/CSS** so it can be embedded into `uaiu.live` via iframe or script tag.
+- Server should be **ready to deploy** on Replit, Render, or any Node.js hosting provider.
+
+---
+
+### 8️⃣ Bonus / Extra Features
+- Optional: seasonal leaderboards, badges, achievements.
+- Persistent storage: use **localStorage for MVP**; later upgrade to database.
+- Real-time notifications for wins, losses, and new matches.
+
+---
+
+**Important:**
+- Output a **complete, copy-paste ready project**:
+1. `server.js` for Node.js backend.
+2. `public/index.html` for the frontend.
+3. Include **all logic for credit burn, payout reset, multiple simultaneous matches, Stripe integration, and real-time multiplayer gameplay**.
+- Make it **visually stunning and mobile-friendly**, worthy of a billion-dollar platform.
