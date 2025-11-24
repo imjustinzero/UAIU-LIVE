@@ -25,7 +25,6 @@ interface User {
   wins: number;
   losses: number;
   totalEarnings: number;
-  emailVerified: boolean;
 }
 
 interface Game {

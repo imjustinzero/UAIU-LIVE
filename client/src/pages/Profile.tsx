@@ -24,7 +24,6 @@ interface User {
   wins: number;
   losses: number;
   totalEarnings: number;
-  emailVerified: boolean;
 }
 
 export default function Profile() {

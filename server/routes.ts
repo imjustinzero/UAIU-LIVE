@@ -7,7 +7,7 @@ import bcrypt from "bcrypt";
 import { sql } from "drizzle-orm";
 import type { GameState } from "@shared/schema";
 import { sendPayoutNotification } from "./email-config";
-import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail, sendSignupNotification } from "./email-service";
+import { sendSignupNotification } from "./email-service";
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -80,11 +80,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         password: hashedPassword,
       });
 
-      // Mark email as verified and give 1 free credit immediately
-      await storage.updateUser(user.id, {
-        emailVerified: true,
-      });
-      
+      // Give 1 free credit immediately upon signup
       await storage.updateUserCredits(user.id, 1);
 
       await storage.addActionLog({
@@ -110,38 +106,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.get('/api/auth/verify-email', async (req, res) => {
-    try {
-      const { token } = req.query;
+  // Explicitly return 404 for removed verification endpoints
+  app.get('/api/auth/verify-email', (req, res) => {
+    res.status(404).json({ message: 'Email verification is no longer required' });
+  });
 
-      if (!token || typeof token !== 'string') {
-        return res.status(400).json({ message: 'Invalid verification token' });
-      }
-
-      const user = await storage.getUserByVerificationToken(token);
-      if (!user) {
-        return res.status(404).json({ message: 'Invalid or expired verification token' });
-      }
-
-      // Award first free credit upon email verification
-      await storage.updateUser(user.id, {
-        emailVerified: true,
-        emailVerificationToken: null,
-      });
-      
-      // Fetch fresh user data and award credit
-      const freshUser = await storage.getUser(user.id);
-      if (freshUser) {
-        await storage.updateUserCredits(user.id, freshUser.credits + 1);
-      }
-
-      await sendWelcomeEmail(user.email, user.name);
-
-      res.json({ message: 'Email verified successfully! You received 1 free credit.' });
-    } catch (error) {
-      console.error('Email verification error:', error);
-      res.status(500).json({ message: 'Verification failed' });
-    }
+  app.post('/api/auth/resend-verification', (req, res) => {
+    res.status(404).json({ message: 'Email verification is no longer required' });
   });
 
   app.post('/api/auth/login', async (req, res) => {
@@ -183,31 +154,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (error) {
       console.error('Get user error:', error);
       res.status(500).json({ message: 'Failed to get user' });
-    }
-  });
-
-  app.post('/api/auth/resend-verification', requireAuth, async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      if (user.emailVerified) {
-        return res.status(400).json({ message: 'Email already verified' });
-      }
-
-      const verificationToken = generateVerificationToken();
-      await storage.updateUser(user.id, { emailVerificationToken: verificationToken });
-
-      await sendVerificationEmail(user.email, user.name, verificationToken);
-
-      res.json({ message: 'Verification email sent' });
-    } catch (error) {
-      console.error('Resend verification error:', error);
-      res.status(500).json({ message: 'Failed to resend verification email' });
     }
   });
 
