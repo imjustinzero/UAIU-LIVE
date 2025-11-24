@@ -50,13 +50,17 @@ export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps
     if (!ctx) return;
 
     const render = () => {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
       if (!gameState) {
+        ctx.fillStyle = '#00ff41';
+        ctx.font = 'bold 24px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Waiting for match...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
         animationFrameRef.current = requestAnimationFrame(render);
         return;
       }
-
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       const brickWidth = CANVAS_WIDTH / BRICK_COLS;
       const brickHeight = 20;
@@ -68,13 +72,14 @@ export function BreakoutRenderer({ gameState, canvasRef }: BreakoutRendererProps
             const x = col * brickWidth;
             const y = row * brickHeight + 50;
             
+            const hue = (row / BRICK_ROWS) * 120;
             const gradient = ctx.createLinearGradient(x, y, x + brickWidth, y + brickHeight);
-            gradient.addColorStop(0, '#00ff41');
-            gradient.addColorStop(1, '#00cc33');
+            gradient.addColorStop(0, `hsl(${hue}, 100%, 50%)`);
+            gradient.addColorStop(1, `hsl(${hue}, 100%, 35%)`);
             ctx.fillStyle = gradient;
             ctx.fillRect(x + 2, y + 2, brickWidth - 4, brickHeight - 4);
             
-            ctx.strokeStyle = '#00ff41';
+            ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
             ctx.lineWidth = 2;
             ctx.strokeRect(x + 2, y + 2, brickWidth - 4, brickHeight - 4);
           }

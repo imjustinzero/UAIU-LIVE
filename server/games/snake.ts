@@ -154,7 +154,6 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
     return dist < nearestDist ? food : nearest;
   });
 
-  // Simple AI: move toward nearest food while avoiding walls and self
   const possibleDirections: Array<'up' | 'down' | 'left' | 'right'> = [];
 
   if (head.x < nearestFood.x && gameData.direction !== 'left') possibleDirections.push('right');
@@ -162,7 +161,7 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
   if (head.y < nearestFood.y && gameData.direction !== 'up') possibleDirections.push('down');
   if (head.y > nearestFood.y && gameData.direction !== 'down') possibleDirections.push('up');
 
-  // Filter out dangerous directions
+  const otherPlayer = botIsPlayer2 ? state.player1 : state.player2;
   const safeDirections = possibleDirections.filter(dir => {
     let testHead = { ...head };
     switch (dir) {
@@ -174,10 +173,32 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
 
     if (testHead.x < 0 || testHead.x >= GRID_WIDTH || testHead.y < 0 || testHead.y >= GRID_HEIGHT) return false;
     if (gameData.snake.some(segment => segment.x === testHead.x && segment.y === testHead.y)) return false;
+    if (otherPlayer.gameData.snake.some(segment => segment.x === testHead.x && segment.y === testHead.y)) return false;
     return true;
   });
 
   if (safeDirections.length > 0) {
     gameData.direction = safeDirections[0];
+  } else {
+    const allDirections: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
+    const desperateDirections = allDirections.filter(dir => {
+      if ((dir === 'up' && gameData.direction === 'down') || (dir === 'down' && gameData.direction === 'up')) return false;
+      if ((dir === 'left' && gameData.direction === 'right') || (dir === 'right' && gameData.direction === 'left')) return false;
+      
+      let testHead = { ...head };
+      switch (dir) {
+        case 'up': testHead.y -= 1; break;
+        case 'down': testHead.y += 1; break;
+        case 'left': testHead.x -= 1; break;
+        case 'right': testHead.x += 1; break;
+      }
+      
+      if (testHead.x < 0 || testHead.x >= GRID_WIDTH || testHead.y < 0 || testHead.y >= GRID_HEIGHT) return false;
+      return true;
+    });
+    
+    if (desperateDirections.length > 0) {
+      gameData.direction = desperateDirections[0];
+    }
   }
 }

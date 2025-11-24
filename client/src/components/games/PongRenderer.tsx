@@ -87,17 +87,22 @@ export function PongRenderer({ gameState, canvasRef }: PongRendererProps) {
       drawPaddle(gameState.player1.gameData.paddleX, player1Y, true);
       drawPaddle(gameState.player2.gameData.paddleX, player2Y, false);
 
-      const gradient = ctx.createRadialGradient(
+      const ballGradient = ctx.createRadialGradient(
         gameState.ball.x, gameState.ball.y, 0,
         gameState.ball.x, gameState.ball.y, BALL_SIZE
       );
-      gradient.addColorStop(0, '#fff');
-      gradient.addColorStop(0.5, '#00ff41');
-      gradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
-      ctx.fillStyle = gradient;
+      ballGradient.addColorStop(0, '#fff');
+      ballGradient.addColorStop(0.4, '#00ff41');
+      ballGradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
+      ctx.fillStyle = ballGradient;
       ctx.beginPath();
       ctx.arc(gameState.ball.x, gameState.ball.y, BALL_SIZE, 0, Math.PI * 2);
       ctx.fill();
+      
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#00ff41';
+      ctx.fill();
+      ctx.shadowBlur = 0;
 
       ctx.fillStyle = '#00ff41';
       ctx.font = 'bold 48px JetBrains Mono, monospace';

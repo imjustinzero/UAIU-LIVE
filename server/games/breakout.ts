@@ -27,8 +27,8 @@ export interface BreakoutGameState {
 }
 
 const PADDLE_WIDTH = 100;
-const PADDLE_SPEED = 8;
-const BALL_SPEED = 5;
+const PADDLE_SPEED = 10;
+const BALL_SPEED = 6;
 const CANVAS_WIDTH = 400;
 const CANVAS_HEIGHT = 600;
 const BRICK_ROWS = 5;
@@ -89,6 +89,17 @@ export function updateBreakoutGame(state: BreakoutGameState): void {
         gameData.ball.x >= gameData.paddleX && 
         gameData.ball.x <= gameData.paddleX + PADDLE_WIDTH) {
       gameData.ball.vy = -Math.abs(gameData.ball.vy);
+      
+      const paddleCenter = gameData.paddleX + PADDLE_WIDTH / 2;
+      const hitPosition = (gameData.ball.x - paddleCenter) / (PADDLE_WIDTH / 2);
+      gameData.ball.vx += hitPosition * 2;
+      
+      const speed = Math.sqrt(gameData.ball.vx * gameData.ball.vx + gameData.ball.vy * gameData.ball.vy);
+      const targetSpeed = BALL_SPEED;
+      if (speed > 0) {
+        gameData.ball.vx = (gameData.ball.vx / speed) * targetSpeed;
+        gameData.ball.vy = (gameData.ball.vy / speed) * targetSpeed;
+      }
     }
 
     if (gameData.ball.y >= CANVAS_HEIGHT) {
