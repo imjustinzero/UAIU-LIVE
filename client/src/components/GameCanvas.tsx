@@ -67,7 +67,18 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
   const config = getCanvasConfig();
 
   const handleInput = (input: any) => {
-    if (!socket || !userId || !matchId || !gameState || gameState.status !== 'playing') return;
+    console.log('[GameCanvas] handleInput called:', { input, hasSocket: !!socket, userId, matchId, gameState: gameState?.status });
+    if (!socket || !userId || !matchId || !gameState || gameState.status !== 'playing') {
+      console.log('[GameCanvas] ❌ Input blocked:', { 
+        hasSocket: !!socket, 
+        hasUserId: !!userId, 
+        hasMatchId: !!matchId, 
+        hasGameState: !!gameState, 
+        status: gameState?.status 
+      });
+      return;
+    }
+    console.log('[GameCanvas] ✅ Emitting gameInput:', { matchId, input });
     socket.emit('gameInput', { matchId, input });
   };
 
@@ -320,20 +331,15 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           <Button
             size="lg"
             className="flex-1 h-20 text-xl font-bold touch-none select-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('left'));
               handleInput({ direction: 'left' });
             }}
-            onMouseUp={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onMouseUp={() => {
               setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
               handleInput({ direction: 'stop' });
             }}
-            onMouseLeave={(e) => {
-              e.stopPropagation();
+            onMouseLeave={() => {
               if (pressedKeys.has('left')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('left'); return next; });
                 handleInput({ direction: 'stop' });
@@ -365,20 +371,15 @@ export function GameCanvas({ socket, userId, matchId, gameType, onMatchStart, on
           <Button
             size="lg"
             className="flex-1 h-20 text-xl font-bold touch-none select-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onMouseDown={() => {
               setPressedKeys(prev => new Set(prev).add('right'));
               handleInput({ direction: 'right' });
             }}
-            onMouseUp={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onMouseUp={() => {
               setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
               handleInput({ direction: 'stop' });
             }}
-            onMouseLeave={(e) => {
-              e.stopPropagation();
+            onMouseLeave={() => {
               if (pressedKeys.has('right')) {
                 setPressedKeys(prev => { const next = new Set(prev); next.delete('right'); return next; });
                 handleInput({ direction: 'stop' });
