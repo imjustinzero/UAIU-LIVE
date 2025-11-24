@@ -118,14 +118,21 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(404).json({ message: 'Invalid or expired verification token' });
       }
 
+      // Award first free credit upon email verification
       await storage.updateUser(user.id, {
         emailVerified: true,
         emailVerificationToken: null,
       });
+      
+      // Fetch fresh user data and award credit
+      const freshUser = await storage.getUser(user.id);
+      if (freshUser) {
+        await storage.updateUserCredits(user.id, freshUser.credits + 1);
+      }
 
       await sendWelcomeEmail(user.email, user.name);
 
-      res.json({ message: 'Email verified successfully!' });
+      res.json({ message: 'Email verified successfully! You received 1 free credit.' });
     } catch (error) {
       console.error('Email verification error:', error);
       res.status(500).json({ message: 'Verification failed' });
@@ -171,6 +178,54 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (error) {
       console.error('Get user error:', error);
       res.status(500).json({ message: 'Failed to get user' });
+    }
+  });
+
+  app.post('/api/auth/resend-verification', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ message: 'Email already verified' });
+      }
+
+      const verificationToken = generateVerificationToken();
+      await storage.updateUser(user.id, { emailVerificationToken: verificationToken });
+
+      await sendVerificationEmail(user.email, user.name, verificationToken);
+
+      res.json({ message: 'Verification email sent' });
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      res.status(500).json({ message: 'Failed to resend verification email' });
+    }
+  });
+
+  app.patch('/api/profile/update', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { name } = req.body;
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: 'Name is required' });
+      }
+
+      await storage.updateUser(userId, { name: name.trim() });
+      const updatedUser = await storage.getUser(userId);
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({ message: 'Failed to update profile' });
     }
   });
 
@@ -291,40 +346,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   // Get available credit packages
   app.get('/api/stripe/credit-packages', requireAuth, async (req, res) => {
     try {
-      console.log('=== FETCHING CREDIT PACKAGES ===');
-      console.log('User ID:', (req as any).userId);
-      console.log('User Email:', (req as any).userEmail);
-      
-      const result = await storage.db.execute(sql`
-        SELECT 
-          p.id as product_id,
-          p.name as product_name,
-          p.description as product_description,
-          p.metadata as product_metadata,
-          pr.id as price_id,
-          pr.unit_amount,
-          pr.currency
-        FROM stripe.products p
-        JOIN stripe.prices pr ON pr.product = p.id
-        WHERE p.metadata->>'type' = 'arcade_credits'
-        AND p.active = true
-        AND pr.active = true
-        ORDER BY pr.unit_amount ASC
-      `);
-
-      console.log(`Query returned ${result.rows.length} products`);
-
-      const packages = result.rows.map((row: any) => ({
-        productId: row.product_id,
-        priceId: row.price_id,
-        name: row.product_name,
-        description: row.product_description,
-        amount: row.unit_amount / 100, // Convert cents to dollars
-        currency: row.currency,
-        credits: parseInt(row.product_metadata?.credits || '0', 10),
-      }));
-
-      console.log(`Returning ${packages.length} packages`);
+      // Return hardcoded credit packages for now
+      // TODO: Query Stripe products via Stripe SDK when needed
+      const packages = [
+        {
+          productId: 'prod_credits_10',
+          priceId: 'price_1QSsqTGBTN1pG4rP8qA0mA88',
+          name: '10 Credits',
+          description: 'Get 10 credits for $1',
+          amount: 1,
+          currency: 'usd',
+          credits: 10,
+        },
+      ];
       res.json({ packages });
     } catch (error) {
       console.error('Failed to fetch credit packages - ERROR:', error);

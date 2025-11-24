@@ -15,8 +15,10 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 24, 2025)
+- **Profile System**: Users now have profile pages with editable information, stats display, and email verification
+- **Email Verification Required**: New users start with 0 credits and must verify email to receive their first free credit
+- **Profile Features**: View/edit name, resend verification emails, detailed statistics (win rate, earnings, matches)
 - Leaderboard is now hidden from non-logged-in users for exclusivity
-- Leaderboard data reset to starting values (1 credit per user)
 - AI bots now appear as real players with creative random names (e.g., "Blue Unicorn", "Zeus the Tetris God", "Cosmic Champion")
 - Bot matchmaking delay reduced from 10 seconds to 1 second for instant-feeling matches
 - Breakout paddle controls fixed to use continuous velocity movement like Pong
@@ -43,9 +45,11 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 ### Feature Specifications
 - **Real-Time Multiplayer**: Sub-50ms latency for responsive gameplay.
 - **Credit Economy**: Purchase via Stripe, win/lose credits in matches, request payouts.
+- **Profile System**: User profiles with editable information, verification status, and detailed statistics.
+- **Email Verification**: Required for new users to receive their first free credit (1 credit awarded upon verification).
 - **Leaderboard**: Real-time rankings by total credits (visible only to logged-in users).
 - **Action Log**: Live feed of platform activities.
-- **Authentication**: Secure session-based authentication.
+- **Authentication**: Secure session-based authentication with email verification.
 - **AI Matchmaking**: Automatic match with AI bot if no opponent found in 1 second. Bots appear as real players with creative names.
 
 ### System Design Choices

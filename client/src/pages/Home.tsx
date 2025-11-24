@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus, UserCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import { GameCanvas } from "@/components/GameCanvas";
@@ -23,6 +25,7 @@ interface User {
   wins: number;
   losses: number;
   totalEarnings: number;
+  emailVerified: boolean;
 }
 
 interface Game {
@@ -34,6 +37,7 @@ interface Game {
 }
 
 export default function Home() {
+  const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -318,6 +322,14 @@ export default function Home() {
                     <span className="sm:hidden">$</span>
                   </Button>
                   <ShareButton />
+                  <Button 
+                    onClick={() => navigate('/profile')} 
+                    variant="ghost" 
+                    size="icon" 
+                    data-testid="button-profile"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                  </Button>
                   <Button onClick={handleLogout} variant="ghost" size="icon" data-testid="button-logout">
                     <LogOut className="w-4 h-4" />
                   </Button>
@@ -375,12 +387,33 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="grid lg:grid-cols-[300px_1fr_300px] gap-6">
-            <div className="space-y-6 order-2 lg:order-1">
-              <Leaderboard currentUserId={user.id} />
-            </div>
+          <div className="space-y-6">
+            {user && !user.emailVerified && (
+              <Alert variant="destructive" data-testid="alert-verify-email">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>
+                    Please verify your email to receive your first free credit and start playing!
+                  </span>
+                  <Button
+                    onClick={() => navigate('/profile')}
+                    variant="outline"
+                    size="sm"
+                    className="ml-4"
+                    data-testid="button-go-to-profile"
+                  >
+                    Go to Profile
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
-            <div className="space-y-6 order-1 lg:order-2">
+            <div className="grid lg:grid-cols-[300px_1fr_300px] gap-6">
+              <div className="space-y-6 order-2 lg:order-1">
+                <Leaderboard currentUserId={user.id} />
+              </div>
+
+              <div className="space-y-6 order-1 lg:order-2">
               <Card className="p-6">
                 <CardContent className="space-y-6 p-0">
                   {!inGame && !matchmaking && (
@@ -543,6 +576,7 @@ export default function Home() {
               />
               <ActionLog />
             </div>
+          </div>
           </div>
         )}
       </main>
