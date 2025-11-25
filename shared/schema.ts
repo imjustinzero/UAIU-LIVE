@@ -114,6 +114,7 @@ export const posts = pgTable("posts", {
   username: text("username").notNull(),
   content: text("content").notNull(),
   youtubeUrl: text("youtube_url"),
+  visibility: text("visibility").notNull().default('friends'),
   likesCount: integer("likes_count").notNull().default(0),
   commentsCount: integer("comments_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
