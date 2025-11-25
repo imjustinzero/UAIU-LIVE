@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/posts', requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
-      const { content, youtubeUrl } = req.body;
+      const { content, youtubeUrl, visibility } = req.body;
 
       if (!content || content.trim().length === 0) {
         return res.status(400).json({ message: 'Content is required' });
@@ -243,11 +243,21 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(400).json({ message: 'User not found or missing username' });
       }
 
+      // Determine final visibility: only imjustinzero@gmail.com can set public
+      let finalVisibility = user.postsVisibility || 'friends';
+      if (visibility) {
+        if (visibility === 'public' && user.email !== 'imjustinzero@gmail.com') {
+          return res.status(403).json({ message: 'Only admin can create public posts' });
+        }
+        finalVisibility = visibility;
+      }
+
       const post = await storage.createPost({
         userId,
         username: user.username,
         content: content.trim(),
         youtubeUrl: youtubeUrl || null,
+        visibility: finalVisibility,
       });
 
       res.json(post);

@@ -171,10 +171,15 @@ export class DbStorage implements IStorage {
     const friendIds = userFriendships.map(f => f.friendId);
     friendIds.push(userId); // Include user's own posts
 
-    // Get posts from user and friends
+    // Get posts from user and friends, plus public posts from admin
     return await db.select()
       .from(posts)
-      .where(inArray(posts.userId, friendIds))
+      .where(
+        or(
+          inArray(posts.userId, friendIds),
+          eq(posts.visibility, 'public')
+        )
+      )
       .orderBy(desc(posts.createdAt))
       .limit(limit);
   }
