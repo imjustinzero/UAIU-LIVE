@@ -48,15 +48,19 @@ export interface IStorage {
   
   // Social features
   createPost(post: InsertPost): Promise<Post>;
+  getPostById(postId: string): Promise<Post | undefined>;
   getFeedPosts(userId: string, limit: number): Promise<Post[]>;
   deletePost(postId: string, userId: string): Promise<boolean>;
   
   createLike(like: InsertLike): Promise<Like>;
   hasLiked(postId: string, userId: string): Promise<boolean>;
   deleteLike(postId: string, userId: string): Promise<void>;
+  processLikeTransaction(likerId: string, creatorId: string, postId: string, likerUsername: string): Promise<boolean>;
   
   createComment(comment: InsertComment): Promise<Comment>;
   getPostComments(postId: string): Promise<Comment[]>;
+  getLastCommentTime(postId: string, userId: string): Promise<Date | null>;
+  processCommentTransaction(commenterId: string, creatorId: string, postId: string, commenterUsername: string, content: string): Promise<Comment | null>;
   
   addFriend(userId: string, friendIdentifier: string): Promise<Friendship>;
   removeFriend(userId: string, friendId: string): Promise<void>;
@@ -153,6 +157,11 @@ export class DbStorage implements IStorage {
     return post;
   }
 
+  async getPostById(postId: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, postId));
+    return post;
+  }
+
   async getFeedPosts(userId: string, limit: number): Promise<Post[]> {
     // Get user's friends
     const userFriendships = await db.select({ friendId: friendships.friendId })
@@ -205,6 +214,53 @@ export class DbStorage implements IStorage {
       .where(eq(posts.id, postId));
   }
 
+  async processLikeTransaction(likerId: string, creatorId: string, postId: string, likerUsername: string): Promise<boolean> {
+    try {
+      return await db.transaction(async (tx) => {
+        // Atomic credit deduction with balance check
+        const likerUpdate = await tx.update(users)
+          .set({ credits: sql`${users.credits} - 1` })
+          .where(and(eq(users.id, likerId), sql`${users.credits} >= 1`))
+          .returning();
+
+        // If liker doesn't have enough credits, abort transaction
+        if (likerUpdate.length === 0) {
+          throw new Error('INSUFFICIENT_CREDITS');
+        }
+
+        // Create like first (unique constraint will prevent duplicates)
+        await tx.insert(likes).values({
+          postId,
+          userId: likerId,
+          username: likerUsername,
+        });
+
+        // Add 0.6 credits to creator (atomic)
+        await tx.update(users)
+          .set({ credits: sql`${users.credits} + 0.6` })
+          .where(eq(users.id, creatorId));
+
+        // Increment like count on post (atomic)
+        await tx.update(posts)
+          .set({ likesCount: sql`${posts.likesCount} + 1` })
+          .where(eq(posts.id, postId));
+
+        return true;
+      });
+    } catch (error: any) {
+      // Check error types
+      if (error.message === 'INSUFFICIENT_CREDITS') {
+        return false;
+      }
+      if (error.code === '23505') {
+        // Duplicate like - unique constraint violation
+        return false;
+      }
+      console.error('Like transaction error:', error);
+      return false;
+    }
+  }
+
   async createComment(insertComment: InsertComment): Promise<Comment> {
     const [comment] = await db.insert(comments).values(insertComment).returning();
     
@@ -221,6 +277,81 @@ export class DbStorage implements IStorage {
       .from(comments)
       .where(eq(comments.postId, postId))
       .orderBy(desc(comments.createdAt));
+  }
+
+  async getLastCommentTime(postId: string, userId: string): Promise<Date | null> {
+    const [comment] = await db.select({ createdAt: comments.createdAt })
+      .from(comments)
+      .where(and(eq(comments.postId, postId), eq(comments.userId, userId)))
+      .orderBy(desc(comments.createdAt))
+      .limit(1);
+    
+    return comment ? comment.createdAt : null;
+  }
+
+  async processCommentTransaction(commenterId: string, creatorId: string, postId: string, commenterUsername: string, content: string): Promise<Comment | null> {
+    try {
+      return await db.transaction(async (tx) => {
+        // Check rate limiting inside transaction with row lock
+        const lastComment = await tx.execute(sql`
+          SELECT created_at 
+          FROM ${comments} 
+          WHERE ${comments.postId} = ${postId} 
+            AND ${comments.userId} = ${commenterId}
+          ORDER BY created_at DESC
+          LIMIT 1
+          FOR UPDATE
+        `);
+
+        if (lastComment.rows.length > 0) {
+          const lastCommentTime = new Date(lastComment.rows[0].created_at as string);
+          const secondsSinceLastComment = (Date.now() - lastCommentTime.getTime()) / 1000;
+          if (secondsSinceLastComment < 30) {
+            throw new Error('RATE_LIMITED');
+          }
+        }
+
+        // Atomic credit deduction with balance check
+        const commenterUpdate = await tx.update(users)
+          .set({ credits: sql`${users.credits} - 1` })
+          .where(and(eq(users.id, commenterId), sql`${users.credits} >= 1`))
+          .returning();
+
+        // If commenter doesn't have enough credits, abort transaction
+        if (commenterUpdate.length === 0) {
+          throw new Error('INSUFFICIENT_CREDITS');
+        }
+
+        // Create comment
+        const [comment] = await tx.insert(comments).values({
+          postId,
+          userId: commenterId,
+          username: commenterUsername,
+          content,
+        }).returning();
+
+        // Add 0.6 credits to creator (atomic)
+        await tx.update(users)
+          .set({ credits: sql`${users.credits} + 0.6` })
+          .where(eq(users.id, creatorId));
+
+        // Increment comment count on post (atomic)
+        await tx.update(posts)
+          .set({ commentsCount: sql`${posts.commentsCount} + 1` })
+          .where(eq(posts.id, postId));
+
+        return comment;
+      });
+    } catch (error: any) {
+      if (error.message === 'INSUFFICIENT_CREDITS') {
+        return null;
+      }
+      if (error.message === 'RATE_LIMITED') {
+        throw error; // Propagate to route handler
+      }
+      console.error('Comment transaction error:', error);
+      return null;
+    }
   }
 
   async addFriend(userId: string, friendIdentifier: string): Promise<Friendship> {

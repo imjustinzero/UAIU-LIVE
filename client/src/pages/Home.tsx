@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus, UserCircle } from "lucide-react";
+import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus, UserCircle, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import { GameCanvas } from "@/components/GameCanvas";
@@ -313,6 +313,14 @@ export default function Home() {
                     <span className="sm:hidden">$</span>
                   </Button>
                   <ShareButton />
+                  <Button 
+                    onClick={() => navigate('/feed')} 
+                    variant="ghost" 
+                    size="icon" 
+                    data-testid="button-feed"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </Button>
                   <Button 
                     onClick={() => navigate('/profile')} 
                     variant="ghost" 

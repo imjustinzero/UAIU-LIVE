@@ -15,6 +15,15 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 25, 2025)
+- **Social Feed Feature**: Complete social network layer with posts, likes, comments, and friend system
+  - Posts support text + optional YouTube URL embedding  
+  - Likes/comments cost 1 credit (0.6 to creator, 0.4 burned)
+  - Friend system allows adding friends by @username or email
+  - Feed shows user's own posts and friends' posts
+  - Atomic database transactions prevent race conditions and negative balances
+  - Authorization checks ensure users can only interact with friends' posts
+  - Unique constraint on likes prevents duplicate paid likes
+  - Comment rate limiting: 30 seconds between comments on same post to prevent spam farming
 - **10-Second Countdown Feature**: Games now start with a 10-second countdown timer
 - **Match Now Button**: Players can instantly start a match with an AI bot by clicking "Match Now" during countdown
 - **Real-Time Countdown Updates**: Countdown timer updates every second via Socket.IO for smooth UX

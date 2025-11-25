@@ -217,6 +217,218 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  // Social Feed Routes
+  app.get('/api/feed', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const posts = await storage.getFeedPosts(userId, 50);
+      res.json(posts);
+    } catch (error) {
+      console.error('Feed error:', error);
+      res.status(500).json({ message: 'Failed to fetch feed' });
+    }
+  });
+
+  app.post('/api/posts', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { content, youtubeUrl } = req.body;
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: 'Content is required' });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.username) {
+        return res.status(400).json({ message: 'User not found or missing username' });
+      }
+
+      const post = await storage.createPost({
+        userId,
+        username: user.username,
+        content: content.trim(),
+        youtubeUrl: youtubeUrl || null,
+      });
+
+      res.json(post);
+    } catch (error) {
+      console.error('Create post error:', error);
+      res.status(500).json({ message: 'Failed to create post' });
+    }
+  });
+
+  app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { postId } = req.params;
+
+      // Get post and validate authorization
+      const post = await storage.getPostById(postId);
+      if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+      }
+
+      // Cannot like own post
+      if (post.userId === userId) {
+        return res.status(400).json({ message: 'Cannot like your own post' });
+      }
+
+      // Verify user can see this post (must be friends or own post)
+      if (post.userId !== userId) {
+        const areFriends = await storage.areFriends(userId, post.userId);
+        if (!areFriends) {
+          return res.status(403).json({ message: 'You can only like posts from friends' });
+        }
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.username) {
+        return res.status(400).json({ message: 'User not found' });
+      }
+
+      // Perform atomic credit transaction (unique constraint prevents duplicates)
+      const success = await storage.processLikeTransaction(userId, post.userId, postId, user.username);
+      
+      if (!success) {
+        return res.status(400).json({ message: 'Already liked or insufficient credits' });
+      }
+
+      // Get updated user credits
+      const updatedUser = await storage.getUser(userId);
+      res.json({ success: true, newCredits: updatedUser?.credits || 0 });
+    } catch (error) {
+      console.error('Like error:', error);
+      res.status(500).json({ message: 'Failed to like post' });
+    }
+  });
+
+  app.delete('/api/posts/:postId/like', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { postId } = req.params;
+
+      await storage.deleteLike(postId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Unlike error:', error);
+      res.status(500).json({ message: 'Failed to unlike post' });
+    }
+  });
+
+  app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { postId } = req.params;
+      const { content } = req.body;
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: 'Comment content is required' });
+      }
+
+      // Get post and validate authorization
+      const post = await storage.getPostById(postId);
+      if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+      }
+
+      // Cannot comment on own post
+      if (post.userId === userId) {
+        return res.status(400).json({ message: 'Cannot comment on your own post' });
+      }
+
+      // Verify user can see this post (must be friends or own post)
+      if (post.userId !== userId) {
+        const areFriends = await storage.areFriends(userId, post.userId);
+        if (!areFriends) {
+          return res.status(403).json({ message: 'You can only comment on posts from friends' });
+        }
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.username) {
+        return res.status(400).json({ message: 'User not found' });
+      }
+
+      // Perform atomic credit transaction and create comment (includes rate limiting)
+      const comment = await storage.processCommentTransaction(
+        userId,
+        post.userId,
+        postId,
+        user.username,
+        content.trim()
+      );
+
+      if (!comment) {
+        return res.status(400).json({ message: 'Insufficient credits. You need 1 credit to comment.' });
+      }
+
+      // Get updated user credits
+      const updatedUser = await storage.getUser(userId);
+      res.json({ comment, newCredits: updatedUser?.credits || 0 });
+    } catch (error: any) {
+      if (error.message === 'RATE_LIMITED') {
+        return res.status(429).json({ 
+          message: 'Please wait 30 seconds before commenting again on this post',
+          waitTime: 30
+        });
+      }
+      console.error('Comment error:', error);
+      res.status(500).json({ message: 'Failed to create comment' });
+    }
+  });
+
+  app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const comments = await storage.getPostComments(postId);
+      res.json(comments);
+    } catch (error) {
+      console.error('Get comments error:', error);
+      res.status(500).json({ message: 'Failed to fetch comments' });
+    }
+  });
+
+  app.post('/api/friends', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { friendIdentifier } = req.body;
+
+      if (!friendIdentifier) {
+        return res.status(400).json({ message: 'Friend identifier (@username or email) is required' });
+      }
+
+      const friendship = await storage.addFriend(userId, friendIdentifier.trim());
+      res.json(friendship);
+    } catch (error: any) {
+      console.error('Add friend error:', error);
+      res.status(400).json({ message: error.message || 'Failed to add friend' });
+    }
+  });
+
+  app.get('/api/friends', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const friends = await storage.getFriends(userId);
+      res.json(friends);
+    } catch (error) {
+      console.error('Get friends error:', error);
+      res.status(500).json({ message: 'Failed to fetch friends' });
+    }
+  });
+
+  app.delete('/api/friends/:friendId', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { friendId } = req.params;
+
+      await storage.removeFriend(userId, friendId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Remove friend error:', error);
+      res.status(500).json({ message: 'Failed to remove friend' });
+    }
+  });
+
   app.post('/api/payout/request', requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
