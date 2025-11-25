@@ -15,6 +15,8 @@ import {
   type InsertComment,
   type Friendship,
   type InsertFriendship,
+  type ReferralPayout,
+  type InsertReferralPayout,
   users,
   matches,
   payoutRequests,
@@ -23,6 +25,7 @@ import {
   likes,
   comments,
   friendships,
+  referralPayouts,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
@@ -67,6 +70,10 @@ export interface IStorage {
   removeFriend(userId: string, friendId: string): Promise<void>;
   getFriends(userId: string): Promise<User[]>;
   areFriends(userId: string, friendId: string): Promise<boolean>;
+  
+  // Referral payouts
+  createReferralPayout(payout: InsertReferralPayout): Promise<ReferralPayout | null>;
+  getReferralPayoutBySessionId(sessionId: string): Promise<ReferralPayout | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -183,12 +190,13 @@ export class DbStorage implements IStorage {
     // Get posts from user and friends, plus public posts from admin only
     const conditions = [inArray(posts.userId, friendIds)];
     if (adminUser) {
-      conditions.push(
-        and(
-          eq(posts.visibility, 'public'),
-          eq(posts.userId, adminUser.id)
-        )
+      const adminCondition = and(
+        eq(posts.visibility, 'public'),
+        eq(posts.userId, adminUser.id)
       );
+      if (adminCondition) {
+        conditions.push(adminCondition);
+      }
     }
 
     return await db.select()
@@ -444,6 +452,29 @@ export class DbStorage implements IStorage {
       .from(friendships)
       .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friendId)));
     return !!friendship;
+  }
+  
+  async createReferralPayout(payout: InsertReferralPayout): Promise<ReferralPayout | null> {
+    try {
+      const [result] = await db.insert(referralPayouts)
+        .values(payout)
+        .returning();
+      return result;
+    } catch (error: any) {
+      // Check if this is a unique constraint violation on stripeSessionId
+      if (error?.code === '23505' && error?.constraint === 'referral_payouts_stripe_session_id_unique') {
+        // Duplicate session - this payout was already processed
+        return null;
+      }
+      throw error;
+    }
+  }
+  
+  async getReferralPayoutBySessionId(sessionId: string): Promise<ReferralPayout | undefined> {
+    const [payout] = await db.select()
+      .from(referralPayouts)
+      .where(eq(referralPayouts.stripeSessionId, sessionId));
+    return payout;
   }
 }
 

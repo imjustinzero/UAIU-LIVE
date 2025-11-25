@@ -58,24 +58,31 @@ export class WebhookHandlers {
 
         // Credit the referrer if this user was referred
         // Referrer earns 1 credit per 10 credits purchased by the referred user
-        // Use session ID as idempotency key to prevent duplicate credits on webhook retries
+        // Use dedicated referral_payouts ledger with unique constraint on session ID for idempotency
         // Also prevent self-referral
         if (user.referredBy && user.referredBy !== user.id) {
           const sessionId = session.id;
           
-          // Check if we've already processed this referral credit by looking at action logs
-          const recentLogs = await storage.getActionLog(200);
-          const alreadyProcessed = recentLogs.some((log: any) => 
-            log.type === 'referral' && log.message.includes(sessionId)
-          );
-          
-          if (!alreadyProcessed) {
-            const referrer = await storage.getUser(user.referredBy);
-            if (referrer) {
-              // Calculate referral credits: 1 credit per 10 credits purchased
-              const referralCredits = Math.floor(creditsToAdd / 10);
-              
-              if (referralCredits > 0) {
+          const referrer = await storage.getUser(user.referredBy);
+          if (referrer) {
+            // Calculate referral credits: 1 credit per 10 credits purchased
+            const referralCredits = Math.floor(creditsToAdd / 10);
+            
+            if (referralCredits > 0) {
+              // Attempt to create referral payout record (atomic idempotency check)
+              const payoutRecord = await storage.createReferralPayout({
+                stripeSessionId: sessionId,
+                referrerId: referrer.id,
+                referrerName: referrer.name,
+                refereeId: user.id,
+                refereeName: user.name,
+                creditsAwarded: referralCredits,
+                purchaseAmount: amountPaid,
+                creditsPurchased: creditsToAdd,
+              });
+
+              if (payoutRecord) {
+                // First payout for this session - credit the referrer
                 const referrerNewCredits = referrer.credits + referralCredits;
                 await storage.updateUserCredits(referrer.id, referrerNewCredits);
                 
@@ -83,14 +90,14 @@ export class WebhookHandlers {
                   userId: referrer.id,
                   userName: referrer.name,
                   type: 'referral',
-                  message: `${referrer.name} earned ${referralCredits} credit(s) from ${user.name}'s purchase of ${creditsToAdd} credits (${sessionId})`,
+                  message: `${referrer.name} earned ${referralCredits} credit(s) from ${user.name}'s purchase of ${creditsToAdd} credits`,
                 });
 
                 console.log(`🎁 Credited referrer ${referrer.name} with ${referralCredits} credit(s). New balance: ${referrerNewCredits}`);
+              } else {
+                console.log(`ℹ️ Skipping duplicate referral credit for session ${sessionId} (already processed)`);
               }
             }
-          } else {
-            console.log(`ℹ️ Skipping duplicate referral credit for session ${sessionId}`);
           }
         }
       } else {

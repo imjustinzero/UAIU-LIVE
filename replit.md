@@ -17,7 +17,7 @@ I prefer simple language and detailed explanations. I want iterative development
 ## Recent Changes (November 25, 2025)
 
 ### Latest Updates
-- **Affiliate/Referral System**: Complete referral program with unique codes and automatic rewards
+- **Affiliate/Referral System**: Production-ready referral program with unique codes and automatic rewards
   - Each user gets a unique 8-character affiliate code upon signup
   - Users can share their code via Profile page with one-click copy
   - New users can enter a referral code during signup (optional field)
@@ -27,7 +27,10 @@ I prefer simple language and detailed explanations. I want iterative development
   - Invalid referral codes show clear error messages
   - Prevents self-referral (users can't refer themselves)
   - Only paid Stripe sessions trigger referral credits (test/unpaid sessions ignored)
-  - Webhook idempotency ensures no duplicate credits on Stripe retries
+  - **Production-grade idempotency**: Dedicated `referral_payouts` ledger table with unique constraint on Stripe session ID
+    - Atomic database-level duplicate prevention (no race conditions)
+    - Full audit trail with referrer/referee details, amounts, and timestamps
+    - Handles webhook retries safely even under high load
   - Collision-safe code generation with retry logic for unique constraint violations
   - All 44 existing users migrated with unique affiliate codes
 
