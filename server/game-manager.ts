@@ -55,6 +55,9 @@ export interface QueuedPlayer {
   betAmount: number;
   timeLimit: number;
   joinedAt: number;
+  countdownSeconds?: number;
+  countdownInterval?: NodeJS.Timeout;
+  botMatchTimeout?: NodeJS.Timeout;
 }
 
 export interface GameController {
@@ -157,11 +160,10 @@ export class GameManager {
 
   joinQueue(player: QueuedPlayer, io: SocketIOServer): void {
     const queue = this.matchmakingQueues.get(player.gameType)!;
-    queue.push(player);
-
-    // Broadcast queue update to all clients
-    this.broadcastQueueUpdate(io);
-
+    
+    // Initialize countdown
+    player.countdownSeconds = 10;
+    
     // Try to match with another player who has the same bet amount
     const matchingPlayer = queue.find(p => 
       p.userId !== player.userId && 
@@ -169,16 +171,58 @@ export class GameManager {
     );
     
     if (matchingPlayer) {
+      // Clear any existing countdown for matching player
+      if (matchingPlayer.countdownInterval) {
+        clearInterval(matchingPlayer.countdownInterval);
+      }
+      if (matchingPlayer.botMatchTimeout) {
+        clearTimeout(matchingPlayer.botMatchTimeout);
+      }
+      
       // Remove both players from queue and start match
-      queue.splice(queue.indexOf(player), 1);
       queue.splice(queue.indexOf(matchingPlayer), 1);
       this.broadcastQueueUpdate(io);
       this.startMatch(player, matchingPlayer, io, player.gameType);
     } else {
-      // Set timeout for AI opponent (1 second for instant-feeling matchmaking)
-      setTimeout(() => {
+      // Add player to queue
+      queue.push(player);
+      this.broadcastQueueUpdate(io);
+      
+      // Start countdown interval (emit every second)
+      player.countdownInterval = setInterval(() => {
+        const stillInQueue = queue.find(p => p.userId === player.userId);
+        if (stillInQueue && stillInQueue.countdownSeconds !== undefined) {
+          stillInQueue.countdownSeconds--;
+          
+          // Emit countdown update to the specific player
+          const socket = io.sockets.sockets.get(player.socketId);
+          if (socket) {
+            socket.emit('matchmakingCountdown', stillInQueue.countdownSeconds);
+          }
+          
+          // Stop countdown when it reaches 0
+          if (stillInQueue.countdownSeconds <= 0) {
+            if (stillInQueue.countdownInterval) {
+              clearInterval(stillInQueue.countdownInterval);
+            }
+          }
+        } else {
+          // Player left queue, clear interval
+          if (player.countdownInterval) {
+            clearInterval(player.countdownInterval);
+          }
+        }
+      }, 1000);
+      
+      // Set timeout for AI opponent (10 seconds)
+      player.botMatchTimeout = setTimeout(() => {
         const stillInQueue = queue.find(p => p.userId === player.userId);
         if (stillInQueue) {
+          // Clear countdown interval
+          if (stillInQueue.countdownInterval) {
+            clearInterval(stillInQueue.countdownInterval);
+          }
+          
           queue.splice(queue.indexOf(stillInQueue), 1);
           this.broadcastQueueUpdate(io);
           const botPlayer: QueuedPlayer = {
@@ -192,7 +236,7 @@ export class GameManager {
           };
           this.startMatch(stillInQueue, botPlayer, io, player.gameType);
         }
-      }, 1000);
+      }, 10000);
     }
   }
 
@@ -200,12 +244,65 @@ export class GameManager {
     this.matchmakingQueues.forEach(queue => {
       const index = queue.findIndex(p => p.userId === userId);
       if (index !== -1) {
+        const player = queue[index];
+        // Clear any countdown intervals and timeouts
+        if (player.countdownInterval) {
+          clearInterval(player.countdownInterval);
+        }
+        if (player.botMatchTimeout) {
+          clearTimeout(player.botMatchTimeout);
+        }
         queue.splice(index, 1);
       }
     });
     if (io) {
       this.broadcastQueueUpdate(io);
     }
+  }
+
+  matchNow(userId: string, io: SocketIOServer): boolean {
+    // Find the player in any queue
+    let player: QueuedPlayer | undefined;
+    let queue: QueuedPlayer[] | undefined;
+    
+    this.matchmakingQueues.forEach(q => {
+      const p = q.find(p => p.userId === userId);
+      if (p) {
+        player = p;
+        queue = q;
+      }
+    });
+
+    if (!player || !queue) {
+      return false;
+    }
+
+    // Clear any countdown intervals and timeouts
+    if (player.countdownInterval) {
+      clearInterval(player.countdownInterval);
+    }
+    if (player.botMatchTimeout) {
+      clearTimeout(player.botMatchTimeout);
+    }
+
+    // Remove player from queue
+    queue.splice(queue.indexOf(player), 1);
+    this.broadcastQueueUpdate(io);
+
+    // Create bot opponent
+    const botPlayer: QueuedPlayer = {
+      userId: 'AI_BOT',
+      socketId: 'bot-socket',
+      name: getRandomBotName(),
+      gameType: player.gameType,
+      betAmount: player.betAmount,
+      timeLimit: player.timeLimit,
+      joinedAt: Date.now(),
+    };
+
+    // Start match immediately with bot
+    this.startMatch(player, botPlayer, io, player.gameType);
+    return true;
   }
 
   getAllQueuedPlayers(): Omit<QueuedPlayer, 'socketId'>[] {

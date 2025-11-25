@@ -167,6 +167,11 @@ export default function Home() {
         setQueuedPlayers(players);
       });
 
+      newSocket.on('matchmakingCountdown', (seconds: number) => {
+        console.log('[CLIENT] Countdown update:', seconds);
+        setMatchmakingTimer(seconds);
+      });
+
       return () => {
         newSocket.close();
       };
@@ -202,7 +207,7 @@ export default function Home() {
     }
 
     setMatchmaking(true);
-    setMatchmakingTimer(1);
+    setMatchmakingTimer(10);
     socket?.emit('joinMatchmaking', { gameType: selectedGame, betAmount });
     toast({
       title: "Finding Match...",
@@ -212,30 +217,17 @@ export default function Home() {
 
   const handleCancelMatchmaking = () => {
     setMatchmaking(false);
-    setMatchmakingTimer(1);
+    setMatchmakingTimer(10);
     socket?.emit('leaveMatchmaking');
   };
 
-  // Matchmaking countdown timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (matchmaking && !inGame) {
-      interval = setInterval(() => {
-        setMatchmakingTimer(prev => {
-          if (prev <= 1) {
-            // Time's up - server will start bot match
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [matchmaking, inGame]);
+  const handleMatchNow = () => {
+    socket?.emit('matchNow');
+    toast({
+      title: "Matching Now!",
+      description: "Starting match with AI bot...",
+    });
+  };
 
   const handleAddCredits = () => {
     window.location.href = 'https://buy.stripe.com/8x26oIa5OacYb46eVCcMM02';
@@ -507,13 +499,25 @@ export default function Home() {
                           {matchmakingTimer}
                         </div>
                       </div>
-                      <Button
-                        onClick={handleCancelMatchmaking}
-                        variant="outline"
-                        data-testid="button-cancel-matchmaking"
-                      >
-                        Cancel
-                      </Button>
+                      <div className="flex gap-3 justify-center">
+                        <Button
+                          onClick={handleMatchNow}
+                          size="lg"
+                          className="flex-1 max-w-xs"
+                          data-testid="button-match-now"
+                        >
+                          <Zap className="w-5 h-5 mr-2" />
+                          Match Now
+                        </Button>
+                        <Button
+                          onClick={handleCancelMatchmaking}
+                          variant="outline"
+                          size="lg"
+                          data-testid="button-cancel-matchmaking"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   )}
 

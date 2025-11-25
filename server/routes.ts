@@ -412,6 +412,16 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       gameManager.leaveQueue(userId, io);
     });
 
+    socket.on('matchNow', () => {
+      const userId = (socket as any).userId;
+      if (!userId) return;
+      
+      const success = gameManager.matchNow(userId, io);
+      if (!success) {
+        socket.emit('error', { message: 'Not in matchmaking queue' });
+      }
+    });
+
     socket.on('joinSpecificMatch', async (data: { targetUserId: string }) => {
       try {
         const userId = (socket as any).userId;
