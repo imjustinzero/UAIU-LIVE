@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Heart, MessageCircle, UserPlus, Users, Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Heart, MessageCircle, UserPlus, Users, Trash2, Globe, Lock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,7 @@ export default function Feed() {
   const { toast } = useToast();
   const [postContent, setPostContent] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [postVisibility, setPostVisibility] = useState<'friends' | 'public'>('friends');
   const [friendIdentifier, setFriendIdentifier] = useState('');
   const [selectedPostComments, setSelectedPostComments] = useState<string | null>(null);
   const [commentContent, setCommentContent] = useState('');
@@ -67,6 +70,8 @@ export default function Feed() {
   const { data: user } = useQuery<{ id: string; name: string; email: string; credits: number; username: string }>({
     queryKey: ['/api/auth/me'],
   });
+
+  const isAdmin = user?.email === 'imjustinzero@gmail.com';
 
   const { data: posts = [], isLoading: loadingPosts } = useQuery<Post[]>({
     queryKey: ['/api/feed'],
@@ -82,16 +87,17 @@ export default function Feed() {
   });
 
   const createPostMutation = useMutation({
-    mutationFn: async (data: { content: string; youtubeUrl?: string }) =>
+    mutationFn: async (data: { content: string; youtubeUrl?: string; visibility?: string }) =>
       apiRequest('POST', '/api/posts', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setPostContent('');
       setYoutubeUrl('');
+      setPostVisibility('friends');
       toast({
         title: 'Post created',
-        description: 'Your post has been shared with your friends',
+        description: postVisibility === 'public' ? 'Your post is now visible to everyone!' : 'Your post has been shared with your friends',
       });
     },
     onError: (error: any) => {
@@ -197,6 +203,7 @@ export default function Feed() {
     createPostMutation.mutate({
       content: postContent,
       youtubeUrl: youtubeUrl.trim() || undefined,
+      visibility: postVisibility,
     });
   };
 
@@ -305,6 +312,32 @@ export default function Feed() {
               onChange={(e) => setYoutubeUrl(e.target.value)}
               data-testid="input-youtube-url"
             />
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Post Visibility</Label>
+                <RadioGroup 
+                  value={postVisibility} 
+                  onValueChange={(value) => setPostVisibility(value as 'friends' | 'public')}
+                  className="flex gap-4"
+                  data-testid="radio-group-visibility"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="friends" id="friends" data-testid="radio-friends" />
+                    <Label htmlFor="friends" className="flex items-center gap-2 cursor-pointer">
+                      <Lock className="w-4 h-4" />
+                      Friends Only
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="public" id="public" data-testid="radio-public" />
+                    <Label htmlFor="public" className="flex items-center gap-2 cursor-pointer">
+                      <Globe className="w-4 h-4" />
+                      Public (Everyone)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
           </CardContent>
           <CardFooter>
             <Button
