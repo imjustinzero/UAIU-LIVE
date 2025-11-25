@@ -72,11 +72,22 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(400).json({ message: 'Email already registered' });
       }
 
+      // Generate unique username from name
+      let username = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      let suffix = 0;
+      let finalUsername = username;
+      
+      while (await storage.getUserByUsername(finalUsername)) {
+        suffix++;
+        finalUsername = `${username}${suffix}`;
+      }
+
       const hashedPassword = await bcrypt.hash(password, 10);
       
       const user = await storage.createUser({ 
         email, 
-        name, 
+        name,
+        username: finalUsername,
         password: hashedPassword,
       });
 

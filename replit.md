@@ -15,43 +15,81 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 25, 2025)
+
+### Latest Updates
+- **Combined Profile/Feed Page**: Unified user experience with tabbed interface
+  - Profile tab: Personal info, game statistics, credits, win rate, earnings
+  - Feed tab: Create posts, view feed, like/comment on posts
+  - Friends tab: Manage friend list, add/remove friends
+  - Single navigation button (UserCircle icon) instead of separate Feed/Profile buttons
+  - Per-post comment state prevents cross-contamination
+  - Auth-gated queries prevent unauthorized access
+
+- **Like Credit System Fixes**: Fixed multiple critical bugs in like/comment functionality
+  - Auto-generate unique usernames during signup (required for likes/comments)
+  - Fixed getFriends SQL error (changed from malformed ANY() to inArray())
+  - Removed database transaction dependency for Neon HTTP driver compatibility
+  - Sequential operations with atomic credit updates and manual rollback on failure
+  - Unique constraints on likes table prevent duplicate payments
+
 - **Admin Public Post Feature**: Admin account (imjustinzero@gmail.com) can now toggle post visibility
   - Visibility toggle appears only for admin user with "Friends Only" (default) and "Public (Everyone)" options
   - Public posts from admin are visible to all users' feeds regardless of friend status
   - Server-side validation ensures only admin can create public posts (403 error for non-admin attempts)
   - Feed query restricts public posts to admin user only for security
   - All other users' posts remain friends-only
+
 - **Social Feed Feature**: Complete social network layer with posts, likes, comments, and friend system
   - Posts support text + optional YouTube URL embedding  
   - Likes/comments cost 1 credit (0.6 to creator, 0.4 burned)
   - Friend system allows adding friends by @username or email
   - Feed shows user's own posts and friends' posts
-  - Atomic database transactions prevent race conditions and negative balances
   - Authorization checks ensure users can only interact with friends' posts
   - Unique constraint on likes prevents duplicate paid likes
-  - Comment rate limiting: 30 seconds between comments on same post (in-transaction with SELECT FOR UPDATE)
+
 - **10-Second Countdown Feature**: Games now start with a 10-second countdown timer
 - **Match Now Button**: Players can instantly start a match with an AI bot by clicking "Match Now" during countdown
 - **Real-Time Countdown Updates**: Countdown timer updates every second via Socket.IO for smooth UX
 
 ## Known Limitations / Accepted Risks
 
+### No Database Transaction Support (Technical Limitation - Nov 25, 2025)
+**Issue**: Neon HTTP driver doesn't support database transactions, so like/comment credit operations use sequential atomic updates instead of true ACID transactions.
+
+**Implementation**: processLikeTransaction and processCommentTransaction use:
+1. Pre-check for sufficient credits and duplicate prevention
+2. Create like/comment record (unique constraint prevents duplicates)
+3. Deduct credit from user (atomic UPDATE with balance check in WHERE clause)
+4. If deduction fails, delete like/comment record (manual rollback)
+5. Add 0.6 credits to creator (atomic UPDATE)
+6. Update post like/comment count (atomic UPDATE)
+
+**Edge Cases**: If server crashes or network fails between steps, system may be in inconsistent state (e.g., like exists but credits not transferred). These scenarios are extremely rare and only occur during infrastructure failures.
+
+**Mitigation**:
+- Atomic credit updates with balance checks prevent negative balances
+- Unique constraints prevent duplicate likes/comments
+- Authorization checks ensure only friends can interact
+- Manual rollback of like/comment if credit deduction fails
+
 ### Comment Rate Limiting Race Condition (Accepted Risk - Nov 25, 2025)
-**Issue**: Comment rate limiting has a theoretical race condition under highly concurrent automated attacks. The current implementation uses `SELECT ... FOR UPDATE` within a transaction to enforce a 30-second cooldown between comments on the same post. However, when no previous comment exists (first check), concurrent requests can bypass the throttle and each deduct 1 credit before the first insert commits.
+**Issue**: Comment rate limiting has a theoretical race condition under highly concurrent automated attacks. Without transaction support, the rate limit check (getLastCommentTime) and comment insert are separate operations, allowing concurrent requests to bypass the 30-second cooldown.
 
 **Impact**: Coordinated scripted attacks could potentially drain user credits by posting multiple paid comments in rapid succession.
 
 **Business Decision**: User explicitly accepted this limitation (quote: "no worries no one's going to spam"). The risk is acceptable for current usage patterns where organic users are not expected to attempt spam.
 
 **Mitigation**: 
-- In-transaction rate limiting provides partial protection against casual spam
+- Rate limiting check provides protection against casual spam
 - Unique constraint on likes prevents similar issue for like functionality
 - Authorization checks ensure only friends can interact
+- Credit deduction has atomic balance check to prevent negative credits
 
 **Future Enhancement** (Backlog):
 - Implement partial unique index on `(post_id, user_id, date_trunc('minute', created_at))` for complete protection
 - Add monitoring/alerting for unusual comment burst patterns and credit deductions
 - Consider throttle table with dedicated lock rows for guaranteed serialization
+- Migrate to PostgreSQL driver with transaction support (not HTTP-based)
 
 ## Recent Changes (November 24, 2025)
 - **Email Verification Removed**: New users now receive 1 credit immediately upon signup - no email verification required
