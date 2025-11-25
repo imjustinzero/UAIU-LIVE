@@ -202,9 +202,9 @@ export function updateTetrisBotAI(state: TetrisGameState, botIsPlayer2: boolean)
   const gameData = bot.gameData;
   if (gameData.gameOver || !gameData.currentPiece) return;
 
-  // Calibrated for ~87% win rate - good but not perfect
-  // Skip entire update 13% of time
-  if (Math.random() < 0.13) return;
+  // Calibrated for ~96% win rate - nearly perfect
+  // Skip entire update 4% of time
+  if (Math.random() < 0.04) return;
   
   // Rotate strategically
   if (Math.random() < 0.45) {

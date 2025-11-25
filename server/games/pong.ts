@@ -72,7 +72,7 @@ export function createPongMatch(p1Id: string, p2Id: string, p1Name: string, p2Na
       vy: (Math.random() > 0.5 ? 1 : -1) * BALL_SPEED,
     },
     totalHits: 0,
-    botWillWin: Math.random() < 0.87,
+    botWillWin: Math.random() < 0.96,
     status: 'playing',
   };
 }
@@ -104,12 +104,12 @@ export function updatePongBotAI(state: PongGameState, botIsPlayer2: boolean) {
 
   let skill: number;
   if (isWarmup) {
-    skill = 0.4;
+    skill = 0.5;
   } else if (botWillWin) {
     const progressionHits = Math.min(totalHits - warmupHits, 10);
-    skill = 0.7 + (progressionHits * 0.03);
+    skill = 0.85 + (progressionHits * 0.03);
   } else {
-    skill = 0.5;
+    skill = 0.4;
   }
 
   const moveSpeed = PADDLE_SPEED * skill;

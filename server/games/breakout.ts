@@ -163,8 +163,8 @@ export function updateBreakoutBotAI(state: BreakoutGameState, botIsPlayer2: bool
   const gameData = bot.gameData;
   if (gameData.lives <= 0) return;
 
-  // Calibrated tracking for ~87% win rate: larger dead zone + occasional delays
-  if (Math.random() < 0.13) {
+  // Calibrated tracking for ~96% win rate: smaller dead zone + rare delays
+  if (Math.random() < 0.04) {
     gameData.paddleVelocity = 0;
     return;
   }

@@ -135,8 +135,8 @@ export function updateFlappyBirdBotAI(state: FlappyBirdGameState, botIsPlayer2: 
   const gameData = bot.gameData;
   if (!gameData.alive) return;
 
-  // Skip decision 13% of time for ~87% win rate
-  if (Math.random() < 0.13) return;
+  // Skip decision 4% of time for ~96% win rate
+  if (Math.random() < 0.04) return;
 
   const birdX = botIsPlayer2 ? 100 : 50;
   const nextPipe = state.pipes.find(pipe => pipe.x + PIPE_WIDTH > birdX);

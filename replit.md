@@ -1,7 +1,7 @@
 # UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. AI bots appear as real players with creative names and win ~87% of matches. Leaderboard hidden from non-logged-in users. New users receive 1 free credit immediately upon signup (no email verification required).
+UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. AI bots appear as real players with creative names and win ~96% of matches. Leaderboard hidden from non-logged-in users. New users receive 1 free credit immediately upon signup (no email verification required).
 
 ## Available Games
 1. **Pong**: Classic vertical paddle game with real-time physics
@@ -124,6 +124,7 @@ I prefer simple language and detailed explanations. I want iterative development
 - **Email System**: Admin signup notifications still work (sent to uaiulive@gmail.com)
 - Leaderboard is now hidden from non-logged-in users for exclusivity
 - AI bots now appear as real players with creative random names (e.g., "Blue Unicorn", "Zeus the Tetris God", "Cosmic Champion")
+- AI bots win ~96% of matches to maintain platform economy
 - Breakout paddle controls fixed to use continuous velocity movement like Pong
 
 ## System Architecture
