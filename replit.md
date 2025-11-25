@@ -15,6 +15,12 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
 ## Recent Changes (November 25, 2025)
+- **Admin Public Post Feature**: Admin account (imjustinzero@gmail.com) can now toggle post visibility
+  - Visibility toggle appears only for admin user with "Friends Only" (default) and "Public (Everyone)" options
+  - Public posts from admin are visible to all users' feeds regardless of friend status
+  - Server-side validation ensures only admin can create public posts (403 error for non-admin attempts)
+  - Feed query restricts public posts to admin user only for security
+  - All other users' posts remain friends-only
 - **Social Feed Feature**: Complete social network layer with posts, likes, comments, and friend system
   - Posts support text + optional YouTube URL embedding  
   - Likes/comments cost 1 credit (0.6 to creator, 0.4 burned)
