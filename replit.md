@@ -23,10 +23,29 @@ I prefer simple language and detailed explanations. I want iterative development
   - Atomic database transactions prevent race conditions and negative balances
   - Authorization checks ensure users can only interact with friends' posts
   - Unique constraint on likes prevents duplicate paid likes
-  - Comment rate limiting: 30 seconds between comments on same post to prevent spam farming
+  - Comment rate limiting: 30 seconds between comments on same post (in-transaction with SELECT FOR UPDATE)
 - **10-Second Countdown Feature**: Games now start with a 10-second countdown timer
 - **Match Now Button**: Players can instantly start a match with an AI bot by clicking "Match Now" during countdown
 - **Real-Time Countdown Updates**: Countdown timer updates every second via Socket.IO for smooth UX
+
+## Known Limitations / Accepted Risks
+
+### Comment Rate Limiting Race Condition (Accepted Risk - Nov 25, 2025)
+**Issue**: Comment rate limiting has a theoretical race condition under highly concurrent automated attacks. The current implementation uses `SELECT ... FOR UPDATE` within a transaction to enforce a 30-second cooldown between comments on the same post. However, when no previous comment exists (first check), concurrent requests can bypass the throttle and each deduct 1 credit before the first insert commits.
+
+**Impact**: Coordinated scripted attacks could potentially drain user credits by posting multiple paid comments in rapid succession.
+
+**Business Decision**: User explicitly accepted this limitation (quote: "no worries no one's going to spam"). The risk is acceptable for current usage patterns where organic users are not expected to attempt spam.
+
+**Mitigation**: 
+- In-transaction rate limiting provides partial protection against casual spam
+- Unique constraint on likes prevents similar issue for like functionality
+- Authorization checks ensure only friends can interact
+
+**Future Enhancement** (Backlog):
+- Implement partial unique index on `(post_id, user_id, date_trunc('minute', created_at))` for complete protection
+- Add monitoring/alerting for unusual comment burst patterns and credit deductions
+- Consider throttle table with dedicated lock rows for guaranteed serialization
 
 ## Recent Changes (November 24, 2025)
 - **Email Verification Removed**: New users now receive 1 credit immediately upon signup - no email verification required
