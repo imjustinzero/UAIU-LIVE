@@ -1,0 +1,123 @@
+This project creates a simple social network layer that attaches directly to an existing gaming credit system. Users must register with an “@username,” add friends, make posts, and use credits from their existing game balance to interact socially.
+
+This allows game players to leverage their real in-game currency inside the social feed, making likes valuable and posts profitable.
+
+1. Forced @username Signup
+
+When a new player enters the platform:
+
+They must create a username in the “@username” format.
+
+Usernames must be unique.
+
+Pretty much just integrate the @ being mandatory and no duplicate accounts 
+
+The username is permanently tied to their gaming account ID.
+
+2. Credit System Connected to the Game
+
+The social feed uses the same credits the user already owns in the game.
+
+There is no separate credit balance.
+
+All credit changes in the feed update the real game account balance.
+
+Credits are pulled LIVE from the existing game wallet.
+
+If the player has 0 credits in the game → they cannot like posts or play games. Prompt them to buy credits starting at $1
+
+3. Making Posts (Simple Twitter-Style Feed)
+
+Players can:
+
+create short posts, post pic, or small video 7 seconds long 
+
+share thoughts
+
+announce wins
+
+promote strategies
+
+talk with friends
+
+
+
+Posts appear with:
+
+@username
+
+timestamp
+
+content
+
+Comment and like button
+
+like counter and comment counter
+
+
+
+The feed shows posts by the player + all their friends.
+
+4. Adding Friends
+
+
+
+Players can add friends by typing someone’s @username or email 
+
+Friends appear in a list, and their posts appear in the user’s feed.
+
+
+
+Rules:
+
+Cannot add yourself.
+
+Cannot add the same friend twice.
+
+@username or email required
+
+5. Liking Posts (Game Credit Economy)
+
+
+
+When a player likes or comments on a post:
+
+
+
+Credit Breakdown (from existing game wallet):
+
+1 credit is deducted from the liker’s or commentors game account.
+
+0.6 credits go directly to the post creator’s game account.
+
+0.4 credits are burned ( permanently removed from the game economy ).
+
+
+
+Rules:
+
+Players cannot like or comment on their own posts.
+
+Players cannot like or comment on the same post twice.
+
+If a player’s game account has fewer than 1 credit, they cannot like or comment 
+
+All credit transfers are instant and reflect in the game wallet.
+
+This creates a real in-game economy where social activity has value.
+
+6. Unified Display
+
+The app shows:
+
+@username
+
+current credit balance (pulled live from the game wallet)
+
+posts
+
+like buttons comment buttons 
+
+transaction updates
+
+Balances update automatically after each like.
