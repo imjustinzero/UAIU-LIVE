@@ -436,7 +436,7 @@ export default function Profile() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Share your referral code with friends! When they make a purchase, you'll earn 1 free credit.
+                      Share your referral code with friends! You'll earn 1 credit for every 10 credits they purchase.
                     </p>
                     <div className="space-y-2">
                       <Label>Your Referral Code</Label>

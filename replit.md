@@ -21,9 +21,12 @@ I prefer simple language and detailed explanations. I want iterative development
   - Each user gets a unique 8-character affiliate code upon signup
   - Users can share their code via Profile page with one-click copy
   - New users can enter a referral code during signup (optional field)
-  - Referrers earn 1 free credit automatically when referred users make purchases
+  - **Referral rewards**: Referrers earn 1 credit for every 10 credits their referred users purchase
+    - Example: Friend buys 50 credits ($5) → you earn 5 credits
+    - Example: Friend buys 100 credits ($10) → you earn 10 credits
   - Invalid referral codes show clear error messages
   - Prevents self-referral (users can't refer themselves)
+  - Only paid Stripe sessions trigger referral credits (test/unpaid sessions ignored)
   - Webhook idempotency ensures no duplicate credits on Stripe retries
   - Collision-safe code generation with retry logic for unique constraint violations
   - All 44 existing users migrated with unique affiliate codes

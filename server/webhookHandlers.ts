@@ -57,13 +57,14 @@ export class WebhookHandlers {
         console.log(`✅ Added ${creditsToAdd} credits to ${user.name} (${customerEmail}). New balance: ${newCredits}`);
 
         // Credit the referrer if this user was referred
+        // Referrer earns 1 credit per 10 credits purchased by the referred user
         // Use session ID as idempotency key to prevent duplicate credits on webhook retries
         // Also prevent self-referral
         if (user.referredBy && user.referredBy !== user.id) {
           const sessionId = session.id;
           
           // Check if we've already processed this referral credit by looking at action logs
-          const recentLogs = await storage.getActionLog(100);
+          const recentLogs = await storage.getActionLog(200);
           const alreadyProcessed = recentLogs.some((log: any) => 
             log.type === 'referral' && log.message.includes(sessionId)
           );
@@ -71,17 +72,22 @@ export class WebhookHandlers {
           if (!alreadyProcessed) {
             const referrer = await storage.getUser(user.referredBy);
             if (referrer) {
-              const referrerNewCredits = referrer.credits + 1;
-              await storage.updateUserCredits(referrer.id, referrerNewCredits);
+              // Calculate referral credits: 1 credit per 10 credits purchased
+              const referralCredits = Math.floor(creditsToAdd / 10);
               
-              await storage.addActionLog({
-                userId: referrer.id,
-                userName: referrer.name,
-                type: 'referral',
-                message: `${referrer.name} earned 1 credit from ${user.name}'s purchase (${sessionId})`,
-              });
+              if (referralCredits > 0) {
+                const referrerNewCredits = referrer.credits + referralCredits;
+                await storage.updateUserCredits(referrer.id, referrerNewCredits);
+                
+                await storage.addActionLog({
+                  userId: referrer.id,
+                  userName: referrer.name,
+                  type: 'referral',
+                  message: `${referrer.name} earned ${referralCredits} credit(s) from ${user.name}'s purchase of ${creditsToAdd} credits (${sessionId})`,
+                });
 
-              console.log(`🎁 Credited referrer ${referrer.name} with 1 credit. New balance: ${referrerNewCredits}`);
+                console.log(`🎁 Credited referrer ${referrer.name} with ${referralCredits} credit(s). New balance: ${referrerNewCredits}`);
+              }
             }
           } else {
             console.log(`ℹ️ Skipping duplicate referral credit for session ${sessionId}`);
