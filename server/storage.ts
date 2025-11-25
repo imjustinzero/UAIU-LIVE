@@ -32,6 +32,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
+  getUserByAffiliateCode(affiliateCode: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(userId: string, updates: Partial<User>): Promise<void>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
@@ -81,6 +82,11 @@ export class DbStorage implements IStorage {
 
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
+  }
+
+  async getUserByAffiliateCode(affiliateCode: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.affiliateCode, affiliateCode));
     return user;
   }
 

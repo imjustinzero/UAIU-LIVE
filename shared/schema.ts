@@ -24,6 +24,8 @@ export const users = pgTable("users", {
   loginStreak: integer("login_streak").notNull().default(0),
   lastDailyBonus: timestamp("last_daily_bonus"),
   postsVisibility: text("posts_visibility").notNull().default('friends'),
+  affiliateCode: text("affiliate_code").unique(),
+  referredBy: text("referred_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
