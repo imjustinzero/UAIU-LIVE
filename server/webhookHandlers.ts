@@ -18,6 +18,13 @@ export class WebhookHandlers {
     
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
+      
+      // Only process successful, paid sessions
+      if (session.payment_status !== 'paid') {
+        console.log(`⏭️ Skipping session ${session.id} - payment status: ${session.payment_status}`);
+        return;
+      }
+
       const customerEmail = session.customer_email || session.customer_details?.email;
 
       if (!customerEmail) {
@@ -48,6 +55,38 @@ export class WebhookHandlers {
         });
 
         console.log(`✅ Added ${creditsToAdd} credits to ${user.name} (${customerEmail}). New balance: ${newCredits}`);
+
+        // Credit the referrer if this user was referred
+        // Use session ID as idempotency key to prevent duplicate credits on webhook retries
+        // Also prevent self-referral
+        if (user.referredBy && user.referredBy !== user.id) {
+          const sessionId = session.id;
+          
+          // Check if we've already processed this referral credit by looking at action logs
+          const recentLogs = await storage.getActionLog(100);
+          const alreadyProcessed = recentLogs.some((log: any) => 
+            log.type === 'referral' && log.message.includes(sessionId)
+          );
+          
+          if (!alreadyProcessed) {
+            const referrer = await storage.getUser(user.referredBy);
+            if (referrer) {
+              const referrerNewCredits = referrer.credits + 1;
+              await storage.updateUserCredits(referrer.id, referrerNewCredits);
+              
+              await storage.addActionLog({
+                userId: referrer.id,
+                userName: referrer.name,
+                type: 'referral',
+                message: `${referrer.name} earned 1 credit from ${user.name}'s purchase (${sessionId})`,
+              });
+
+              console.log(`🎁 Credited referrer ${referrer.name} with 1 credit. New balance: ${referrerNewCredits}`);
+            }
+          } else {
+            console.log(`ℹ️ Skipping duplicate referral credit for session ${sessionId}`);
+          }
+        }
       } else {
         console.error(`❌ User not found for email: ${customerEmail}`);
         console.error('💡 User must sign up in the app before purchasing credits');

@@ -17,6 +17,17 @@ I prefer simple language and detailed explanations. I want iterative development
 ## Recent Changes (November 25, 2025)
 
 ### Latest Updates
+- **Affiliate/Referral System**: Complete referral program with unique codes and automatic rewards
+  - Each user gets a unique 8-character affiliate code upon signup
+  - Users can share their code via Profile page with one-click copy
+  - New users can enter a referral code during signup (optional field)
+  - Referrers earn 1 free credit automatically when referred users make purchases
+  - Invalid referral codes show clear error messages
+  - Prevents self-referral (users can't refer themselves)
+  - Webhook idempotency ensures no duplicate credits on Stripe retries
+  - Collision-safe code generation with retry logic for unique constraint violations
+  - All 44 existing users migrated with unique affiliate codes
+
 - **Combined Profile/Feed Page**: Unified user experience with tabbed interface
   - Profile tab: Personal info, game statistics, credits, win rate, earnings
   - Feed tab: Create posts, view feed, like/comment on posts

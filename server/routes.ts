@@ -12,6 +12,7 @@ import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
 import { gameManager, type GameType } from "./game-manager";
+import { nanoid } from "nanoid";
 
 // Legacy Pong code removed - all games now use GameManager
 
@@ -61,7 +62,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.post('/api/auth/signup', async (req, res) => {
     try {
-      const { email, name, password } = req.body;
+      const { email, name, password, referralCode } = req.body;
 
       if (!email || !name || !password) {
         return res.status(400).json({ message: 'Email, name, and password are required' });
@@ -70,6 +71,16 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(400).json({ message: 'Email already registered' });
+      }
+
+      // Validate referral code if provided
+      let referrerId: string | undefined;
+      if (referralCode && referralCode.trim()) {
+        const referrer = await storage.getUserByAffiliateCode(referralCode.trim());
+        if (!referrer) {
+          return res.status(400).json({ message: 'Invalid referral code' });
+        }
+        referrerId = referrer.id;
       }
 
       // Generate unique username from name
@@ -84,12 +95,43 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const hashedPassword = await bcrypt.hash(password, 10);
       
-      const user = await storage.createUser({ 
-        email, 
-        name,
-        username: finalUsername,
-        password: hashedPassword,
-      });
+      // Generate unique affiliate code with retry logic for collisions
+      let user;
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      while (attempts < maxAttempts) {
+        try {
+          const affiliateCode = nanoid(8).toUpperCase();
+          user = await storage.createUser({ 
+            email, 
+            name,
+            password: hashedPassword,
+            affiliateCode,
+            referredBy: referrerId,
+          });
+          break; // Success, exit loop
+        } catch (error: any) {
+          // Check if error is due to unique constraint violation on affiliateCode
+          if (error.message?.includes('affiliate_code') || error.code === '23505') {
+            attempts++;
+            if (attempts >= maxAttempts) {
+              throw new Error('Failed to generate unique affiliate code. Please try again.');
+            }
+            // Retry with new code
+            continue;
+          }
+          // Re-throw other errors
+          throw error;
+        }
+      }
+
+      if (!user) {
+        throw new Error('User creation failed');
+      }
+
+      // Update username separately
+      await storage.updateUser(user.id, { username: finalUsername });
 
       // Give 1 free credit immediately upon signup
       await storage.updateUserCredits(user.id, 1);
@@ -98,7 +140,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         userId: user.id,
         userName: name,
         type: 'signup',
-        message: `${name} joined UAIU Arcade!`,
+        message: `${name} joined UAIU Arcade!${referrerId ? ' (referred)' : ''}`,
       });
 
       // Optionally send admin notification (silently fail if it doesn't work)

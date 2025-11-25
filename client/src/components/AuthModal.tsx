@@ -24,12 +24,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     const email = formData.get('signup-email') as string;
     const name = formData.get('signup-name') as string;
     const password = formData.get('signup-password') as string;
+    const referralCode = formData.get('signup-referral') as string;
 
     try {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, password }),
+        body: JSON.stringify({ email, name, password, referralCode }),
       });
 
       if (!response.ok) {
@@ -151,6 +152,16 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                   placeholder="••••••••"
                   required
                   data-testid="input-signup-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-referral">Referral Code (Optional)</Label>
+                <Input
+                  id="signup-referral"
+                  name="signup-referral"
+                  type="text"
+                  placeholder="Enter a friend's code"
+                  data-testid="input-signup-referral"
                 />
               </div>
               <Button

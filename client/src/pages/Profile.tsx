@@ -22,7 +22,10 @@ import {
   UserPlus,
   Trash2,
   Globe,
-  Lock
+  Lock,
+  Copy,
+  Check,
+  Gift
 } from "lucide-react";
 import {
   Dialog,
@@ -42,6 +45,8 @@ interface User {
   wins: number;
   losses: number;
   totalEarnings: number;
+  affiliateCode?: string;
+  referredBy?: string;
 }
 
 interface Post {
@@ -96,6 +101,7 @@ export default function Profile() {
   const [friendIdentifier, setFriendIdentifier] = useState('');
   const [selectedPostComments, setSelectedPostComments] = useState<string | null>(null);
   const [commentContents, setCommentContents] = useState<Record<string, string>>({});
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: user, isLoading: loadingUser } = useQuery<User>({
     queryKey: ['/api/auth/me'],
@@ -304,6 +310,18 @@ export default function Profile() {
     commentMutation.mutate({ postId, content });
   };
 
+  const handleCopyAffiliateCode = () => {
+    if (user?.affiliateCode) {
+      navigator.clipboard.writeText(user.affiliateCode);
+      setCodeCopied(true);
+      toast({
+        title: 'Copied!',
+        description: 'Referral code copied to clipboard',
+      });
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
   if (loadingUser) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -407,6 +425,41 @@ export default function Profile() {
                   </div>
                 </CardContent>
               </Card>
+
+              {user.affiliateCode && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Gift className="w-6 h-6 text-primary" />
+                      Referral Program
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Share your referral code with friends! When they make a purchase, you'll earn 1 free credit.
+                    </p>
+                    <div className="space-y-2">
+                      <Label>Your Referral Code</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={user.affiliateCode}
+                          readOnly
+                          className="font-mono text-lg"
+                          data-testid="input-affiliate-code"
+                        />
+                        <Button
+                          onClick={handleCopyAffiliateCode}
+                          variant="outline"
+                          size="icon"
+                          data-testid="button-copy-affiliate"
+                        >
+                          {codeCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               <div className="grid md:grid-cols-3 gap-6">
                 <Card>
