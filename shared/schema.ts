@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
+  username: text("username").unique(),
   password: text("password").notNull(),
   credits: real("credits").notNull().default(0),
   matchesPlayed: integer("matches_played").notNull().default(0),
@@ -22,6 +23,7 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at"),
   loginStreak: integer("login_streak").notNull().default(0),
   lastDailyBonus: timestamp("last_daily_bonus"),
+  postsVisibility: text("posts_visibility").notNull().default('friends'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -106,8 +108,38 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const posts = pgTable("posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  content: text("content").notNull(),
+  mediaUrl: text("media_url"),
+  mediaType: text("media_type"),
+  likesCount: integer("likes_count").notNull().default(0),
+  commentsCount: integer("comments_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const likes = pgTable("likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const comments = pgTable("comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
+  username: true,
   credits: true,
   matchesPlayed: true,
   wins: true,
@@ -122,6 +154,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
   lastLoginAt: true,
   loginStreak: true,
   lastDailyBonus: true,
+  postsVisibility: true,
   createdAt: true,
 });
 
@@ -165,6 +198,23 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertPostSchema = createInsertSchema(posts).omit({
+  id: true,
+  likesCount: true,
+  commentsCount: true,
+  createdAt: true,
+});
+
+export const insertLikeSchema = createInsertSchema(likes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCommentSchema = createInsertSchema(comments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
@@ -181,6 +231,12 @@ export type InsertDailyMission = z.infer<typeof insertDailyMissionSchema>;
 export type DailyMission = typeof dailyMissions.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+export type InsertPost = z.infer<typeof insertPostSchema>;
+export type Post = typeof posts.$inferSelect;
+export type InsertLike = z.infer<typeof insertLikeSchema>;
+export type Like = typeof likes.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type Comment = typeof comments.$inferSelect;
 
 export interface GameState {
   matchId: string;
