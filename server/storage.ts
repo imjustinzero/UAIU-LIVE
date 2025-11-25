@@ -25,7 +25,7 @@ import {
   friendships,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, and, sql } from "drizzle-orm";
+import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -174,7 +174,7 @@ export class DbStorage implements IStorage {
     // Get posts from user and friends
     return await db.select()
       .from(posts)
-      .where(sql`${posts.userId} = ANY(${friendIds})`)
+      .where(inArray(posts.userId, friendIds))
       .orderBy(desc(posts.createdAt))
       .limit(limit);
   }
