@@ -68,6 +68,13 @@ I prefer simple language and detailed explanations. I want iterative development
 - **Match Now Button**: Players can instantly start a match with an AI bot by clicking "Match Now" during countdown
 - **Real-Time Countdown Updates**: Countdown timer updates every second via Socket.IO for smooth UX
 
+## Future Enhancements (Backlog)
+
+### Referral System Monitoring (Suggested by Architect - Nov 25, 2025)
+- **Compensating Logic**: Add automated detection/remediation for edge case where ledger insert succeeds but credit update fails
+- **Performance Optimization**: Consider adding indexes on `referrer_id`/`referee_id` columns if building referral analytics dashboards
+- **Deployment Monitoring**: Monitor Stripe webhook logs after deployment to confirm duplicate deliveries are handled correctly
+
 ## Known Limitations / Accepted Risks
 
 ### No Database Transaction Support (Technical Limitation - Nov 25, 2025)
