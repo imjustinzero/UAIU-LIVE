@@ -1,7 +1,7 @@
 # UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 1 second if no opponent is found. AI bots appear as real players with creative names. The platform prioritizes security, real-time performance, and a vibrant gaming experience, optimized for both mobile and desktop.
+UAIU Arcade is a production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy. Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. Games run until natural completion based on scoring, with AI bot fallback after 10 seconds if no opponent is found. AI bots appear as real players with creative names and win ~87% of matches. Leaderboard hidden from non-logged-in users. New users receive 1 free credit immediately upon signup (no email verification required).
 
 ## Available Games
 1. **Pong**: Classic vertical paddle game with real-time physics
@@ -14,6 +14,11 @@ UAIU Arcade is a production-ready online multiplayer gaming platform featuring a
 ## User Preferences
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
 
+## Recent Changes (November 25, 2025)
+- **10-Second Countdown Feature**: Games now start with a 10-second countdown timer
+- **Match Now Button**: Players can instantly start a match with an AI bot by clicking "Match Now" during countdown
+- **Real-Time Countdown Updates**: Countdown timer updates every second via Socket.IO for smooth UX
+
 ## Recent Changes (November 24, 2025)
 - **Email Verification Removed**: New users now receive 1 credit immediately upon signup - no email verification required
 - **Simplified Onboarding**: Users can start playing instantly after registration
@@ -23,7 +28,6 @@ I prefer simple language and detailed explanations. I want iterative development
 - **Email System**: Admin signup notifications still work (sent to uaiulive@gmail.com)
 - Leaderboard is now hidden from non-logged-in users for exclusivity
 - AI bots now appear as real players with creative random names (e.g., "Blue Unicorn", "Zeus the Tetris God", "Cosmic Champion")
-- Bot matchmaking delay reduced from 10 seconds to 1 second for instant-feeling matches
 - Breakout paddle controls fixed to use continuous velocity movement like Pong
 
 ## System Architecture
@@ -53,7 +57,7 @@ The frontend is built with React and TypeScript, styled using Tailwind CSS with 
 - **Leaderboard**: Real-time rankings by total credits (visible only to logged-in users).
 - **Action Log**: Live feed of platform activities.
 - **Authentication**: Secure session-based authentication.
-- **AI Matchmaking**: Automatic match with AI bot if no opponent found in 1 second. Bots appear as real players with creative names.
+- **AI Matchmaking**: 10-second countdown for finding opponents, with instant "Match Now" button to immediately pair with AI bot. Bots appear as real players with creative names.
 
 ### System Design Choices
 The system employs a client-server architecture. The server manages all critical game logic, credit transactions, and user authentication to ensure fairness and prevent cheating. Data is persisted in a PostgreSQL database, ensuring state consistency across server restarts. Socket.IO is used for low-latency real-time game state synchronization.
