@@ -7,17 +7,30 @@ import {
   type InsertPayoutRequest,
   type ActionLogEntry,
   type InsertActionLog,
+  type Post,
+  type InsertPost,
+  type Like,
+  type InsertLike,
+  type Comment,
+  type InsertComment,
+  type Friendship,
+  type InsertFriendship,
   users,
   matches,
   payoutRequests,
   actionLog,
+  posts,
+  likes,
+  comments,
+  friendships,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(userId: string, updates: Partial<User>): Promise<void>;
@@ -32,6 +45,23 @@ export interface IStorage {
   
   getActionLog(limit: number): Promise<ActionLogEntry[]>;
   addActionLog(entry: InsertActionLog): Promise<void>;
+  
+  // Social features
+  createPost(post: InsertPost): Promise<Post>;
+  getFeedPosts(userId: string, limit: number): Promise<Post[]>;
+  deletePost(postId: string, userId: string): Promise<boolean>;
+  
+  createLike(like: InsertLike): Promise<Like>;
+  hasLiked(postId: string, userId: string): Promise<boolean>;
+  deleteLike(postId: string, userId: string): Promise<void>;
+  
+  createComment(comment: InsertComment): Promise<Comment>;
+  getPostComments(postId: string): Promise<Comment[]>;
+  
+  addFriend(userId: string, friendIdentifier: string): Promise<Friendship>;
+  removeFriend(userId: string, friendId: string): Promise<void>;
+  getFriends(userId: string): Promise<User[]>;
+  areFriends(userId: string, friendId: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -111,6 +141,153 @@ export class DbStorage implements IStorage {
 
   async addActionLog(entry: InsertActionLog): Promise<void> {
     await db.insert(actionLog).values(entry);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createPost(insertPost: InsertPost): Promise<Post> {
+    const [post] = await db.insert(posts).values(insertPost).returning();
+    return post;
+  }
+
+  async getFeedPosts(userId: string, limit: number): Promise<Post[]> {
+    // Get user's friends
+    const userFriendships = await db.select({ friendId: friendships.friendId })
+      .from(friendships)
+      .where(eq(friendships.userId, userId));
+    
+    const friendIds = userFriendships.map(f => f.friendId);
+    friendIds.push(userId); // Include user's own posts
+
+    // Get posts from user and friends
+    return await db.select()
+      .from(posts)
+      .where(sql`${posts.userId} = ANY(${friendIds})`)
+      .orderBy(desc(posts.createdAt))
+      .limit(limit);
+  }
+
+  async deletePost(postId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(posts)
+      .where(and(eq(posts.id, postId), eq(posts.userId, userId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async createLike(insertLike: InsertLike): Promise<Like> {
+    const [like] = await db.insert(likes).values(insertLike).returning();
+    
+    // Increment like count on post
+    await db.update(posts)
+      .set({ likesCount: sql`${posts.likesCount} + 1` })
+      .where(eq(posts.id, insertLike.postId));
+    
+    return like;
+  }
+
+  async hasLiked(postId: string, userId: string): Promise<boolean> {
+    const [like] = await db.select()
+      .from(likes)
+      .where(and(eq(likes.postId, postId), eq(likes.userId, userId)));
+    return !!like;
+  }
+
+  async deleteLike(postId: string, userId: string): Promise<void> {
+    await db.delete(likes)
+      .where(and(eq(likes.postId, postId), eq(likes.userId, userId)));
+    
+    // Decrement like count on post
+    await db.update(posts)
+      .set({ likesCount: sql`${posts.likesCount} - 1` })
+      .where(eq(posts.id, postId));
+  }
+
+  async createComment(insertComment: InsertComment): Promise<Comment> {
+    const [comment] = await db.insert(comments).values(insertComment).returning();
+    
+    // Increment comment count on post
+    await db.update(posts)
+      .set({ commentsCount: sql`${posts.commentsCount} + 1` })
+      .where(eq(posts.id, insertComment.postId));
+    
+    return comment;
+  }
+
+  async getPostComments(postId: string): Promise<Comment[]> {
+    return await db.select()
+      .from(comments)
+      .where(eq(comments.postId, postId))
+      .orderBy(desc(comments.createdAt));
+  }
+
+  async addFriend(userId: string, friendIdentifier: string): Promise<Friendship> {
+    // Find friend by username or email
+    let friend: User | undefined;
+    if (friendIdentifier.startsWith('@')) {
+      friend = await this.getUserByUsername(friendIdentifier);
+    } else {
+      friend = await this.getUserByEmail(friendIdentifier);
+    }
+
+    if (!friend) {
+      throw new Error('User not found');
+    }
+
+    if (friend.id === userId) {
+      throw new Error('Cannot add yourself as a friend');
+    }
+
+    // Check if already friends
+    const existing = await db.select()
+      .from(friendships)
+      .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friend.id)));
+    
+    if (existing.length > 0) {
+      throw new Error('Already friends');
+    }
+
+    const [friendship] = await db.insert(friendships)
+      .values({ userId, friendId: friend.id, status: 'accepted' })
+      .returning();
+    
+    // Create reciprocal friendship
+    await db.insert(friendships)
+      .values({ userId: friend.id, friendId: userId, status: 'accepted' });
+    
+    return friendship;
+  }
+
+  async removeFriend(userId: string, friendId: string): Promise<void> {
+    await db.delete(friendships)
+      .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friendId)));
+    
+    // Remove reciprocal friendship
+    await db.delete(friendships)
+      .where(and(eq(friendships.userId, friendId), eq(friendships.friendId, userId)));
+  }
+
+  async getFriends(userId: string): Promise<User[]> {
+    const userFriendships = await db.select({ friendId: friendships.friendId })
+      .from(friendships)
+      .where(eq(friendships.userId, userId));
+    
+    const friendIds = userFriendships.map(f => f.friendId);
+    
+    if (friendIds.length === 0) return [];
+    
+    return await db.select()
+      .from(users)
+      .where(sql`${users.id} = ANY(${friendIds})`);
+  }
+
+  async areFriends(userId: string, friendId: string): Promise<boolean> {
+    const [friendship] = await db.select()
+      .from(friendships)
+      .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friendId)));
+    return !!friendship;
   }
 }
 
