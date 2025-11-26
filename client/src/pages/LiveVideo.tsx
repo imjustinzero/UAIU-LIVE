@@ -112,6 +112,15 @@ export default function LiveVideo() {
         console.log('Live match found with partner:', data.partnerId);
         setIsMatching(false);
         setPartnerId(data.partnerId);
+        
+        // Request camera/mic access now that match is found
+        try {
+          await initLocalStream();
+        } catch (err) {
+          console.error('Failed to get media access after match:', err);
+          // Continue anyway - user will see error toast
+        }
+        
         await createPeerConnection(data.partnerId, true);
       });
 
@@ -322,17 +331,6 @@ export default function LiveVideo() {
         description: "You need 1 credit to start a live video session",
         variant: "destructive",
       });
-      return;
-    }
-
-    // Request camera/mic access before joining queue (privacy-friendly)
-    try {
-      console.log('[LiveVideo Client] Requesting media access...');
-      await initLocalStream();
-      console.log('[LiveVideo Client] Media access granted');
-    } catch (err) {
-      console.log('[LiveVideo Client] Media access denied:', err);
-      // Error already toasted in initLocalStream
       return;
     }
 
