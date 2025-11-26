@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus, UserCircle } from "lucide-react";
+import { Gem, LogOut, DollarSign, Loader2, Zap, Gamepad2, Plus, Minus, UserCircle, Trophy, Users, TrendingUp, Shield, Check, Star, MessageCircle, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import { GameCanvas } from "@/components/GameCanvas";
@@ -335,50 +335,440 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main>
         {!user ? (
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-5xl md:text-7xl font-display font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-                Play. Compete. Win Real Money.
-              </h2>
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-                Challenge players worldwide in real-time Pong matches. Every game is pay-to-play, winner takes the pot!
-              </p>
-            </div>
+          <div className="space-y-0 overflow-hidden">
+            {/* HERO SECTION */}
+            <section className="relative bg-gradient-to-br from-background via-primary/5 to-background py-20 md:py-32 overflow-hidden">
+              <div className="absolute inset-0 opacity-5"></div>
+              <div className="container mx-auto px-4 relative z-10">
+                <div className="max-w-5xl mx-auto text-center space-y-8">
+                  <Badge variant="secondary" className="text-sm px-4 py-2 animate-pulse" data-testid="badge-live">
+                    <Sparkles className="w-4 h-4 mr-2 inline" />
+                    Live Multiplayer Arcade
+                  </Badge>
+                  
+                  <h1 className="text-6xl md:text-8xl font-display font-black bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent leading-tight">
+                    Win Real Cash
+                    <br />
+                    Playing Games
+                  </h1>
+                  
+                  <p className="text-xl md:text-3xl text-muted-foreground max-w-3xl mx-auto font-medium">
+                    Challenge players worldwide in 6 arcade classics. Every match is pay-to-play. Winners earn credits, losers learn.
+                  </p>
 
-            <Card className="p-8 md:p-12 bg-gradient-to-br from-card to-primary/5 border-2 border-primary/20 shadow-2xl">
-              <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <div className="space-y-2">
-                  <div className="text-4xl font-bold text-primary">$1</div>
-                  <div className="text-sm text-muted-foreground">= 10 Credits</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="text-4xl font-bold text-accent">1 Credit</div>
-                  <div className="text-sm text-muted-foreground">Per Match</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="text-4xl font-bold text-green-500">+60%</div>
-                  <div className="text-sm text-muted-foreground">Winner Bonus</div>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
+                    <Button
+                      onClick={() => setShowAuthModal(true)}
+                      size="lg"
+                      className="h-16 px-12 text-2xl font-bold shadow-2xl hover:shadow-primary/50 transition-all"
+                      data-testid="button-hero-cta"
+                    >
+                      <Zap className="w-6 h-6 mr-2" />
+                      Start Playing Free
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Get 1 free credit • No credit card required
+                    </p>
+                  </div>
+
+                  {/* Live Stats Banner */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-12 max-w-4xl mx-auto">
+                    <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-ai-win-rate">
+                      <div className="text-3xl md:text-4xl font-bold text-primary">96%</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">AI Win Rate</div>
+                    </Card>
+                    <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-games-available">
+                      <div className="text-3xl md:text-4xl font-bold text-accent">6</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Games Available</div>
+                    </Card>
+                    <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-winner-payout">
+                      <div className="text-3xl md:text-4xl font-bold text-green-500">1.6x</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Winner Payout</div>
+                    </Card>
+                    <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-instant-match">
+                      <div className="text-3xl md:text-4xl font-bold text-primary">24/7</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Instant Match</div>
+                    </Card>
+                  </div>
                 </div>
               </div>
-              <Button
-                onClick={() => setShowAuthModal(true)}
-                size="lg"
-                className="w-full h-16 text-xl font-bold"
-                data-testid="button-get-started"
-              >
-                <Zap className="w-6 h-6 mr-2" />
-                Get Started Now
-              </Button>
-            </Card>
+            </section>
 
-            <div className="grid md:grid-cols-1 gap-6">
-              <ActionLog />
-            </div>
+            {/* GAMES SHOWCASE */}
+            <section className="py-20 md:py-32 bg-gradient-to-b from-background to-primary/5">
+              <div className="container mx-auto px-4">
+                <div className="text-center space-y-4 mb-16">
+                  <h2 className="text-5xl md:text-6xl font-display font-bold">
+                    Choose Your Game
+                  </h2>
+                  <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                    Six classic arcade games. Real-time multiplayer. Skill-based competition.
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+                  {availableGames.map((game, index) => (
+                    <Card
+                      key={game.id}
+                      className="group relative overflow-hidden hover-elevate cursor-pointer border-2 border-transparent hover:border-primary/50 transition-all"
+                      data-testid={`card-game-showcase-${game.id}`}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <CardContent className="p-6 relative z-10">
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between">
+                            <div className="p-3 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                              <Gamepad2 className="w-8 h-8 text-primary" />
+                            </div>
+                            <Badge variant="secondary" className="font-semibold">
+                              {game.players}
+                            </Badge>
+                          </div>
+                          
+                          <div>
+                            <h3 className="text-2xl font-bold mb-2 group-hover:text-primary transition-colors">
+                              {game.name}
+                            </h3>
+                            <p className="text-muted-foreground text-sm leading-relaxed">
+                              {game.description}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant={game.difficulty === 'Easy' ? 'default' : game.difficulty === 'Medium' ? 'secondary' : 'outline'}
+                            >
+                              {game.difficulty}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">•</span>
+                            <span className="text-sm font-medium text-primary">1 credit entry</span>
+                          </div>
+
+                          <Button 
+                            onClick={() => setShowAuthModal(true)}
+                            className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all"
+                            variant="outline"
+                            data-testid={`button-play-${game.id}`}
+                          >
+                            Play Now
+                            <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* PRICING / CREDITS SECTION */}
+            <section className="py-20 md:py-32 bg-background">
+              <div className="container mx-auto px-4">
+                <div className="text-center space-y-4 mb-16">
+                  <Badge variant="outline" className="text-sm px-4 py-2">
+                    <Gem className="w-4 h-4 mr-2 inline" />
+                    Simple Pricing
+                  </Badge>
+                  <h2 className="text-5xl md:text-6xl font-display font-bold">
+                    Get Credits, Start Winning
+                  </h2>
+                  <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                    Buy credits. Play games. Win real money. It's that simple.
+                  </p>
+                </div>
+
+                <div className="max-w-5xl mx-auto">
+                  <Card className="p-8 md:p-12 bg-gradient-to-br from-card via-primary/5 to-card border-2 border-primary/20 shadow-2xl">
+                    <div className="grid md:grid-cols-3 gap-8 mb-10">
+                      <div className="text-center space-y-3">
+                        <div className="text-6xl font-black text-primary">$1</div>
+                        <div className="text-lg font-medium">= 10 Credits</div>
+                        <div className="text-sm text-muted-foreground">Best Value</div>
+                      </div>
+                      <div className="text-center space-y-3">
+                        <div className="text-6xl font-black text-accent">1</div>
+                        <div className="text-lg font-medium">Credit Per Match</div>
+                        <div className="text-sm text-muted-foreground">Pay to Play</div>
+                      </div>
+                      <div className="text-center space-y-3">
+                        <div className="text-6xl font-black text-green-500">1.6</div>
+                        <div className="text-lg font-medium">Credits If You Win</div>
+                        <div className="text-sm text-muted-foreground">+60% Bonus</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <Button
+                        onClick={() => setShowAuthModal(true)}
+                        size="lg"
+                        className="w-full h-16 text-2xl font-bold shadow-xl"
+                        data-testid="button-pricing-cta"
+                      >
+                        <Gem className="w-6 h-6 mr-2" />
+                        Sign Up & Get 1 Free Credit
+                      </Button>
+                      
+                      <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-green-500" />
+                          Secure Payments
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-green-500" />
+                          Instant Credits
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-green-500" />
+                          Request Payouts
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Value Props */}
+                  <div className="grid md:grid-cols-3 gap-6 mt-8">
+                    <Card className="p-6 text-center hover-elevate">
+                      <Trophy className="w-12 h-12 mx-auto mb-4 text-primary" />
+                      <h3 className="font-bold text-lg mb-2">Win Real Cash</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Winners earn 1.6x their bet. Request payouts anytime.
+                      </p>
+                    </Card>
+                    <Card className="p-6 text-center hover-elevate">
+                      <Zap className="w-12 h-12 mx-auto mb-4 text-accent" />
+                      <h3 className="font-bold text-lg mb-2">Instant Matches</h3>
+                      <p className="text-sm text-muted-foreground">
+                        AI bots join in 10 seconds. Play anytime, 24/7.
+                      </p>
+                    </Card>
+                    <Card className="p-6 text-center hover-elevate">
+                      <Shield className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <h3 className="font-bold text-lg mb-2">Fair & Secure</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Server-authoritative gameplay. No cheating possible.
+                      </p>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* HOW IT WORKS */}
+            <section className="py-20 md:py-32 bg-gradient-to-b from-primary/5 to-background">
+              <div className="container mx-auto px-4">
+                <div className="text-center space-y-4 mb-16">
+                  <h2 className="text-5xl md:text-6xl font-display font-bold">
+                    How It Works
+                  </h2>
+                  <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                    Three simple steps to start winning
+                  </p>
+                </div>
+
+                <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
+                  <Card className="p-8 text-center hover-elevate border-2 border-primary/20">
+                    <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-3xl font-bold mx-auto mb-6">
+                      1
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4">Sign Up Free</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Create your account in seconds. Get 1 free credit to try your first game. No credit card required.
+                    </p>
+                  </Card>
+
+                  <Card className="p-8 text-center hover-elevate border-2 border-accent/20">
+                    <div className="w-16 h-16 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-3xl font-bold mx-auto mb-6">
+                      2
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4">Choose & Play</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Pick your game, set your bet (1-100 credits), and get matched with an opponent in seconds.
+                    </p>
+                  </Card>
+
+                  <Card className="p-8 text-center hover-elevate border-2 border-green-500/20">
+                    <div className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center text-3xl font-bold mx-auto mb-6">
+                      3
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4">Win & Cash Out</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Winners get 1.6x their bet instantly. Request payouts anytime via PayPal, Venmo, or CashApp.
+                    </p>
+                  </Card>
+                </div>
+
+                <div className="text-center mt-12">
+                  <Button
+                    onClick={() => setShowAuthModal(true)}
+                    size="lg"
+                    className="h-16 px-12 text-xl font-bold"
+                    data-testid="button-how-it-works-cta"
+                  >
+                    Start Your First Game Free
+                    <ChevronRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            {/* SOCIAL PROOF / LIVE ACTIVITY */}
+            <section className="py-20 md:py-32 bg-background">
+              <div className="container mx-auto px-4">
+                <div className="text-center space-y-4 mb-12">
+                  <h2 className="text-5xl md:text-6xl font-display font-bold">
+                    Live Activity
+                  </h2>
+                  <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                    Real players. Real games. Real wins happening now.
+                  </p>
+                </div>
+
+                <div className="max-w-4xl mx-auto">
+                  <ActionLog />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8 mt-16 max-w-5xl mx-auto">
+                  <Card className="p-8 hover-elevate">
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 rounded-lg bg-primary/10">
+                        <Star className="w-8 h-8 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-bold text-lg">Sarah M.</h4>
+                          <Badge variant="secondary" className="text-xs">Verified Winner</Badge>
+                        </div>
+                        <p className="text-muted-foreground">
+                          "Won $50 playing Snake in my first week! The instant matchmaking is addictive and payouts are super fast."
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-8 hover-elevate">
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 rounded-lg bg-accent/10">
+                        <Star className="w-8 h-8 text-accent" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-bold text-lg">Mike T.</h4>
+                          <Badge variant="secondary" className="text-xs">Top Player</Badge>
+                        </div>
+                        <p className="text-muted-foreground">
+                          "Love the variety of games. Tetris and Connect 4 are my favorites. Fair gameplay and the AI is challenging!"
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            </section>
+
+            {/* FINAL CTA */}
+            <section className="py-20 md:py-32 bg-gradient-to-br from-primary/10 via-accent/10 to-primary/10">
+              <div className="container mx-auto px-4">
+                <Card className="max-w-4xl mx-auto p-12 md:p-16 text-center border-2 border-primary/30 shadow-2xl bg-card/80 backdrop-blur">
+                  <h2 className="text-5xl md:text-6xl font-display font-bold mb-6">
+                    Ready to Start Winning?
+                  </h2>
+                  <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+                    Join hundreds of players competing in real-time arcade games. Sign up now and get your first credit free.
+                  </p>
+                  <Button
+                    onClick={() => setShowAuthModal(true)}
+                    size="lg"
+                    className="h-20 px-16 text-2xl font-bold shadow-2xl hover:shadow-primary/50 transition-all"
+                    data-testid="button-final-cta"
+                  >
+                    <Zap className="w-8 h-8 mr-3" />
+                    Play Your First Game Free
+                  </Button>
+                  <p className="text-sm text-muted-foreground mt-6">
+                    No credit card required • Instant access • 1 free credit
+                  </p>
+                </Card>
+              </div>
+            </section>
+
+            {/* FOOTER */}
+            <footer className="bg-card border-t border-border">
+              <div className="container mx-auto px-4 py-12">
+                <div className="grid md:grid-cols-4 gap-8 mb-8">
+                  <div className="space-y-4">
+                    <img 
+                      src={logoImg} 
+                      alt="UAIU Arcade" 
+                      className="h-12 w-auto"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      The ultimate online arcade for competitive gaming and real cash prizes.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold mb-4">Games</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li><a href="#" className="hover:text-primary transition-colors">Pong</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Snake</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Tetris</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Breakout</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Flappy Bird</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Connect 4</a></li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold mb-4">Account</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li>
+                        <button onClick={() => setShowAuthModal(true)} className="hover:text-primary transition-colors">
+                          Sign Up
+                        </button>
+                      </li>
+                      <li>
+                        <button onClick={() => setShowAuthModal(true)} className="hover:text-primary transition-colors">
+                          Login
+                        </button>
+                      </li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Buy Credits</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Leaderboard</a></li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold mb-4">Support</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li><a href="#" className="hover:text-primary transition-colors">Help Center</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
+                      <li><a href="#" className="hover:text-primary transition-colors">Contact Us</a></li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    © 2025 UAIU Arcade. All rights reserved.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <Badge variant="outline" className="text-xs">
+                      <Shield className="w-3 h-3 mr-1" />
+                      Secure Platform
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <Users className="w-3 h-3 mr-1" />
+                      Fair Play Guaranteed
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </footer>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="container mx-auto px-4 py-8 space-y-6">
             <div className="grid lg:grid-cols-[300px_1fr_300px] gap-6">
               <div className="space-y-6 order-2 lg:order-1">
                 <Leaderboard currentUserId={user.id} />
