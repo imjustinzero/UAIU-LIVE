@@ -99,24 +99,24 @@ export function updatePongBotAI(state: PongGameState, botIsPlayer2: boolean) {
   const currentX = state.player2.gameData.paddleX + PADDLE_WIDTH / 2;
   const diff = targetX - currentX;
 
-  const warmupHits = 6;
+  const warmupHits = 3;
   const isWarmup = totalHits < warmupHits;
 
   let skill: number;
   if (isWarmup) {
-    skill = 0.5;
+    skill = 0.7;
   } else if (botWillWin) {
     const progressionHits = Math.min(totalHits - warmupHits, 10);
-    skill = 0.85 + (progressionHits * 0.03);
+    skill = 0.98 + (progressionHits * 0.002);
   } else {
-    skill = 0.4;
+    skill = 0.25;
   }
 
   const moveSpeed = PADDLE_SPEED * skill;
-  const randomOffset = (Math.random() - 0.5) * 30 * (1 - skill);
+  const randomOffset = (Math.random() - 0.5) * 15 * (1 - skill);
   const adjustedDiff = diff + randomOffset;
 
-  if (Math.abs(adjustedDiff) > 5) {
+  if (Math.abs(adjustedDiff) > 3) {
     if (adjustedDiff > 0) {
       state.player2.gameData.paddleX = Math.min(state.player2.gameData.paddleX + moveSpeed, CANVAS_WIDTH - PADDLE_WIDTH);
     } else {

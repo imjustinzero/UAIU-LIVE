@@ -127,8 +127,8 @@ export function getConnect4BotMove(state: Connect4GameState): number {
   const botColor = bot.gameData.color;
   const opponentColor = botColor === 1 ? 2 : 1;
 
-  // 4% chance to make a random move for ~96% win rate
-  if (Math.random() < 0.04) {
+  // Only 1% chance to make a random move for true 96%+ win rate
+  if (Math.random() < 0.01) {
     const validCols = [];
     for (let col = 0; col < COLS; col++) {
       if (state.board[0][col] === 0) validCols.push(col);

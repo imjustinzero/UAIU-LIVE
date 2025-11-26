@@ -147,11 +147,11 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
   const gameData = bot.gameData;
   if (!gameData.alive) return;
 
-  // Bot makes decisions every 10 frames (balanced response time)
+  // Align decisions with movement (every 10 frames)
   if (state.frameCounter % 10 !== 0) return;
 
-  // Calibrated mistakes - bot fails 4% of the time for ~96% win rate
-  if (Math.random() < 0.04) return;
+  // Bot fails only 1% of the time for true 96%+ win rate
+  if (Math.random() < 0.01) return;
 
   const head = gameData.snake[0];
   const nearestFood = state.food.reduce((nearest, food) => {
@@ -184,12 +184,8 @@ export function updateSnakeBotAI(state: SnakeGameState, botIsPlayer2: boolean): 
   });
 
   if (safeDirections.length > 0) {
-    // Pick suboptimal moves 4% of time for ~96% win rate
-    if (Math.random() < 0.04 && safeDirections.length > 1) {
-      gameData.direction = safeDirections[Math.floor(Math.random() * safeDirections.length)];
-    } else {
-      gameData.direction = safeDirections[0];
-    }
+    // Always pick optimal move - no random suboptimal moves
+    gameData.direction = safeDirections[0];
   } else {
     const allDirections: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
     const desperateDirections = allDirections.filter(dir => {
