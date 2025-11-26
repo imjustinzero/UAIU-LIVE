@@ -17,6 +17,8 @@ import {
   type InsertFriendship,
   type ReferralPayout,
   type InsertReferralPayout,
+  type LiveMatchSession,
+  type InsertLiveMatchSession,
   users,
   matches,
   payoutRequests,
@@ -26,6 +28,7 @@ import {
   comments,
   friendships,
   referralPayouts,
+  liveMatchSessions,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
@@ -74,6 +77,9 @@ export interface IStorage {
   // Referral payouts
   createReferralPayout(payout: InsertReferralPayout): Promise<ReferralPayout | null>;
   getReferralPayoutBySessionId(sessionId: string): Promise<ReferralPayout | undefined>;
+  
+  // Live video chat sessions
+  createLiveMatchSession(session: InsertLiveMatchSession): Promise<LiveMatchSession>;
 }
 
 export class DbStorage implements IStorage {
@@ -475,6 +481,13 @@ export class DbStorage implements IStorage {
       .from(referralPayouts)
       .where(eq(referralPayouts.stripeSessionId, sessionId));
     return payout;
+  }
+  
+  async createLiveMatchSession(session: InsertLiveMatchSession): Promise<LiveMatchSession> {
+    const [result] = await db.insert(liveMatchSessions)
+      .values(session)
+      .returning();
+    return result;
   }
 }
 

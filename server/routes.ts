@@ -4,8 +4,10 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import type { GameState } from "@shared/schema";
+import { liveMatchSessions } from "@shared/schema";
+import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification } from "./email-service";
 import { createSession, getSession, requireAuth } from "./session-middleware";
@@ -604,6 +606,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // GameManager handles all matchmaking including bot fallback
 
+  // Live video chat matchmaking queue and active sessions
+  const liveVideoQueue: { userId: string; socketId: string; joinedAt: number }[] = [];
+  const liveVideoSessions = new Map<string, {
+    sessionId: string;
+    user1Id: string;
+    user2Id: string;
+    user1SocketId: string;
+    user2SocketId: string;
+    startedAt: number;
+    timer: NodeJS.Timeout;
+  }>();
+
   io.on('connection', (socket: Socket) => {
     console.log('=== SOCKET CONNECTION ATTEMPT ===');
     console.log('Socket ID:', socket.id);
@@ -744,9 +758,293 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
     });
 
-    socket.on('disconnect', () => {
+    // Helper function to find active session for a user
+    const findUserSession = (userId: string) => {
+      for (const [sessionId, session] of liveVideoSessions.entries()) {
+        if (session.user1Id === userId || session.user2Id === userId) {
+          return { sessionId, session };
+        }
+      }
+      return null;
+    };
+
+    // Helper function to end a live video session
+    const endLiveVideoSession = async (sessionId: string, reason: string = 'completed') => {
+      const session = liveVideoSessions.get(sessionId);
+      if (!session) return;
+
+      console.log(`[LiveVideo] Ending session ${sessionId} (${reason})`);
+
+      // Clear timer
+      clearTimeout(session.timer);
+
+      // Notify both clients
+      const user1Socket = io.sockets.sockets.get(session.user1SocketId);
+      const user2Socket = io.sockets.sockets.get(session.user2SocketId);
+      
+      if (user1Socket) {
+        user1Socket.emit('liveMatch:ended');
+      }
+      if (user2Socket) {
+        user2Socket.emit('liveMatch:ended');
+      }
+
+      // Update database - mark session as completed
+      await db.update(liveMatchSessions)
+        .set({ 
+          status: 'completed',
+          endedAt: new Date()
+        })
+        .where(eq(liveMatchSessions.id, sessionId));
+
+      // Remove from active sessions
+      liveVideoSessions.delete(sessionId);
+    };
+
+    // Live video chat events
+    socket.on('liveMatch:join', async () => {
+      try {
+        const userId = (socket as any).userId;
+        if (!userId) {
+          socket.emit('error', { message: 'Unauthorized' });
+          return;
+        }
+
+        const user = await storage.getUser(userId);
+        if (!user) {
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
+
+        // Check if already in a session
+        const existingSession = findUserSession(userId);
+        if (existingSession) {
+          socket.emit('error', { message: 'Already in a session' });
+          return;
+        }
+
+        // Check if already in queue
+        if (liveVideoQueue.some(p => p.userId === userId)) {
+          console.log(`[LiveVideo] User ${userId} already in queue`);
+          return;
+        }
+
+        // Check credits (don't deduct yet - only on match)
+        if (user.credits < 1) {
+          socket.emit('error', { message: 'Not enough credits. You need 1 credit for a live video session.' });
+          return;
+        }
+
+        console.log(`[LiveVideo] User ${userId} joined queue with socket ${socket.id}`);
+
+        // Check if there's someone waiting
+        let matchFound = false;
+        while (liveVideoQueue.length > 0 && !matchFound) {
+          const partner = liveVideoQueue.shift()!;
+          
+          // Make sure partner is still connected and valid
+          const partnerSocket = io.sockets.sockets.get(partner.socketId);
+          const partnerUser = await storage.getUser(partner.userId);
+          
+          if (!partnerSocket || !partnerUser || partnerUser.credits < 1) {
+            console.log(`[LiveVideo] Partner ${partner.userId} invalid, skipping`);
+            // If partner lacks credits, they shouldn't be in queue
+            continue;
+          }
+
+          // Match found! Deduct credits from both users
+          await storage.updateUserCredits(partner.userId, partnerUser.credits - 1);
+          await storage.updateUserCredits(userId, user.credits - 1);
+          
+          partnerSocket.emit('creditsUpdated', partnerUser.credits - 1);
+          socket.emit('creditsUpdated', user.credits - 1);
+
+          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}`);
+          
+          // Create database record
+          const [dbSession] = await db.insert(liveMatchSessions)
+            .values({
+              user1Id: partner.userId,
+              user1Name: partnerUser.name,
+              user2Id: userId,
+              user2Name: user.name,
+              durationSeconds: 60,
+            })
+            .returning();
+
+          // Create in-memory session with 60-second timer
+          const timer = setTimeout(async () => {
+            await endLiveVideoSession(dbSession.id, 'timeout');
+          }, 60000); // 60 seconds
+
+          liveVideoSessions.set(dbSession.id, {
+            sessionId: dbSession.id,
+            user1Id: partner.userId,
+            user2Id: userId,
+            user1SocketId: partner.socketId,
+            user2SocketId: socket.id,
+            startedAt: Date.now(),
+            timer,
+          });
+
+          // Notify both clients
+          socket.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id });
+          partnerSocket.emit('liveMatch:found', { partnerId: userId, sessionId: dbSession.id });
+          
+          matchFound = true;
+        }
+
+        if (!matchFound) {
+          // Add to queue
+          liveVideoQueue.push({ userId, socketId: socket.id, joinedAt: Date.now() });
+          console.log(`[LiveVideo] User ${userId} added to queue. Queue size: ${liveVideoQueue.length}`);
+        }
+      } catch (error) {
+        console.error('[LiveVideo] Error joining match:', error);
+        socket.emit('error', { message: 'Failed to join live video match' });
+      }
+    });
+
+    socket.on('liveMatch:offer', (data: { offer: RTCSessionDescriptionInit; to: string }) => {
+      const fromUserId = (socket as any).userId;
+      if (!fromUserId) return;
+      
+      // Verify this is a valid matched pair
+      const sessionData = findUserSession(fromUserId);
+      if (!sessionData) {
+        console.log(`[LiveVideo] Rejected offer from ${fromUserId}: not in session`);
+        return;
+      }
+
+      const { session } = sessionData;
+      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
+      
+      // Verify recipient matches the partner
+      if (data.to !== partnerId) {
+        console.log(`[LiveVideo] Rejected offer from ${fromUserId} to ${data.to}: not matched partner`);
+        return;
+      }
+
+      console.log(`[LiveVideo] Forwarding offer from ${fromUserId} to ${data.to}`);
+      
+      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
+      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+      
+      if (recipientSocket) {
+        recipientSocket.emit('liveMatch:offer', { offer: data.offer, from: fromUserId });
+      }
+    });
+
+    socket.on('liveMatch:answer', (data: { answer: RTCSessionDescriptionInit; to: string }) => {
+      const fromUserId = (socket as any).userId;
+      if (!fromUserId) return;
+      
+      // Verify this is a valid matched pair
+      const sessionData = findUserSession(fromUserId);
+      if (!sessionData) {
+        console.log(`[LiveVideo] Rejected answer from ${fromUserId}: not in session`);
+        return;
+      }
+
+      const { session } = sessionData;
+      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
+      
+      // Verify recipient matches the partner
+      if (data.to !== partnerId) {
+        console.log(`[LiveVideo] Rejected answer from ${fromUserId} to ${data.to}: not matched partner`);
+        return;
+      }
+
+      console.log(`[LiveVideo] Forwarding answer from ${fromUserId} to ${data.to}`);
+      
+      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
+      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+      
+      if (recipientSocket) {
+        recipientSocket.emit('liveMatch:answer', { answer: data.answer });
+      }
+    });
+
+    socket.on('liveMatch:iceCandidate', (data: { candidate: RTCIceCandidateInit; to: string }) => {
+      const fromUserId = (socket as any).userId;
+      if (!fromUserId) return;
+      
+      // Verify this is a valid matched pair
+      const sessionData = findUserSession(fromUserId);
+      if (!sessionData) return;
+
+      const { session } = sessionData;
+      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
+      
+      // Verify recipient matches the partner
+      if (data.to !== partnerId) return;
+      
+      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
+      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+      
+      if (recipientSocket) {
+        recipientSocket.emit('liveMatch:iceCandidate', { 
+          candidate: data.candidate, 
+          from: fromUserId 
+        });
+      }
+    });
+
+    socket.on('liveMatch:leave', async () => {
+      const userId = (socket as any).userId;
+      if (!userId) return;
+      
+      console.log(`[LiveVideo] User ${userId} left session`);
+      
+      // Remove from queue if present
+      const queueIndex = liveVideoQueue.findIndex(p => p.userId === userId);
+      if (queueIndex !== -1) {
+        liveVideoQueue.splice(queueIndex, 1);
+        console.log(`[LiveVideo] Removed ${userId} from queue`);
+      }
+      
+      // End active session if present
+      const sessionData = findUserSession(userId);
+      if (sessionData) {
+        await endLiveVideoSession(sessionData.sessionId, 'user_left');
+      }
+    });
+
+    socket.on('liveMatch:next', async () => {
+      const userId = (socket as any).userId;
+      if (!userId) return;
+      
+      console.log(`[LiveVideo] User ${userId} clicked next`);
+      
+      // End current session
+      const sessionData = findUserSession(userId);
+      if (sessionData) {
+        await endLiveVideoSession(sessionData.sessionId, 'user_next');
+      }
+      
+      // Frontend will automatically rejoin queue
+    });
+
+    socket.on('disconnect', async () => {
       console.log('Client disconnected:', socket.id);
-      // GameManager handles cleanup automatically
+      
+      const userId = (socket as any).userId;
+      if (userId) {
+        // Remove from live video queue if present
+        const queueIndex = liveVideoQueue.findIndex(p => p.userId === userId);
+        if (queueIndex !== -1) {
+          liveVideoQueue.splice(queueIndex, 1);
+          console.log(`[LiveVideo] Removed user ${userId} from queue on disconnect`);
+        }
+        
+        // End active live video session if present
+        const sessionData = findUserSession(userId);
+        if (sessionData) {
+          await endLiveVideoSession(sessionData.sessionId, 'disconnect');
+        }
+      }
+      
+      // GameManager handles game cleanup automatically
     });
   });
 
