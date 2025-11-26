@@ -374,11 +374,7 @@ export default function Home() {
                   </div>
 
                   {/* Live Stats Banner */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-12 max-w-4xl mx-auto">
-                    <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-ai-win-rate">
-                      <div className="text-3xl md:text-4xl font-bold text-primary">96%</div>
-                      <div className="text-xs md:text-sm text-muted-foreground">AI Win Rate</div>
-                    </Card>
+                  <div className="grid grid-cols-3 gap-6 pt-12 max-w-4xl mx-auto">
                     <Card className="p-4 bg-card/50 backdrop-blur border-primary/10 hover-elevate" data-testid="stat-games-available">
                       <div className="text-3xl md:text-4xl font-bold text-accent">6</div>
                       <div className="text-xs md:text-sm text-muted-foreground">Games Available</div>
