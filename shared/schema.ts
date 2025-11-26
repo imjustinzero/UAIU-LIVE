@@ -154,6 +154,18 @@ export const referralPayouts = pgTable("referral_payouts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const liveMatchSessions = pgTable("live_match_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  user1Id: varchar("user1_id").notNull(),
+  user1Name: text("user1_name").notNull(),
+  user2Id: varchar("user2_id").notNull(),
+  user2Name: text("user2_name").notNull(),
+  status: text("status").notNull().default('active'),
+  durationSeconds: integer("duration_seconds").notNull().default(60),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  endedAt: timestamp("ended_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   username: true,
@@ -237,6 +249,13 @@ export const insertReferralPayoutSchema = createInsertSchema(referralPayouts).om
   createdAt: true,
 });
 
+export const insertLiveMatchSessionSchema = createInsertSchema(liveMatchSessions).omit({
+  id: true,
+  status: true,
+  startedAt: true,
+  endedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
@@ -261,6 +280,8 @@ export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof comments.$inferSelect;
 export type InsertReferralPayout = z.infer<typeof insertReferralPayoutSchema>;
 export type ReferralPayout = typeof referralPayouts.$inferSelect;
+export type InsertLiveMatchSession = z.infer<typeof insertLiveMatchSessionSchema>;
+export type LiveMatchSession = typeof liveMatchSessions.$inferSelect;
 
 export interface GameState {
   matchId: string;
