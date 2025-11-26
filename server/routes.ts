@@ -803,15 +803,20 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
     // Live video chat events
     socket.on('liveMatch:join', async () => {
+      console.log('[LiveVideo] ===== liveMatch:join event received =====');
       try {
         const userId = (socket as any).userId;
+        console.log('[LiveVideo] User ID:', userId);
         if (!userId) {
+          console.log('[LiveVideo] No userId found - unauthorized');
           socket.emit('error', { message: 'Unauthorized' });
           return;
         }
 
         const user = await storage.getUser(userId);
+        console.log('[LiveVideo] User fetched:', user?.name, 'Credits:', user?.credits);
         if (!user) {
+          console.log('[LiveVideo] User not found in database');
           socket.emit('error', { message: 'User not found' });
           return;
         }
@@ -819,6 +824,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         // Check if already in a session
         const existingSession = findUserSession(userId);
         if (existingSession) {
+          console.log('[LiveVideo] User already in active session');
           socket.emit('error', { message: 'Already in a session' });
           return;
         }
@@ -831,11 +837,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
         // Check credits (don't deduct yet - only on match)
         if (user.credits < 1) {
+          console.log('[LiveVideo] Insufficient credits');
           socket.emit('error', { message: 'Not enough credits. You need 1 credit for a live video session.' });
           return;
         }
 
-        console.log(`[LiveVideo] User ${userId} joined queue with socket ${socket.id}`);
+        console.log(`[LiveVideo] User ${userId} (${user.name}) joining queue with socket ${socket.id}`);
 
         // Check if there's someone waiting
         let matchFound = false;
