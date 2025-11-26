@@ -304,12 +304,19 @@ export default function LiveVideo() {
   };
 
   const handleFindMatch = async () => {
+    console.log('[LiveVideo Client] handleFindMatch called');
+    console.log('[LiveVideo Client] User:', user);
+    console.log('[LiveVideo Client] Socket:', socket);
+    console.log('[LiveVideo Client] Socket connected?', socket?.connected);
+    
     if (!user) {
+      console.log('[LiveVideo Client] No user - showing auth modal');
       setShowAuthModal(true);
       return;
     }
 
     if (user.credits < 1) {
+      console.log('[LiveVideo Client] Insufficient credits');
       toast({
         title: "Not Enough Credits",
         description: "You need 1 credit to start a live video session",
@@ -320,14 +327,19 @@ export default function LiveVideo() {
 
     // Request camera/mic access before joining queue (privacy-friendly)
     try {
+      console.log('[LiveVideo Client] Requesting media access...');
       await initLocalStream();
+      console.log('[LiveVideo Client] Media access granted');
     } catch (err) {
+      console.log('[LiveVideo Client] Media access denied:', err);
       // Error already toasted in initLocalStream
       return;
     }
 
+    console.log('[LiveVideo Client] Emitting liveMatch:join event');
     setIsMatching(true);
     socket?.emit('liveMatch:join');
+    console.log('[LiveVideo Client] Event emitted');
   };
 
   const handleNext = () => {
