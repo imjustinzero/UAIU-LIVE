@@ -213,6 +213,18 @@ export default function LiveVideo() {
     }
   }, [user?.id]); // Only reconnect if user ID changes, not on credit updates
 
+  // Cleanup when leaving page
+  useEffect(() => {
+    return () => {
+      // Send leave event when component unmounts (user navigates away)
+      // liveMatch:leave handles both queue and session cleanup
+      if (socket && (isMatching || partnerId)) {
+        console.log('[LiveVideo Client] Component unmounting - sending leave event');
+        socket.emit('liveMatch:leave');
+      }
+    };
+  }, [socket, isMatching, partnerId]);
+
   // Initialize local video stream only when needed (privacy)
   const initLocalStream = async () => {
     if (localStreamRef.current) return; // Already initialized

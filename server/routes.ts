@@ -829,8 +829,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         // Check if already in a session
         const existingSession = findUserSession(userId);
         if (existingSession) {
-          console.log('[LiveVideo] User already in active session');
-          socket.emit('error', { message: 'Already in a session' });
+          console.log(`[LiveVideo] User ${userId} already in active session ${existingSession.sessionId}`);
+          console.log('[LiveVideo] Existing session details:', {
+            sessionId: existingSession.sessionId,
+            user1: existingSession.session.user1Id,
+            user2: existingSession.session.user2Id,
+            startedAt: new Date(existingSession.session.startedAt).toISOString()
+          });
+          socket.emit('error', { message: 'Already in a session. Please refresh the page and try again.' });
           return;
         }
 
