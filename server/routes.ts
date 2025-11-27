@@ -607,7 +607,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   // GameManager handles all matchmaking including bot fallback
 
   // Live video chat matchmaking queue and active sessions
-  const liveVideoQueue: { userId: string; socketId: string; joinedAt: number }[] = [];
+  const liveVideoQueue: { userId: string; joinedAt: number }[] = [];
+  const userSocketMap = new Map<string, string>(); // userId -> socketId mapping
   const liveVideoSessions = new Map<string, {
     sessionId: string;
     user1Id: string;
@@ -638,7 +639,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     
     (socket as any).userId = session.userId;
     (socket as any).userEmail = session.email;
+    
+    // Update userId -> socketId mapping for live video matchmaking
+    userSocketMap.set(session.userId, socket.id);
     console.log('Client connected:', socket.id, 'User:', session.userId, session.email);
+    console.log('[LiveVideo] Updated socket mapping:', session.userId, '->', socket.id);
 
     socket.on('joinMatchmaking', async (data: { gameType: GameType; betAmount?: number }) => {
       try {
@@ -834,6 +839,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           console.log(`[LiveVideo] User ${userId} already in queue`);
           return;
         }
+        
+        // Update socket mapping (in case of reconnection)
+        userSocketMap.set(userId, socket.id);
 
         // Check credits (don't deduct yet - only on match)
         if (user.credits < 1) {
@@ -849,14 +857,23 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         while (liveVideoQueue.length > 0 && !matchFound) {
           const partner = liveVideoQueue.shift()!;
           
-          // Make sure partner is still connected and valid
-          const partnerSocket = io.sockets.sockets.get(partner.socketId);
+          // Get partner's CURRENT socket ID from mapping
+          const partnerSocketId = userSocketMap.get(partner.userId);
+          const partnerSocket = partnerSocketId ? io.sockets.sockets.get(partnerSocketId) : null;
           const partnerUser = await storage.getUser(partner.userId);
           
           if (!partnerSocket || !partnerUser || partnerUser.credits < 1) {
-            console.log(`[LiveVideo] Partner ${partner.userId} invalid, skipping`);
-            // If partner lacks credits, they shouldn't be in queue
+            console.log(`[LiveVideo] Partner ${partner.userId} invalid (socket: ${partnerSocketId}), skipping`);
+            // If partner lacks credits or isn't connected, skip
             continue;
+          }
+          
+          // Get current user's socket ID from mapping
+          const currentSocketId = userSocketMap.get(userId);
+          if (!currentSocketId) {
+            console.log(`[LiveVideo] Current user ${userId} socket not found in mapping`);
+            socket.emit('error', { message: 'Connection error' });
+            return;
           }
 
           // Match found! Deduct credits from both users
@@ -888,22 +905,27 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             sessionId: dbSession.id,
             user1Id: partner.userId,
             user2Id: userId,
-            user1SocketId: partner.socketId,
-            user2SocketId: socket.id,
+            user1SocketId: partnerSocketId!, // Safe because partnerSocket exists
+            user2SocketId: currentSocketId!, // Safe because currentSocket will be checked
             startedAt: Date.now(),
             timer,
           });
 
-          // Notify both clients
-          socket.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id });
+          // Notify both clients using current socket IDs from mapping
+          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${currentSocketId} (user ${userId}) with partnerId ${partner.userId}`);
+          const currentSocket = io.sockets.sockets.get(currentSocketId);
+          currentSocket?.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id });
+          
+          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${partnerSocketId} (user ${partner.userId}) with partnerId ${userId}`);
           partnerSocket.emit('liveMatch:found', { partnerId: userId, sessionId: dbSession.id });
           
+          console.log('[LiveVideo] Both liveMatch:found events emitted successfully');
           matchFound = true;
         }
 
         if (!matchFound) {
-          // Add to queue
-          liveVideoQueue.push({ userId, socketId: socket.id, joinedAt: Date.now() });
+          // Add to queue (socketId tracked in userSocketMap)
+          liveVideoQueue.push({ userId, joinedAt: Date.now() });
           console.log(`[LiveVideo] User ${userId} added to queue. Queue size: ${liveVideoQueue.length}`);
         }
       } catch (error) {

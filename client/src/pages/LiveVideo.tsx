@@ -109,19 +109,27 @@ export default function LiveVideo() {
 
       // WebRTC signaling events
       newSocket.on('liveMatch:found', async (data: { partnerId: string; sessionId: string }) => {
-        console.log('Live match found with partner:', data.partnerId);
+        console.log('🎉 [LiveVideo Client] MATCH FOUND EVENT RECEIVED!');
+        console.log('[LiveVideo Client] Partner ID:', data.partnerId);
+        console.log('[LiveVideo Client] Session ID:', data.sessionId);
+        console.log('[LiveVideo Client] Setting isMatching to false and partnerId to:', data.partnerId);
+        
         setIsMatching(false);
         setPartnerId(data.partnerId);
         
         // Request camera/mic access now that match is found
         try {
+          console.log('[LiveVideo Client] Requesting camera/mic access after match...');
           await initLocalStream();
+          console.log('[LiveVideo Client] Media access granted');
         } catch (err) {
-          console.error('Failed to get media access after match:', err);
+          console.error('[LiveVideo Client] Failed to get media access after match:', err);
           // Continue anyway - user will see error toast
         }
         
+        console.log('[LiveVideo Client] Creating peer connection...');
         await createPeerConnection(data.partnerId, true);
+        console.log('[LiveVideo Client] Peer connection created');
       });
 
       newSocket.on('liveMatch:offer', async (data: { offer: RTCSessionDescriptionInit; from: string }) => {
