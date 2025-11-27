@@ -211,7 +211,7 @@ export default function LiveVideo() {
         newSocket.disconnect();
       };
     }
-  }, [user]);
+  }, [user?.id]); // Only reconnect if user ID changes, not on credit updates
 
   // Initialize local video stream only when needed (privacy)
   const initLocalStream = async () => {
