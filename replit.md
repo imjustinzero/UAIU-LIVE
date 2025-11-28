@@ -31,6 +31,7 @@ The frontend uses React and TypeScript, styled with Tailwind CSS in a vibrant ga
 - **AI Matchmaking**: 10-second opponent search with "Match Now" option for instant bot play. Bots are named creatively to appear as real players.
 - **Referral System**: Unique 8-character affiliate codes, rewards for referrers based on referred user purchases.
 - **Social Feed**: Posts, likes, comments, and friend management. Admin users can make posts public.
+- **Send Credits**: Users can send credits to friends via the Friends tab. Minimum transfer is 1 credit. Transfers are logged in the action log.
 - **Live Video Chat**: Standalone random video chat matching at /live route. Users pay 1 credit per session for 1-minute peer-to-peer video calls via WebRTC. Features include matchmaking queue, server-enforced 60-second time limit, video/audio controls, Next/Disconnect buttons, and session tracking in database.
 
 ### System Design Choices

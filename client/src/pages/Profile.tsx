@@ -102,6 +102,9 @@ export default function Profile() {
   const [selectedPostComments, setSelectedPostComments] = useState<string | null>(null);
   const [commentContents, setCommentContents] = useState<Record<string, string>>({});
   const [codeCopied, setCodeCopied] = useState(false);
+  const [sendCreditsDialogOpen, setSendCreditsDialogOpen] = useState(false);
+  const [selectedFriendForCredits, setSelectedFriendForCredits] = useState<Friend | null>(null);
+  const [creditsToSend, setCreditsToSend] = useState('');
 
   const { data: user, isLoading: loadingUser } = useQuery<User>({
     queryKey: ['/api/auth/me'],
@@ -255,6 +258,66 @@ export default function Profile() {
       });
     },
   });
+
+  const sendCreditsMutation = useMutation({
+    mutationFn: async (data: { recipientId: string; amount: number }) =>
+      apiRequest('POST', '/api/credits/send', data),
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/friends'] });
+      setSendCreditsDialogOpen(false);
+      setSelectedFriendForCredits(null);
+      setCreditsToSend('');
+      toast({
+        title: 'Credits sent!',
+        description: response.message,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to send credits',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSendCredits = () => {
+    if (!selectedFriendForCredits) return;
+    
+    const amount = parseFloat(creditsToSend);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: 'Invalid amount',
+        description: 'Please enter a valid positive number',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (amount < 1) {
+      toast({
+        title: 'Minimum 1 credit',
+        description: 'You must send at least 1 credit',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (user && amount > user.credits) {
+      toast({
+        title: 'Insufficient credits',
+        description: `You only have ${user.credits.toFixed(1)} credits`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    sendCreditsMutation.mutate({
+      recipientId: selectedFriendForCredits.id,
+      amount,
+    });
+  };
 
   const handleUpdateProfile = () => {
     if (!user || !name.trim()) {
@@ -772,19 +835,78 @@ export default function Profile() {
                           <p className="text-sm text-muted-foreground">{friend.username}</p>
                           <p className="text-xs text-muted-foreground">{friend.credits.toFixed(1)} credits</p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeFriendMutation.mutate(friend.id)}
-                          data-testid={`button-remove-friend-${friend.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex gap-2 items-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedFriendForCredits(friend);
+                              setSendCreditsDialogOpen(true);
+                            }}
+                            data-testid={`button-send-credits-${friend.id}`}
+                          >
+                            <Gift className="w-4 h-4 mr-1" />
+                            Send Credits
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeFriendMutation.mutate(friend.id)}
+                            data-testid={`button-remove-friend-${friend.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               )}
+
+              {/* Send Credits Dialog */}
+              <Dialog open={sendCreditsDialogOpen} onOpenChange={setSendCreditsDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Send Credits to {selectedFriendForCredits?.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Amount (minimum 1 credit)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        step="0.1"
+                        placeholder="Enter amount"
+                        value={creditsToSend}
+                        onChange={(e) => setCreditsToSend(e.target.value)}
+                        data-testid="input-credits-amount"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Your balance: {user?.credits.toFixed(1)} credits
+                      </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSendCreditsDialogOpen(false);
+                          setCreditsToSend('');
+                        }}
+                        data-testid="button-cancel-send-credits"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSendCredits}
+                        disabled={sendCreditsMutation.isPending || !creditsToSend}
+                        data-testid="button-confirm-send-credits"
+                      >
+                        {sendCreditsMutation.isPending ? 'Sending...' : 'Send Credits'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           </Tabs>
         </div>

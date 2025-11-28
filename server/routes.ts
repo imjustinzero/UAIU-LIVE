@@ -537,6 +537,68 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  // Send credits to another user
+  app.post('/api/credits/send', requireAuth, async (req, res) => {
+    try {
+      const senderId = (req as any).userId;
+      const { recipientId, amount } = req.body;
+
+      if (!recipientId || !amount) {
+        return res.status(400).json({ message: 'Recipient and amount are required' });
+      }
+
+      const creditAmount = parseFloat(amount);
+      if (isNaN(creditAmount) || creditAmount <= 0) {
+        return res.status(400).json({ message: 'Amount must be a positive number' });
+      }
+
+      if (creditAmount < 1) {
+        return res.status(400).json({ message: 'Minimum transfer is 1 credit' });
+      }
+
+      const sender = await storage.getUser(senderId);
+      if (!sender) {
+        return res.status(404).json({ message: 'Sender not found' });
+      }
+
+      if (sender.credits < creditAmount) {
+        return res.status(400).json({ message: 'Insufficient credits' });
+      }
+
+      const recipient = await storage.getUser(recipientId);
+      if (!recipient) {
+        return res.status(404).json({ message: 'Recipient not found' });
+      }
+
+      if (senderId === recipientId) {
+        return res.status(400).json({ message: 'Cannot send credits to yourself' });
+      }
+
+      // Deduct from sender
+      await storage.updateUserCredits(senderId, sender.credits - creditAmount);
+      // Add to recipient
+      await storage.updateUserCredits(recipientId, recipient.credits + creditAmount);
+
+      // Log the transfer
+      await storage.addActionLog({
+        userId: senderId,
+        userName: sender.name,
+        type: 'credit_transfer',
+        message: `${sender.name} sent ${creditAmount.toFixed(1)} credits to ${recipient.name}`,
+      });
+
+      const updatedSender = await storage.getUser(senderId);
+      res.json({ 
+        success: true, 
+        newCredits: updatedSender?.credits || 0,
+        message: `Successfully sent ${creditAmount.toFixed(1)} credits to ${recipient.name}`
+      });
+    } catch (error) {
+      console.error('Credit transfer error:', error);
+      res.status(500).json({ message: 'Credit transfer failed' });
+    }
+  });
+
   // Create Stripe checkout session for credit purchases
   app.post('/api/stripe/create-checkout', requireAuth, async (req, res) => {
     try {
