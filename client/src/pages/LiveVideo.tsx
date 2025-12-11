@@ -38,6 +38,7 @@ export default function LiveVideo() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const partnerIdRef = useRef<string | null>(null); // Ref for current partnerId (avoids stale closure)
   
   const { toast } = useToast();
 
