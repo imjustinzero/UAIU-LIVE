@@ -659,9 +659,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   // Use the HTTP server passed in from runApp
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: true, // Allow all origins with credentials
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    transports: ['polling', 'websocket'], // Match client transport order
+    allowEIO3: true // Allow older engine.io clients for compatibility
   });
   
   console.log('Socket.IO server initialized on shared HTTP server');

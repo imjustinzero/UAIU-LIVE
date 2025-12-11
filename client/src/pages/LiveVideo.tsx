@@ -22,9 +22,13 @@ interface PeerConnection {
 }
 
 export default function LiveVideo() {
+  // Debug: Log when component mounts
+  console.log('[LiveVideo] Component rendering...');
+  
   const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false); // Track socket connection status
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -52,11 +56,15 @@ export default function LiveVideo() {
 
   // Load user session
   useEffect(() => {
+    console.log('[LiveVideo] Loading user session...');
     const savedUser = localStorage.getItem('pong-user');
     const sessionId = localStorage.getItem('pong-session');
+    console.log('[LiveVideo] savedUser exists:', !!savedUser);
+    console.log('[LiveVideo] sessionId exists:', !!sessionId);
     
     if (savedUser && sessionId) {
       const parsedUser = JSON.parse(savedUser);
+      console.log('[LiveVideo] User parsed:', parsedUser?.id);
       setUser(parsedUser);
       
       fetch('/api/auth/me', {
@@ -80,8 +88,10 @@ export default function LiveVideo() {
           }
         })
         .catch(err => {
-          console.error('Failed to refresh user data:', err);
+          console.error('[LiveVideo] Failed to refresh user data:', err);
         });
+    } else {
+      console.log('[LiveVideo] No saved user or session - user needs to log in');
     }
   }, []);
 
@@ -95,22 +105,38 @@ export default function LiveVideo() {
       }
 
       console.log('[LiveVideo] Creating socket connection...');
-      console.log('[LiveVideo] Origin:', window.location.origin);
-      console.log('[LiveVideo] Session ID:', sessionId.substring(0, 8) + '...');
+      console.log('[LiveVideo] window.location.origin:', window.location.origin);
+      console.log('[LiveVideo] Session ID (first 8 chars):', sessionId.substring(0, 8) + '...');
 
-      const newSocket = io(window.location.origin, {
+      // Determine Socket.IO URL
+      // Use VITE_SOCKET_URL env var if set, otherwise fallback to current origin
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+      console.log('[LiveVideo] VITE_SOCKET_URL:', import.meta.env.VITE_SOCKET_URL || '(not set)');
+      console.log('[LiveVideo] Using socket URL:', socketUrl);
+
+      const newSocket = io(socketUrl, {
         auth: { sessionId },
-        transports: ['websocket', 'polling'], // Prefer websocket but fallback to polling
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 20000,
       });
       
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
         console.log('✅ [LiveVideo] Socket connected! ID:', newSocket.id);
+        setSocketConnected(true);
+        toast({
+          title: "Connected",
+          description: "Ready to find a match!",
+        });
       });
 
       newSocket.on('connect_error', (error) => {
         console.error('❌ [LiveVideo] Socket connection error:', error.message);
+        setSocketConnected(false);
         toast({
           title: "Connection Error",
           description: "Failed to connect to server. Please refresh the page.",
@@ -120,6 +146,7 @@ export default function LiveVideo() {
 
       newSocket.on('disconnect', (reason) => {
         console.log('[LiveVideo] Socket disconnected:', reason);
+        setSocketConnected(false);
       });
 
       newSocket.on('creditsUpdated', (newCredits: number) => {
@@ -565,9 +592,15 @@ export default function LiveVideo() {
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Finding a match...
                         </Badge>
+                      ) : socketConnected ? (
+                        <Badge variant="outline" className="gap-2 border-green-500" data-testid="badge-ready">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          Ready
+                        </Badge>
                       ) : (
-                        <Badge variant="outline" className="gap-2" data-testid="badge-offline">
-                          Offline
+                        <Badge variant="outline" className="gap-2 border-yellow-500" data-testid="badge-connecting">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Connecting...
                         </Badge>
                       )}
                     </div>
