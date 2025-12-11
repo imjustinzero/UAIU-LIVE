@@ -90,18 +90,36 @@ export default function LiveVideo() {
     if (user) {
       const sessionId = localStorage.getItem('pong-session');
       if (!sessionId) {
-        console.error('No session ID found, cannot connect to socket');
+        console.error('[LiveVideo] No session ID found, cannot connect to socket');
         return;
       }
 
+      console.log('[LiveVideo] Creating socket connection...');
+      console.log('[LiveVideo] Origin:', window.location.origin);
+      console.log('[LiveVideo] Session ID:', sessionId.substring(0, 8) + '...');
+
       const newSocket = io(window.location.origin, {
-        auth: { sessionId }
+        auth: { sessionId },
+        transports: ['websocket', 'polling'], // Prefer websocket but fallback to polling
       });
       
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('✅ Socket connected for live video');
+        console.log('✅ [LiveVideo] Socket connected! ID:', newSocket.id);
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('❌ [LiveVideo] Socket connection error:', error.message);
+        toast({
+          title: "Connection Error",
+          description: "Failed to connect to server. Please refresh the page.",
+          variant: "destructive",
+        });
+      });
+
+      newSocket.on('disconnect', (reason) => {
+        console.log('[LiveVideo] Socket disconnected:', reason);
       });
 
       newSocket.on('creditsUpdated', (newCredits: number) => {
@@ -110,82 +128,92 @@ export default function LiveVideo() {
 
       // WebRTC signaling events
       newSocket.on('liveMatch:found', async (data: { partnerId: string; sessionId: string }) => {
-        console.log('🎉 [LiveVideo Client] MATCH FOUND EVENT RECEIVED!');
-        console.log('[LiveVideo Client] Partner ID:', data.partnerId);
-        console.log('[LiveVideo Client] Session ID:', data.sessionId);
-        console.log('[LiveVideo Client] Setting isMatching to false and partnerId to:', data.partnerId);
+        console.log('🎉 [LiveVideo] MATCH FOUND!');
+        console.log('[LiveVideo] Partner ID:', data.partnerId);
+        console.log('[LiveVideo] Session ID:', data.sessionId);
         
         setIsMatching(false);
         setPartnerId(data.partnerId);
+        partnerIdRef.current = data.partnerId; // Update ref immediately
         
         // Request camera/mic access now that match is found
         try {
-          console.log('[LiveVideo Client] Requesting camera/mic access after match...');
+          console.log('[LiveVideo] Requesting camera/mic access...');
           await initLocalStream();
-          console.log('[LiveVideo Client] Media access granted');
+          console.log('[LiveVideo] Media access granted');
         } catch (err) {
-          console.error('[LiveVideo Client] Failed to get media access after match:', err);
-          // Continue anyway - user will see error toast
+          console.error('[LiveVideo] Failed to get media access:', err);
         }
         
-        console.log('[LiveVideo Client] Creating peer connection...');
+        console.log('[LiveVideo] Creating peer connection as offerer...');
         await createPeerConnection(data.partnerId, true);
-        console.log('[LiveVideo Client] Peer connection created');
+        console.log('[LiveVideo] Peer connection created');
       });
 
       newSocket.on('liveMatch:offer', async (data: { offer: RTCSessionDescriptionInit; from: string }) => {
-        console.log('Received offer from:', data.from);
+        console.log('[LiveVideo] Received offer from:', data.from);
+        console.log('[LiveVideo] Current partnerIdRef:', partnerIdRef.current);
         
-        // Only accept offer from confirmed partner
-        setPartnerId((currentPartnerId) => {
-          if (!currentPartnerId || currentPartnerId !== data.from) {
-            console.log('Ignoring offer from non-partner:', data.from);
-            return currentPartnerId;
-          }
-          
-          // Process offer asynchronously
-          (async () => {
-            await createPeerConnection(data.from, false);
-            await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await peerConnectionRef.current?.createAnswer();
-            if (answer) {
-              await peerConnectionRef.current?.setLocalDescription(answer);
-              newSocket.emit('liveMatch:answer', { answer, to: data.from });
-            }
-          })();
-          
-          return currentPartnerId;
-        });
-      });
-
-      newSocket.on('liveMatch:answer', async (data: { answer: RTCSessionDescriptionInit; from?: string }) => {
-        console.log('Received answer from:', data.from);
-        
-        // Only process answer if we're in a matched state with the correct partner
-        if (!partnerId || (data.from && data.from !== partnerId)) {
-          console.log('Ignoring answer: not from matched partner');
+        // Use ref to get current partnerId value (avoids stale closure)
+        const currentPartnerId = partnerIdRef.current;
+        if (!currentPartnerId || currentPartnerId !== data.from) {
+          console.log('[LiveVideo] Ignoring offer - not from matched partner');
           return;
         }
         
-        await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.answer));
+        try {
+          await createPeerConnection(data.from, false);
+          await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await peerConnectionRef.current?.createAnswer();
+          if (answer) {
+            await peerConnectionRef.current?.setLocalDescription(answer);
+            newSocket.emit('liveMatch:answer', { answer, to: data.from });
+            console.log('[LiveVideo] Sent answer to:', data.from);
+          }
+        } catch (err) {
+          console.error('[LiveVideo] Error handling offer:', err);
+        }
+      });
+
+      newSocket.on('liveMatch:answer', async (data: { answer: RTCSessionDescriptionInit; from?: string }) => {
+        console.log('[LiveVideo] Received answer from:', data.from);
+        
+        // Use ref for current partnerId (avoids stale closure)
+        const currentPartnerId = partnerIdRef.current;
+        if (!currentPartnerId || (data.from && data.from !== currentPartnerId)) {
+          console.log('[LiveVideo] Ignoring answer - not from matched partner');
+          return;
+        }
+        
+        try {
+          await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.answer));
+          console.log('[LiveVideo] Set remote description from answer');
+        } catch (err) {
+          console.error('[LiveVideo] Error setting remote description:', err);
+        }
       });
 
       newSocket.on('liveMatch:iceCandidate', async (data: { candidate: RTCIceCandidateInit; from: string }) => {
-        console.log('Received ICE candidate from:', data.from);
+        console.log('[LiveVideo] Received ICE candidate from:', data.from);
         
-        // Only accept ICE candidates from confirmed partner
-        if (!partnerId || partnerId !== data.from) {
-          console.log('Ignoring ICE candidate from non-partner:', data.from);
+        // Use ref for current partnerId (avoids stale closure)
+        const currentPartnerId = partnerIdRef.current;
+        if (!currentPartnerId || currentPartnerId !== data.from) {
+          console.log('[LiveVideo] Ignoring ICE candidate - not from matched partner');
           return;
         }
         
         if (peerConnectionRef.current) {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          try {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (err) {
+            console.error('[LiveVideo] Error adding ICE candidate:', err);
+          }
         }
       });
 
       newSocket.on('liveMatch:partnerDisconnected', () => {
-        console.log('Partner disconnected');
+        console.log('[LiveVideo] Partner disconnected');
         handleDisconnect();
         toast({
           title: "Partner Disconnected",
@@ -195,11 +223,12 @@ export default function LiveVideo() {
       });
 
       newSocket.on('liveMatch:ended', () => {
-        console.log('Session ended');
+        console.log('[LiveVideo] Session ended');
         handleDisconnect();
       });
 
       newSocket.on('error', (data: { message: string }) => {
+        console.error('[LiveVideo] Server error:', data.message);
         toast({
           title: "Error",
           description: data.message,
@@ -209,6 +238,7 @@ export default function LiveVideo() {
       });
 
       return () => {
+        console.log('[LiveVideo] Cleaning up socket connection');
         newSocket.disconnect();
       };
     }
@@ -334,19 +364,39 @@ export default function LiveVideo() {
   };
 
   const handleFindMatch = async () => {
-    console.log('[LiveVideo Client] handleFindMatch called');
-    console.log('[LiveVideo Client] User:', user);
-    console.log('[LiveVideo Client] Socket:', socket);
-    console.log('[LiveVideo Client] Socket connected?', socket?.connected);
+    console.log('[LiveVideo] handleFindMatch called');
+    console.log('[LiveVideo] User:', user?.id);
+    console.log('[LiveVideo] Socket exists:', !!socket);
+    console.log('[LiveVideo] Socket connected:', socket?.connected);
     
     if (!user) {
-      console.log('[LiveVideo Client] No user - showing auth modal');
+      console.log('[LiveVideo] No user - showing auth modal');
       setShowAuthModal(true);
       return;
     }
 
+    if (!socket) {
+      console.error('[LiveVideo] Socket not initialized');
+      toast({
+        title: "Connection Error",
+        description: "Please wait for connection or refresh the page",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!socket.connected) {
+      console.error('[LiveVideo] Socket not connected, attempting reconnect...');
+      socket.connect();
+      toast({
+        title: "Reconnecting",
+        description: "Attempting to reconnect to server...",
+      });
+      return;
+    }
+
     if (user.credits < 1) {
-      console.log('[LiveVideo Client] Insufficient credits');
+      console.log('[LiveVideo] Insufficient credits');
       toast({
         title: "Not Enough Credits",
         description: "You need 1 credit to start a live video session",
@@ -355,10 +405,10 @@ export default function LiveVideo() {
       return;
     }
 
-    console.log('[LiveVideo Client] Emitting liveMatch:join event');
+    console.log('[LiveVideo] Emitting liveMatch:join event');
     setIsMatching(true);
-    socket?.emit('liveMatch:join');
-    console.log('[LiveVideo Client] Event emitted');
+    socket.emit('liveMatch:join');
+    console.log('[LiveVideo] Event emitted successfully');
   };
 
   const handleNext = () => {
@@ -370,6 +420,7 @@ export default function LiveVideo() {
   };
 
   const handleDisconnect = () => {
+    console.log('[LiveVideo] handleDisconnect called');
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -379,6 +430,7 @@ export default function LiveVideo() {
     }
     setIsConnected(false);
     setPartnerId(null);
+    partnerIdRef.current = null; // Clear ref too
     setIsMatching(false);
   };
 
