@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Phone, Mail, MessageSquare, Building, Users, FileText, ChevronRight, Shield, Clock, CheckCircle, Gamepad2, Upload, Loader2 } from "lucide-react";
+import { Phone, Mail, MessageSquare, Building, Users, FileText, ChevronRight, Shield, Clock, CheckCircle, Gamepad2, Upload, Loader2, DollarSign, Zap, Lock, Wrench, Calendar, Target, ChevronDown, FileDown, Briefcase, HardHat, Download } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import headshotImg from "@assets/32D1D022-D4F3-46FF-AEDE-6DF9904193AC_1769358232562.png";
@@ -35,19 +36,28 @@ export default function Landing() {
       
       <main>
         <HeroSection onScrollToForm={scrollToForm} />
+        <CredibilityStackSection />
         <CTACards onScrollToForm={scrollToForm} />
-        <ProcessSection />
+        <BuyBoxSection />
+        <ConfidentialityPledgeSection />
         
-        <div ref={callFormRef}>
-          {activeForm === 'call' && <RequestCallForm onClose={() => setActiveForm(null)} />}
-        </div>
         <div ref={companyFormRef}>
           {activeForm === 'company' && <CompanyForSaleForm onClose={() => setActiveForm(null)} />}
         </div>
+        <div ref={callFormRef}>
+          {activeForm === 'call' && <RequestCallForm onClose={() => setActiveForm(null)} />}
+        </div>
+        
+        <ForAdvisorsSection onScrollToForm={scrollToForm} />
+        
         <div ref={referralFormRef}>
           {activeForm === 'referral' && <ReferralForm onClose={() => setActiveForm(null)} />}
         </div>
         
+        <TransactionReadinessSection />
+        <EvaluationExampleSection />
+        <SellerFAQSection />
+        <ProcessSection />
         <PlayGamesSection />
       </main>
 
@@ -122,7 +132,10 @@ function HeroSection({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'comp
               </li>
             </ul>
 
-            <p className="text-lg font-semibold text-stone-800 italic">
+            <p className="text-xl font-bold text-stone-900 border-l-4 border-amber-600 pl-4 my-4">
+              I buy. I operate. I close. I don't shop.
+            </p>
+            <p className="text-lg font-semibold text-stone-600 italic">
               Confidential. Fast Decisions.
             </p>
 
@@ -130,7 +143,7 @@ function HeroSection({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'comp
               <Button 
                 onClick={() => onScrollToForm('call')} 
                 size="lg" 
-                className="bg-amber-600 hover:bg-amber-700 text-white"
+                className="bg-amber-600 text-white"
                 data-testid="button-hero-request-call"
               >
                 Request a Call
@@ -139,7 +152,6 @@ function HeroSection({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'comp
                 onClick={() => onScrollToForm('company')} 
                 variant="outline" 
                 size="lg"
-                className="border-stone-400"
                 data-testid="button-hero-submit-company"
               >
                 Submit a Company
@@ -174,7 +186,7 @@ function CTACards({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'company
               <Phone className="w-12 h-12 mx-auto text-amber-600" />
               <h3 className="text-xl font-bold text-stone-900">Request a Call</h3>
               <p className="text-sm text-stone-600">Schedule a Confidential Consultation</p>
-              <Button className="w-full bg-amber-600 hover:bg-amber-700">Submit Request</Button>
+              <Button className="w-full bg-amber-600 text-white" data-testid="button-cta-request">Submit Request</Button>
             </CardContent>
           </Card>
 
@@ -183,7 +195,7 @@ function CTACards({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'company
               <Building className="w-12 h-12 mx-auto text-stone-600" />
               <h3 className="text-xl font-bold text-stone-900">Present a Company For Sale</h3>
               <p className="text-sm text-stone-600">Submit Business Details & Documents</p>
-              <Button variant="outline" className="w-full border-stone-400">Submit Company</Button>
+              <Button variant="outline" className="w-full" data-testid="button-cta-company">Submit Company</Button>
             </CardContent>
           </Card>
 
@@ -192,7 +204,7 @@ function CTACards({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'company
               <Users className="w-12 h-12 mx-auto text-stone-600" />
               <h3 className="text-xl font-bold text-stone-900">Referral / Other</h3>
               <p className="text-sm text-stone-600">Make an Introduction</p>
-              <Button variant="outline" className="w-full border-stone-400">Submit Referral</Button>
+              <Button variant="outline" className="w-full" data-testid="button-cta-referral">Submit Referral</Button>
             </CardContent>
           </Card>
 
@@ -387,7 +399,7 @@ function RequestCallForm({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="flex gap-3">
-                <Button type="submit" className="bg-amber-600 hover:bg-amber-700" disabled={isSubmitting} data-testid="button-submit-call">
+                <Button type="submit" className="bg-amber-600 text-white" disabled={isSubmitting} data-testid="button-submit-call">
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Submit Request
                 </Button>
@@ -627,7 +639,7 @@ function CompanyForSaleForm({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="flex gap-3">
-                <Button type="submit" className="bg-amber-600 hover:bg-amber-700" disabled={isSubmitting} data-testid="button-submit-company">
+                <Button type="submit" className="bg-amber-600 text-white" disabled={isSubmitting} data-testid="button-submit-company">
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Submit Company
                 </Button>
@@ -735,7 +747,7 @@ function ReferralForm({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="flex gap-3">
-                <Button type="submit" className="bg-amber-600 hover:bg-amber-700" disabled={isSubmitting} data-testid="button-submit-referral">
+                <Button type="submit" className="bg-amber-600 text-white" disabled={isSubmitting} data-testid="button-submit-referral">
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Send Referral
                 </Button>
@@ -749,12 +761,268 @@ function ReferralForm({ onClose }: { onClose: () => void }) {
   );
 }
 
+function CredibilityStackSection() {
+  const items = [
+    { icon: DollarSign, title: "Structure Flexibility", desc: "Cash + seller note / earnout when appropriate" },
+    { icon: Zap, title: "Speed", desc: "48-hour initial response after basics" },
+    { icon: Lock, title: "Confidentiality", desc: "Owner-to-owner, discreet" },
+    { icon: Wrench, title: "Operator Mindset", desc: "Protect crews + customers" },
+    { icon: Calendar, title: "Transition", desc: "3–12 month handoff" },
+    { icon: Target, title: "Focus", desc: "NorCal construction & trades" },
+  ];
+
+  return (
+    <section className="py-16 bg-white" data-testid="section-credibility">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-10">How I Operate</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {items.map((item) => (
+            <Card key={item.title} className="border border-stone-200">
+              <CardContent className="p-5 flex items-start gap-4">
+                <item.icon className="w-8 h-8 text-amber-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-bold text-stone-900">{item.title}</h3>
+                  <p className="text-sm text-stone-600">{item.desc}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BuyBoxSection() {
+  const buyBoxItems = [
+    "$5M+ revenue preferred (open to larger)",
+    "EBITDA/SDE positive (clean add-backs preferred)",
+    "HVAC, Plumbing, Electrical, Restoration, Concrete, Grading, Roofing, Paving, Landscaping, GC, and more",
+    "Established operation (7+ years preferred)",
+    "Stable crews + supervisors/foremen",
+    "Repeat customers or service contracts",
+  ];
+
+  const notAFitItems = [
+    "Negative cash flow / distressed",
+    "Heavy litigation or compliance issues",
+    "Chaotic books / no basic financials",
+    "Extreme customer concentration",
+    "Pre-revenue / startup",
+  ];
+
+  return (
+    <section className="py-16 bg-stone-50" data-testid="section-buybox">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-10">Buy Box</h2>
+        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          <Card className="border-2 border-amber-500">
+            <CardHeader>
+              <CardTitle className="text-xl text-amber-700 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5" />
+                What I'm Buying
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {buyBoxItems.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-stone-700">
+                    <CheckCircle className="w-4 h-4 text-amber-600 mt-1 flex-shrink-0" />
+                    <span className="text-sm">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 border-stone-300">
+            <CardHeader>
+              <CardTitle className="text-xl text-stone-600 flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Not a Fit
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {notAFitItems.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-stone-600">
+                    <span className="text-stone-400">×</span>
+                    <span className="text-sm">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="text-center mt-8">
+          <a href="/api/buybox-pdf" download data-testid="button-download-buybox">
+            <Button variant="outline" className="border-amber-600 text-amber-700">
+              <Download className="w-4 h-4 mr-2" />
+              Download Buy Box (PDF)
+            </Button>
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ConfidentialityPledgeSection() {
+  return (
+    <section className="py-12 bg-white" data-testid="section-confidentiality">
+      <div className="container mx-auto px-4">
+        <Card className="max-w-3xl mx-auto border-2 border-stone-800 bg-stone-900 text-white">
+          <CardContent className="p-8">
+            <div className="flex items-start gap-4">
+              <Shield className="w-10 h-10 text-amber-400 flex-shrink-0" />
+              <div>
+                <h3 className="text-xl font-bold mb-4">Confidentiality Pledge</h3>
+                <ul className="space-y-2 text-stone-300">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-amber-400" />
+                    No mass blasts
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-amber-400" />
+                    No outreach to employees/customers without permission
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-amber-400" />
+                    Materials handled discreetly
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function ForAdvisorsSection({ onScrollToForm }: { onScrollToForm: (form: 'call' | 'company' | 'referral') => void }) {
+  return (
+    <section className="py-12 bg-stone-100" data-testid="section-advisors">
+      <div className="container mx-auto px-4 text-center max-w-3xl">
+        <h2 className="text-2xl font-bold text-stone-900 mb-4">For CPAs, Attorneys, Bankers, Bonding & Insurance Advisors</h2>
+        <p className="text-stone-600 mb-2">If you have a client considering succession, send an intro.</p>
+        <p className="text-stone-600 mb-6">I protect relationships and keep it confidential.</p>
+        <Button onClick={() => onScrollToForm('referral')} className="bg-amber-600 text-white" data-testid="button-advisor-referral">
+          <Users className="w-4 h-4 mr-2" />
+          Make a Referral
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function TransactionReadinessSection() {
+  const items = [
+    "Diligence team ready (CPA/QoE + attorney)",
+    "Banking/lender introductions available (shared when there is mutual fit)",
+    "Clear process + templates (NDA/LOI)",
+    "References available upon request",
+  ];
+
+  return (
+    <section className="py-16 bg-white" data-testid="section-readiness">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-10">Transaction Readiness</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-start gap-3 p-4 bg-stone-50 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <span className="text-stone-700">{item}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-sm text-stone-500 mt-6 italic">
+          Verification shared when there is mutual fit.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function EvaluationExampleSection() {
+  const evaluationPoints = [
+    "Recurring revenue / maintenance agreements",
+    "Gross margin & labor mix",
+    "Dispatch/ops maturity",
+    "AR/WIP basics (as applicable)",
+    "Equipment/vehicle condition",
+    "Customer concentration",
+  ];
+
+  return (
+    <section className="py-16 bg-stone-50" data-testid="section-evaluation">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-10">How I Evaluate (Example)</h2>
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3">
+              <HardHat className="w-6 h-6 text-amber-600" />
+              HVAC / Restoration Business
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {evaluationPoints.map((point, i) => (
+                <li key={i} className="flex items-start gap-3 text-stone-700">
+                  <ChevronRight className="w-4 h-4 text-amber-600 mt-1 flex-shrink-0" />
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function SellerFAQSection() {
+  const faqs = [
+    { q: "Are you a broker?", a: "No. I'm a principal buyer. I'm looking to acquire and operate a business long-term." },
+    { q: "What do you need first?", a: "A short call plus basic numbers: TTM revenue, EBITDA/SDE, and a simple overview of the operation. If it's project-based, a basic WIP summary helps." },
+    { q: "Do you require an NDA?", a: "If you want one, yes. I'm fine signing an NDA once we confirm there's potential fit." },
+    { q: "How do you value businesses?", a: "I look at true cash flow, risk, and how dependent the company is on the owner. Valuation comes from earnings quality, margins, customer concentration, and the strength of the team—not just a multiple." },
+    { q: "Will you contact employees, customers, or vendors?", a: "Not without your permission. Confidentiality is non-negotiable." },
+    { q: "How fast can you move?", a: "I can give a quick yes/no after basics. If there's a fit, we move into diligence and a clear LOI range. Timeline depends on responsiveness and documentation, but I'm built for speed." },
+    { q: "Do you use seller financing?", a: "Often, yes. It aligns incentives and can improve terms for both sides. I'm flexible on structure." },
+    { q: "What happens after close?", a: "The goal is continuity: keep the crew, protect customers, and build on what's already working. I'm not here to flip—I'm here to operate." },
+  ];
+
+  return (
+    <section className="py-16 bg-white" data-testid="section-faq">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-10">Seller FAQ</h2>
+        <div className="max-w-3xl mx-auto">
+          <Accordion type="single" collapsible className="space-y-2">
+            {faqs.map((faq, i) => (
+              <AccordionItem key={i} value={`faq-${i}`} className="border rounded-lg px-4" data-testid={`faq-item-${i}`}>
+                <AccordionTrigger className="text-left font-semibold text-stone-900 hover:no-underline" data-testid={`faq-trigger-${i}`}>
+                  {faq.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-stone-600" data-testid={`faq-content-${i}`}>
+                  {faq.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PlayGamesSection() {
   return (
     <section className="py-8 bg-gradient-to-r from-stone-800 to-stone-700">
       <div className="container mx-auto px-4 text-center">
         <Link href="/play">
-          <Button size="lg" className="h-16 px-12 text-xl font-bold bg-amber-500 hover:bg-amber-600 text-stone-900" data-testid="button-play-games">
+          <Button size="lg" className="h-16 px-12 text-xl font-bold bg-amber-500 text-stone-900" data-testid="button-play-games">
             <Gamepad2 className="w-6 h-6 mr-3" />
             PLAY UAIU LIVE GAMES
           </Button>

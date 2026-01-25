@@ -13,6 +13,7 @@ import { sendSignupNotification, sendFormSubmissionEmail } from "./email-service
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import PDFDocument from "pdfkit";
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -719,6 +720,81 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     return true;
   };
 
+  // Buy Box PDF download
+  app.get('/api/buybox-pdf', (req, res) => {
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="UAIU-Buy-Box.pdf"');
+    
+    doc.pipe(res);
+    
+    // Title
+    doc.fontSize(20).font('Helvetica-Bold').text('UAIU Holding Co — Acquisition Criteria (Buy Box)', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(14).font('Helvetica').text('Justin Zaragoza | Principal Buyer', { align: 'center' });
+    doc.fontSize(10).text('uaiu.live | uaiulive@gmail.com | 844-789-2300 | 530-808-5208', { align: 'center' });
+    doc.moveDown(1);
+    
+    // Positioning
+    doc.fontSize(12).font('Helvetica-Bold').text('I buy. I operate. I close. I don\'t shop.');
+    doc.fontSize(10).font('Helvetica').text('Confidential discussions. Fast yes/no. Respectful process.');
+    doc.moveDown(1);
+    
+    // What I'm Buying
+    doc.fontSize(12).font('Helvetica-Bold').text('What I\'m Buying');
+    doc.fontSize(10).font('Helvetica');
+    doc.text('• Focus: Cash-flowing construction & specialty trades businesses in Northern California');
+    doc.text('• Target Size: $5M+ revenue preferred (open to larger)');
+    doc.text('• Profitability: EBITDA/SDE positive (clean add-backs preferred)');
+    doc.text('• Typical Industries: HVAC; Plumbing; Electrical; Restoration (water/fire/mold); Concrete; Grading/Earthwork; Roofing; Paving/Asphalt; Landscaping (commercial, recurring-heavy); General Contractor (strong systems + repeat clients); Other construction services with stable demand.');
+    doc.moveDown(0.5);
+    
+    // What 'Good' Looks Like
+    doc.fontSize(12).font('Helvetica-Bold').text('What \'Good\' Looks Like');
+    doc.fontSize(10).font('Helvetica');
+    doc.text('• Established operation (7+ years preferred) with a strong local reputation');
+    doc.text('• Stable crews + supervisors/foremen (not 100% owner-dependent)');
+    doc.text('• Repeat customers, service contracts, or consistent bid/negotiated work');
+    doc.text('• Basic financial reporting (P&L, balance sheet; job costing/WIP if applicable)');
+    doc.text('• Clean licensing/insurance posture (bonding/surety relationship where relevant)');
+    doc.moveDown(0.5);
+    
+    // Deal Approach
+    doc.fontSize(12).font('Helvetica-Bold').text('Deal Approach');
+    doc.fontSize(10).font('Helvetica');
+    doc.text('• Flexible structures: cash at close, seller note, and earnout when appropriate');
+    doc.text('• Owner transition supported: typically 3–12 months');
+    doc.text('• Discreet process: no employee/customer outreach without permission');
+    doc.text('• Fast screening: quick yes/no after basic info');
+    doc.moveDown(0.5);
+    
+    // What I Need First
+    doc.fontSize(12).font('Helvetica-Bold').text('What I Need First (to evaluate)');
+    doc.fontSize(10).font('Helvetica');
+    doc.text('• TTM P&L (and last 2–3 years if available)');
+    doc.text('• Revenue by service line / customer type');
+    doc.text('• Headcount + key roles (foremen/supervisors)');
+    doc.text('• Licenses/insurance/bonding status (as applicable)');
+    doc.text('• If project-based: basic WIP/job costing summary');
+    doc.moveDown(0.5);
+    
+    // Not a Fit
+    doc.fontSize(12).font('Helvetica-Bold').text('Not a Fit (save us both time)');
+    doc.fontSize(10).font('Helvetica');
+    doc.text('• Negative cash flow');
+    doc.text('• Unresolved litigation/compliance problems');
+    doc.text('• No basic financials or unwilling to share high-level numbers');
+    doc.text('• Extreme one-customer dependence');
+    doc.text('• Pre-revenue/startups');
+    doc.moveDown(1);
+    
+    // Footer
+    doc.fontSize(9).font('Helvetica-Oblique').text('Not a broker-dealer. Confidential discussions. For initial introductions only.', { align: 'center' });
+    
+    doc.end();
+  });
+
   // Request a Call form
   app.post('/api/forms/request-call', async (req, res) => {
     try {
@@ -811,13 +887,75 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       };
 
       // Save to file
-      const filename = `company-${Date.now()}.json`;
+      const timestamp = Date.now();
+      const filename = `company-${timestamp}.json`;
       fs.writeFileSync(path.join(dataDir, filename), JSON.stringify(submission, null, 2));
 
-      // Send email
-      await sendFormSubmissionEmail('Company For Sale', submission, fileNames);
+      // Generate Deal Summary PDF
+      const pdfFilename = `deal-summary-${timestamp}.pdf`;
+      const pdfPath = path.join(uploadsDir, pdfFilename);
+      
+      const pdfDoc = new PDFDocument({ margin: 50 });
+      const pdfStream = fs.createWriteStream(pdfPath);
+      pdfDoc.pipe(pdfStream);
+      
+      // PDF Header
+      pdfDoc.fontSize(18).font('Helvetica-Bold').text('UAIU Holding Co — Deal Summary', { align: 'center' });
+      pdfDoc.moveDown(0.5);
+      pdfDoc.fontSize(10).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+      pdfDoc.moveDown(1);
+      
+      // Company Info
+      pdfDoc.fontSize(14).font('Helvetica-Bold').text('Company Information');
+      pdfDoc.fontSize(10).font('Helvetica');
+      pdfDoc.text(`Company: ${companyName || 'Not disclosed'}`);
+      pdfDoc.text(`Industry: ${industry}`);
+      pdfDoc.text(`Location: ${location}`);
+      pdfDoc.moveDown(0.5);
+      
+      // Financials
+      pdfDoc.fontSize(14).font('Helvetica-Bold').text('Financial Overview');
+      pdfDoc.fontSize(10).font('Helvetica');
+      pdfDoc.text(`TTM Revenue: $${Number(ttmRevenue).toLocaleString()}`);
+      pdfDoc.text(`EBITDA/SDE: $${Number(ebitda).toLocaleString()}`);
+      pdfDoc.text(`Asking Price: ${askingPrice ? '$' + Number(askingPrice).toLocaleString() : 'Not provided'}`);
+      pdfDoc.moveDown(0.5);
+      
+      // Deal Context
+      pdfDoc.fontSize(14).font('Helvetica-Bold').text('Deal Context');
+      pdfDoc.fontSize(10).font('Helvetica');
+      pdfDoc.text(`Reason for Sale: ${reasonForSale || 'Not provided'}`);
+      pdfDoc.text(`Timing: ${timing}`);
+      pdfDoc.text(`Seller Involvement: ${sellerInvolvement}${sellerInvolvementDetail ? ' - ' + sellerInvolvementDetail : ''}`);
+      pdfDoc.moveDown(0.5);
+      
+      // Contact
+      pdfDoc.fontSize(14).font('Helvetica-Bold').text('Submitted By');
+      pdfDoc.fontSize(10).font('Helvetica');
+      pdfDoc.text(`Name: ${yourName}`);
+      pdfDoc.text(`Role: ${role}`);
+      pdfDoc.moveDown(0.5);
+      
+      // Files
+      if (fileNames.length > 0) {
+        pdfDoc.fontSize(14).font('Helvetica-Bold').text('Uploaded Documents');
+        pdfDoc.fontSize(10).font('Helvetica');
+        fileNames.forEach(f => pdfDoc.text(`• ${f}`));
+      }
+      
+      pdfDoc.moveDown(1);
+      pdfDoc.fontSize(9).font('Helvetica-Oblique').text('Confidential — UAIU Holding Co', { align: 'center' });
+      
+      pdfDoc.end();
+      
+      // Wait for PDF to finish writing
+      await new Promise<void>((resolve) => pdfStream.on('finish', resolve));
 
-      console.log(`🏢 Company submission received from ${yourName} - ${companyName || 'Unnamed'}`);
+      // Send email with PDF path
+      const submissionWithPdf = { ...submission, dealSummaryPdf: `/uploads/${pdfFilename}` };
+      await sendFormSubmissionEmail('Company For Sale', submissionWithPdf, fileNames);
+
+      console.log(`🏢 Company submission received from ${yourName} - ${companyName || 'Unnamed'}, PDF: ${pdfFilename}`);
       res.json({ success: true });
     } catch (error) {
       console.error('Form submission error:', error);

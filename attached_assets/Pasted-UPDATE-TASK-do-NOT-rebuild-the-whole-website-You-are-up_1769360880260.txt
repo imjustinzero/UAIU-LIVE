@@ -1,0 +1,180 @@
+UPDATE TASK (do NOT rebuild the whole website)
+
+You are updating an existing Next.js + Tailwind site for:
+Justin Zaragoza — Principal Buyer, UAIU Holding Co (uaiu.live)
+
+CONSTRAINTS
+- Keep existing routes and layout structure.
+- Do NOT add any audio player or embedded media on “/”.
+- Keep existing legacy routing: “/play” remains reserved for legacy; homepage has a button that navigates to /play (navigation only).
+- Preserve existing forms and API routes; we are ENHANCING them.
+- Maintain the current premium look: white, charcoal/black, subtle gold.
+
+CONTACT (must be consistent everywhere)
+- Main call: 844-789-2300
+- Direct text/call: 530-808-5208
+- Email: uaiulive@gmail.com
+- Website: uaiu.live
+
+GOAL
+Add credibility + authority upgrades (items 1–9) and make the site feel like a seasoned buyer who closes. Implement the following sections/features cleanly, without clutter.
+
+1) ADD “CREDIBILITY STACK” SECTION (homepage)
+Add a section under the hero called “Credibility” (or “How I Operate”) with 6 compact cards:
+- Structure Flexibility: “Cash + seller note / earnout when appropriate”
+- Speed: “48-hour initial response after basics”
+- Confidentiality: “Owner-to-owner, discreet”
+- Operator Mindset: “Protect crews + customers”
+- Transition: “3–12 month handoff”
+- Focus: “NorCal construction & trades”
+Design: grid (2x3 desktop, 1-column mobile). Minimal icons ok.
+
+2) ADD “BUY BOX” + “WHAT I WILL NOT BUY” (homepage)
+Create a section called “Buy Box” with:
+- Clear bullets (the existing buy box stays, but improve formatting)
+Add a sub-box titled “Not a Fit” with short bullets:
+- Negative cash flow / distressed
+- Heavy litigation or compliance issues
+- Chaotic books / no basic financials
+- Extreme customer concentration
+- Pre-revenue / startup
+Add a button: “Download Buy Box (PDF)”
+Implementation:
+- Generate the PDF on-demand via Next.js route /api/buybox-pdf using a PDF generator.
+- The PDF must be 1 page, branded, and use the exact wording below (verbatim).
+
+BUY BOX PDF EXACT COPY (USE VERBATIM)
+Title:
+“UAIU Holding Co — Acquisition Criteria (Buy Box)”
+Header line:
+“Justin Zaragoza | Principal Buyer”
+Contact line:
+“uaiu.live | uaiulive@gmail.com | 844-789-2300 | 530-808-5208”
+
+Positioning line:
+“I buy. I operate. I close. I don’t shop.”
+Subtext:
+“Confidential discussions. Fast yes/no. Respectful process.”
+
+Section: What I’m Buying
+- Focus: “Cash-flowing construction & specialty trades businesses in Northern California”
+- Target Size: “$5M+ revenue preferred (open to larger)”
+- Profitability: “EBITDA/SDE positive (clean add-backs preferred)”
+- Typical Industries:
+  “HVAC; Plumbing; Electrical; Restoration (water/fire/mold); Concrete; Grading/Earthwork; Roofing; Paving/Asphalt; Landscaping (commercial, recurring-heavy); General Contractor (strong systems + repeat clients); Other construction services with stable demand.”
+
+Section: What ‘Good’ Looks Like
+- “Established operation (7+ years preferred) with a strong local reputation”
+- “Stable crews + supervisors/foremen (not 100% owner-dependent)”
+- “Repeat customers, service contracts, or consistent bid/negotiated work”
+- “Basic financial reporting (P&L, balance sheet; job costing/WIP if applicable)”
+- “Clean licensing/insurance posture (bonding/surety relationship where relevant)”
+
+Section: Deal Approach
+- “Flexible structures: cash at close, seller note, and earnout when appropriate”
+- “Owner transition supported: typically 3–12 months”
+- “Discreet process: no employee/customer outreach without permission”
+- “Fast screening: quick yes/no after basic info”
+
+Section: What I Need First (to evaluate)
+- “TTM P&L (and last 2–3 years if available)”
+- “Revenue by service line / customer type”
+- “Headcount + key roles (foremen/supervisors)”
+- “Licenses/insurance/bonding status (as applicable)”
+- “If project-based: basic WIP/job costing summary”
+
+Section: Not a Fit (save us both time)
+- “Negative cash flow”
+- “Unresolved litigation/compliance problems”
+- “No basic financials or unwilling to share high-level numbers”
+- “Extreme one-customer dependence”
+- “Pre-revenue/startups”
+
+Footer line:
+“Not a broker-dealer. Confidential discussions. For initial introductions only.”
+
+3) ADD “SELLER FAQ” (homepage)
+Add an accordion section titled “Seller FAQ” with the exact Q&A copy below (verbatim). Keep it concise and confident.
+
+SELLER FAQ EXACT COPY (USE VERBATIM)
+Q1: “Are you a broker?”
+A1: “No. I’m a principal buyer. I’m looking to acquire and operate a business long-term.”
+
+Q2: “What do you need first?”
+A2: “A short call plus basic numbers: TTM revenue, EBITDA/SDE, and a simple overview of the operation. If it’s project-based, a basic WIP summary helps.”
+
+Q3: “Do you require an NDA?”
+A3: “If you want one, yes. I’m fine signing an NDA once we confirm there’s potential fit.”
+
+Q4: “How do you value businesses?”
+A4: “I look at true cash flow, risk, and how dependent the company is on the owner. Valuation comes from earnings quality, margins, customer concentration, and the strength of the team—not just a multiple.”
+
+Q5: “Will you contact employees, customers, or vendors?”
+A5: “Not without your permission. Confidentiality is non-negotiable.”
+
+Q6: “How fast can you move?”
+A6: “I can give a quick yes/no after basics. If there’s a fit, we move into diligence and a clear LOI range. Timeline depends on responsiveness and documentation, but I’m built for speed.”
+
+Q7: “Do you use seller financing?”
+A7: “Often, yes. It aligns incentives and can improve terms for both sides. I’m flexible on structure.”
+
+Q8: “What happens after close?”
+A8: “The goal is continuity: keep the crew, protect customers, and build on what’s already working. I’m not here to flip—I'm here to operate.”
+
+4) ADD “PROOF PACKAGE / READINESS” SECTION (homepage)
+Add a section titled “Transaction Readiness” with 4 items:
+- “Diligence team ready (CPA/QoE + attorney)”
+- “Banking/lender introductions available (shared when there is mutual fit)”
+- “Clear process + templates (NDA/LOI)”
+- “References available upon request”
+Include a small note: “Verification shared when there is mutual fit.”
+
+5) ENHANCE INTAKE FORMS: AUTO “DEAL SUMMARY” OUTPUT
+When someone submits “Present a Company For Sale”:
+- Create a clean summary (server-side) and email it to uaiulive@gmail.com (existing email sending stays).
+- Also generate a 1-page “Deal Summary” PDF and save it to /uploads (or /data).
+- In the email, include the summary plus the server path/URL to the PDF and uploaded files.
+PDF includes: company basics, location, revenue, EBITDA/SDE, asking, timing, seller involvement, and list of uploaded docs.
+Keep it branded and readable.
+
+6) ADD “CONFIDENTIALITY PLEDGE” CALLOUT (homepage)
+Add a tasteful box titled “Confidentiality Pledge”:
+- “No mass blasts”
+- “No outreach to employees/customers without permission”
+- “Materials handled discreetly”
+Place near forms or before the “Present a Company” section.
+
+7) ADD “FOR ADVISORS” MINI-SECTION (homepage)
+Add a short section titled “For CPAs, Attorneys, Bankers, Bonding & Insurance Advisors”
+Copy:
+- “If you have a client considering succession, send an intro.”
+- “I protect relationships and keep it confidential.”
+Include a button that scrolls to the Referral form.
+
+8) ADD A STRONG POSITIONING LINE (hero)
+Add one line under the headline:
+“I buy. I operate. I close. I don’t shop.”
+Keep it elegant.
+
+9) ADD ONE “EVALUATION EXAMPLE” (educational positioning only)
+Add a section titled “How I Evaluate (Example)”
+Create one example block (HVAC or Restoration) with bullet points:
+- “Recurring revenue / maintenance agreements”
+- “Gross margin & labor mix”
+- “Dispatch/ops maturity”
+- “AR/WIP basics (as applicable)”
+- “Equipment/vehicle condition”
+- “Customer concentration”
+Do NOT claim past acquisitions.
+
+ENGINEERING NOTES
+- Keep components clean: add new sections as components.
+- Keep SEO intact.
+- Ensure email sending continues working; if email fails, still save submission and log the error.
+- Keep everything responsive and accessible.
+- Do not change routing behavior beyond adding these sections/features.
+
+DELIVERABLE
+Return the updated files only (or clearly list which files changed), plus any new API routes for:
+- /api/buybox-pdf (download)
+- /api/deal-summary-pdf (optional) or integrate into existing submit route
