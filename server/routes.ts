@@ -9,7 +9,10 @@ import type { GameState } from "@shared/schema";
 import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
-import { sendSignupNotification } from "./email-service";
+import { sendSignupNotification, sendFormSubmissionEmail } from "./email-service";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { createSession, getSession, requireAuth } from "./session-middleware";
 import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -653,6 +656,217 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (error) {
       console.error('Failed to fetch credit packages - ERROR:', error);
       res.status(500).json({ message: 'Failed to fetch credit packages' });
+    }
+  });
+
+  // Form submission API routes for business landing page
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  const dataDir = path.join(process.cwd(), 'data');
+  
+  // Ensure directories exist
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+  // Configure multer for file uploads
+  const storage_multer = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      cb(null, `${Date.now()}-${safeName}`);
+    }
+  });
+
+  const upload = multer({
+    storage: storage_multer,
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15MB per file
+    fileFilter: (req, file, cb) => {
+      const allowedExtensions = ['.pdf', '.xlsx', '.csv', '.docx', '.png', '.jpg', '.jpeg'];
+      const allowedMimes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+      const ext = path.extname(file.originalname).toLowerCase();
+      const mimeValid = allowedMimes.includes(file.mimetype);
+      const extValid = allowedExtensions.includes(ext);
+      
+      if (mimeValid && extValid) {
+        cb(null, true);
+      } else {
+        console.warn(`Rejected file upload: ${file.originalname} (MIME: ${file.mimetype}, ext: ${ext})`);
+        cb(new Error('Invalid file type'));
+      }
+    }
+  });
+
+  // Simple rate limiting for form submissions
+  const formSubmissionTimes = new Map<string, number[]>();
+  const RATE_LIMIT_WINDOW = 60000; // 1 minute
+  const MAX_SUBMISSIONS = 5;
+
+  const checkRateLimit = (ip: string): boolean => {
+    const now = Date.now();
+    const times = formSubmissionTimes.get(ip) || [];
+    const recentTimes = times.filter(t => now - t < RATE_LIMIT_WINDOW);
+    
+    if (recentTimes.length >= MAX_SUBMISSIONS) return false;
+    
+    recentTimes.push(now);
+    formSubmissionTimes.set(ip, recentTimes);
+    return true;
+  };
+
+  // Request a Call form
+  app.post('/api/forms/request-call', async (req, res) => {
+    try {
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      if (!checkRateLimit(ip)) {
+        return res.status(429).json({ message: 'Too many requests. Please try again later.' });
+      }
+
+      const { fullName, phone, email, bestDays, timeWindow, timezone, notes, honeypot } = req.body;
+
+      // Spam check
+      if (honeypot) {
+        return res.status(200).json({ success: true }); // Silent success for bots
+      }
+
+      if (!fullName || !phone || !email || !bestDays || bestDays.length === 0 || !timeWindow) {
+        return res.status(400).json({ message: 'Missing required fields' });
+      }
+
+      const submission = {
+        type: 'Request a Call',
+        fullName,
+        phone,
+        email,
+        bestDays: bestDays.join(', '),
+        timeWindow,
+        timezone: timezone || 'Pacific',
+        notes: notes || '',
+        submittedAt: new Date().toISOString(),
+        ip
+      };
+
+      // Save to file
+      const filename = `call-${Date.now()}.json`;
+      fs.writeFileSync(path.join(dataDir, filename), JSON.stringify(submission, null, 2));
+
+      // Send email
+      await sendFormSubmissionEmail('Request a Call', submission);
+
+      console.log(`📞 Call request received from ${fullName} (${email})`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Form submission error:', error);
+      res.status(500).json({ message: 'Failed to submit form' });
+    }
+  });
+
+  // Company For Sale form with file uploads
+  app.post('/api/forms/company-for-sale', upload.array('files', 10), async (req, res) => {
+    try {
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      if (!checkRateLimit(ip)) {
+        return res.status(429).json({ message: 'Too many requests. Please try again later.' });
+      }
+
+      const { yourName, role, companyName, industry, location, ttmRevenue, ebitda, 
+              askingPrice, reasonForSale, timing, sellerInvolvement, sellerInvolvementDetail,
+              confidentialityConfirmed, honeypot } = req.body;
+
+      // Spam check
+      if (honeypot) {
+        return res.status(200).json({ success: true });
+      }
+
+      if (!yourName || !role || !industry || !location || !ttmRevenue || !ebitda || 
+          !timing || !sellerInvolvement || confidentialityConfirmed !== 'true') {
+        return res.status(400).json({ message: 'Missing required fields' });
+      }
+
+      const files = (req.files as Express.Multer.File[]) || [];
+      const fileNames = files.map(f => f.filename);
+
+      const submission = {
+        type: 'Company For Sale',
+        yourName,
+        role,
+        companyName: companyName || 'Not provided',
+        industry,
+        location,
+        ttmRevenue: `$${Number(ttmRevenue).toLocaleString()}`,
+        ebitda: `$${Number(ebitda).toLocaleString()}`,
+        askingPrice: askingPrice ? `$${Number(askingPrice).toLocaleString()}` : 'Not provided',
+        reasonForSale: reasonForSale || 'Not provided',
+        timing,
+        sellerInvolvement,
+        sellerInvolvementDetail: sellerInvolvementDetail || '',
+        files: fileNames,
+        submittedAt: new Date().toISOString(),
+        ip
+      };
+
+      // Save to file
+      const filename = `company-${Date.now()}.json`;
+      fs.writeFileSync(path.join(dataDir, filename), JSON.stringify(submission, null, 2));
+
+      // Send email
+      await sendFormSubmissionEmail('Company For Sale', submission, fileNames);
+
+      console.log(`🏢 Company submission received from ${yourName} - ${companyName || 'Unnamed'}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Form submission error:', error);
+      res.status(500).json({ message: 'Failed to submit form' });
+    }
+  });
+
+  // Referral form
+  app.post('/api/forms/referral', async (req, res) => {
+    try {
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      if (!checkRateLimit(ip)) {
+        return res.status(429).json({ message: 'Too many requests. Please try again later.' });
+      }
+
+      const { yourName, contact, referralInfo, notes, okToMention, honeypot } = req.body;
+
+      // Spam check
+      if (honeypot) {
+        return res.status(200).json({ success: true });
+      }
+
+      if (!yourName || !contact || !referralInfo || !okToMention) {
+        return res.status(400).json({ message: 'Missing required fields' });
+      }
+
+      const submission = {
+        type: 'Referral',
+        yourName,
+        contact,
+        referralInfo,
+        notes: notes || '',
+        okToMention: okToMention ? 'Yes' : 'No',
+        submittedAt: new Date().toISOString(),
+        ip
+      };
+
+      // Save to file
+      const filename = `referral-${Date.now()}.json`;
+      fs.writeFileSync(path.join(dataDir, filename), JSON.stringify(submission, null, 2));
+
+      // Send email
+      await sendFormSubmissionEmail('Referral', submission);
+
+      console.log(`👥 Referral received from ${yourName} - referring ${referralInfo}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Form submission error:', error);
+      res.status(500).json({ message: 'Failed to submit form' });
     }
   });
 

@@ -1,5 +1,51 @@
 import { getUncachableResendClient } from './resend-client';
 
+const TO_EMAIL = 'uaiulive@gmail.com';
+
+export async function sendFormSubmissionEmail(formType: string, data: Record<string, any>, files?: string[]) {
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    const sender = fromEmail.includes('gmail.com') ? 'UAIU Forms <onboarding@resend.dev>' : fromEmail;
+    
+    const fields = Object.entries(data)
+      .filter(([key]) => !['honeypot', 'files'].includes(key))
+      .map(([key, value]) => `
+        <tr style="border-bottom: 1px solid #e5e5e5;">
+          <td style="padding: 10px; color: #b45309; font-weight: bold;">${key}:</td>
+          <td style="padding: 10px; color: #1c1917;">${value}</td>
+        </tr>
+      `).join('');
+
+    const filesList = files && files.length > 0 
+      ? `<tr><td style="padding: 10px; color: #b45309; font-weight: bold;">Uploaded Files:</td><td style="padding: 10px;">${files.join(', ')}</td></tr>`
+      : '';
+
+    await client.emails.send({
+      from: sender,
+      to: TO_EMAIL,
+      subject: `[UAIU Form] ${formType}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafaf9; color: #1c1917;">
+          <h2 style="color: #b45309; border-bottom: 3px solid #b45309; padding-bottom: 10px;">New Form Submission: ${formType}</h2>
+          <table style="border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff; border-radius: 8px; overflow: hidden;">
+            ${fields}
+            ${filesList}
+          </table>
+          <p style="color: #78716c; font-size: 12px; margin-top: 20px;">
+            Submitted at: ${new Date().toISOString()}
+          </p>
+        </div>
+      `,
+    });
+    
+    console.log(`✅ Form submission email sent for ${formType}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send form submission email:', error);
+    return false;
+  }
+}
+
 export async function sendSignupNotification(email: string, name: string, timestamp: Date) {
   try {
     const { client, fromEmail } = await getUncachableResendClient();
