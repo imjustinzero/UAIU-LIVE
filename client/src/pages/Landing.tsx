@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MessageSquare, Building, Users, FileText, ChevronRight, Shield, Clock, CheckCircle, Gamepad2, Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import headshotImg from "@assets/E708457C-45C1-42BD-998F-FAD8F6A0EEFA_1769325184923.png";
+import headshotImg from "@assets/32D1D022-D4F3-46FF-AEDE-6DF9904193AC_1769358232562.png";
 
 export default function Landing() {
   const { toast } = useToast();
