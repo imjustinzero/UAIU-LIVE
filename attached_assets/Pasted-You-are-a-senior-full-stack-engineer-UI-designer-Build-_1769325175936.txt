@@ -1,0 +1,167 @@
+You are a senior full-stack engineer + UI designer. Build a SUPER PROFESSIONAL, modern, mobile-first website for a principal buyer. Use Next.js + Tailwind (preferred) and make it easy to run/deploy in Replit.
+
+BRAND / IDENTITY
+- Name: Justin Zaragoza
+- Title: Principal Buyer
+- Company: UAIU Holding Co
+- Website: uaiu.live
+- Main phone (tap-to-call): 844-789-2300
+- Direct phone (tap-to-call & tap-to-text): 530-808-5208
+- Email (all submissions go here): uaiulive@gmail.com
+
+PRIMARY GOAL
+This is not a generic personal site. It’s a serious buyer intake + relationship machine:
+1) Request a Call
+2) Present a Company For Sale (submit docs)
+3) Referral / Other (send introductions)
+4) A prominent “PLAY UAIU LIVE GAMES” button (navigation only)
+
+TONE / COPY (Dan Peña vibe, but polished)
+Direct, confident, no fluff:
+- “Confidential. Fast yes/no. No tire-kickers.”
+- “Serious owners and advisors only.”
+- “Clear process. Respectful outreach.”
+Make the site feel like a boutique acquisition firm.
+
+DESIGN REQUIREMENTS (must look premium)
+- White background, strong typography, lots of whitespace
+- Accent: subtle gold line/details, black/charcoal text
+- Hero section that feels institutional (like a boutique investment firm)
+- Optional professional headshot area in hero (use placeholder image in /public and show where to replace it)
+- 3 large CTA cards with icons + hover states
+- Smooth scroll between sections
+- Mobile optimized (tap-to-call, big buttons)
+- Proper SEO meta tags + OpenGraph defaults
+
+ROUTES (IMPORTANT — LEGACY BEHAVIOR)
+- "/" = NEW professional homepage (the acquisition/buyer site)
+- "/play" = LEGACY existing UAIU live games / player experience
+- The homepage must include a prominent button labeled:
+  “PLAY UAIU LIVE GAMES”
+  Clicking it must navigate to "/play"
+- Do NOT implement any audio player, autoplay, or embedded media on the homepage. ZERO audio UI components on "/".
+- Keep /play reserved for legacy routing. It can:
+  (A) redirect to the existing legacy URL if one exists (use a constant LEGACY_PLAY_URL),
+  OR (B) be a minimal page with a single button “Continue to UAIU Live Games” that links out.
+
+HOMEPAGE STRUCTURE
+1) HERO
+- Headline: “Principal Buyer”
+- Subheadline: “Acquiring cash-flowing construction & trades businesses in Northern California”
+- Name line: “Justin Zaragoza — Principal Buyer, UAIU Holding Co”
+- Professional headshot on the right (optional but supported)
+- Buttons:
+   - Call 844-789-2300
+   - Text/Call 530-808-5208
+   - Email uaiulive@gmail.com
+   - PLAY UAIU LIVE GAMES (routes to /play)
+- Buy Box bullets:
+   - “$5M+ revenue preferred”
+   - “Profitable (EBITDA/SDE positive)”
+   - “HVAC • Plumbing • Electrical • Concrete • Grading • Restoration • Roofing • GC • Other”
+   - “Confidential. Fast decisions.”
+
+2) CTA CARDS (3)
+Each card scrolls to its section:
+A) Request a Call
+B) Present a Company For Sale
+C) Referral / Other
+
+3) PROCESS SECTION (credibility)
+4 steps:
+1) Intro call (10–15 min)
+2) NDA (if needed) + high-level review
+3) Clear LOI range
+4) Diligence + close
+Add a “Confidentiality” callout box.
+
+FORMS (REQUIRED — serious, validated, clean UI)
+A) REQUEST A CALL FORM
+Fields:
+- Full Name (required)
+- Phone (required)
+- Email (required)
+- Best days (checkboxes required at least one): Mon Tue Wed Thu Fri
+- Best time window (dropdown required): Morning / Midday / Afternoon / Evening
+- Time zone (dropdown required, default Pacific)
+- Notes (optional)
+Button: “Submit Request”
+Success screen: “Received. If it fits, you’ll hear back within 1–2 business days.”
+
+B) PRESENT A COMPANY FOR SALE FORM (INTAKE + UPLOADS)
+Fields:
+- Your Name (required)
+- Role (required): Owner / Broker / Advisor / Other
+- Company Name (optional)
+- Industry (required dropdown): HVAC, Plumbing, Electrical, Concrete, Grading/Earthwork, Restoration, Roofing, Landscaping, General Contractor, Other
+- Location (City/State) (required)
+- TTM Revenue (required numeric)
+- EBITDA or SDE (required numeric)
+- Asking Price (optional numeric)
+- Reason for sale (optional short text)
+- Timing (required): Now / 3–6 months / 6–12 months / Exploring
+- Seller involvement post-close (required): Yes / No + detail field if Yes
+- Uploads (multiple file upload):
+   • Teaser / CIM
+   • Financials
+   • WIP schedule (optional)
+   • Equipment list (optional)
+Accept: pdf, xlsx, csv, docx, images
+- Confidentiality checkbox (required): “I confirm I have the right to share these materials.”
+Button: “Submit Company”
+Success screen.
+
+C) REFERRAL / OTHER FORM
+Fields:
+- Your Name (required)
+- Your Phone or Email (required)
+- Who are you referring? (required: name + company)
+- Notes (optional)
+- Checkbox (required): “OK to mention my name when reaching out.”
+Button: “Send Referral”
+Success screen.
+
+SUBMISSION HANDLING (MUST BE IMPLEMENTED IN CODE)
+Implement backend using Next.js API routes in Replit.
+Must do:
+1) Save each submission as JSON in a /data folder (timestamped filename)
+2) Save uploaded files to /uploads with safe filenames
+3) Server-side validation
+4) File size limits (e.g., 15MB per file, 50MB total)
+5) Basic spam protection (honeypot hidden field + simple rate limit)
+
+EMAIL REQUIREMENT (CRITICAL)
+- Every successful form submission MUST automatically send an email to: uaiulive@gmail.com
+- Email must include:
+  - Form type (Request a Call / Company For Sale / Referral)
+  - All field values in a clean, readable format
+  - Links/paths to any uploaded files (or attach files if supported)
+- Use an email provider via API with environment variables (DO NOT hardcode secrets).
+  Preferred: SendGrid (or Mailgun). Provide working integration using env vars:
+   - SENDGRID_API_KEY (or MAILGUN_API_KEY / domain)
+   - FROM_EMAIL (e.g., no-reply@uaiu.live or a verified sender)
+   - TO_EMAIL defaults to uaiulive@gmail.com
+- Provide a graceful fallback:
+  If email sending fails, still save the submission locally and return an admin-visible warning in logs.
+
+NO GOOGLE CALENDAR LINKS
+This is request-based scheduling only. Do not include Calendar booking links.
+
+FOOTER DISCLAIMER
+Add:
+“Not a broker-dealer. Confidential discussions. This site is for initial introductions only.”
+
+TECH / DELIVERABLES
+- Provide complete runnable code for a Replit project
+- Use clean component structure
+- Accessibility: labels, focus states, keyboard nav
+- Add README:
+  - How to run in Replit
+  - Where submissions/uploads are stored
+  - How to set env vars for email sending
+  - How to change LEGACY_PLAY_URL (if used)
+  - How to deploy
+- Make it look like a boutique acquisition firm site — not a template.
+
+OUTPUT
+Return all file contents needed (package.json, Next config if needed, app/pages routes, API routes, components, styles) and concise setup instructions.
