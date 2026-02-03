@@ -279,6 +279,11 @@ export default function Play() {
                 alt="UAU - Universal AI Unlimited" 
                 className="h-12 md:h-16 w-auto"
               />
+              <a href="https://JustinZaragoza.com" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" data-testid="button-contact">
+                  Contact
+                </Button>
+              </a>
               {user && (
                 <Badge variant="secondary" className="text-base font-semibold hidden sm:flex">
                   {user.name}

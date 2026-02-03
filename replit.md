@@ -1,22 +1,14 @@
-# UAIU Arcade - Multi-Game Pay-to-Play Platform & Business Acquisition Site
+# UAIU Arcade - Multi-Game Pay-to-Play Platform
 
 ## Overview
-UAIU is a dual-purpose platform:
-1. **Business Landing Page** (/) - Professional acquisition website for Justin Zaragoza, Principal Buyer at UAIU Holding Co, focused on acquiring cash-flowing construction & trades businesses in Northern California.
-2. **Gaming Arcade** (/play) - Production-ready online multiplayer gaming platform featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy.
+UAIU is an online multiplayer gaming platform (/) featuring a pay-to-play model, real-time 1v1 matchmaking, and a credit-based economy.
 
 Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. The platform includes a referral system, social feed, and an instant onboarding process with a free credit upon signup. Games run until natural completion, with AI bot fallback after 10 seconds if no opponent is found. Bots appear as real players and win ~96% of matches, ensuring platform credit economy balance.
 
-## Recent Changes (January 2026)
-- **Landing Page Redesign**: Home page (/) is now a professional business acquisition landing page with:
-  - Hero section with Justin Zaragoza branding and headshot
-  - Three CTA forms: Request a Call, Present a Company For Sale, Referral/Other
-  - Buy box criteria ($5M+ revenue, profitable, construction trades)
-  - 4-step acquisition process section
-  - "PLAY UAIU LIVE GAMES" button linking to /play
-- **Game Interface Moved**: Previous home page game content now at /play route
-- **Form Submissions**: All forms save to /data folder as JSON and send email notifications via Resend to uaiulive@gmail.com
-- **File Uploads**: Company For Sale form supports document uploads (PDF, XLSX, CSV, DOCX, images) saved to /uploads folder
+## Recent Changes (February 2026)
+- **Home Page Updated**: UAIU Live Games is now the home page (/)
+- **Contact Button**: Added to header, links to JustinZaragoza.com
+- **Business Landing Page Removed**: Previous acquisition landing page has been removed
 
 ## User Preferences
 I prefer simple language and detailed explanations. I want iterative development where I am asked before major changes are made. Do not make changes to the `server/stripe-config.ts` file without explicit instruction. Do not make changes to the `server/email-config.ts` file without explicit instruction.
