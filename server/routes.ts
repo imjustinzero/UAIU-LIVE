@@ -261,12 +261,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.get('/api/turn', async (req, res) => {
     try {
-      const appName = process.env.METERED_APP_NAME;
+      let appName = process.env.METERED_APP_NAME;
       const apiKey = process.env.METERED_API_KEY;
 
       if (!appName || !apiKey) {
         return res.status(500).json({ error: 'TURN server not configured' });
       }
+
+      // Handle both "uaiulive" and "uaiulive.metered.live" formats
+      appName = appName.replace(/\.metered\.live$/i, '');
 
       const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
       const r = await fetch(url);
