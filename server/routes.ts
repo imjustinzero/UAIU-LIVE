@@ -259,6 +259,33 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  app.get('/api/turn', async (req, res) => {
+    try {
+      const appName = process.env.METERED_APP_NAME;
+      const apiKey = process.env.METERED_API_KEY;
+
+      if (!appName || !apiKey) {
+        return res.status(500).json({ error: 'TURN server not configured' });
+      }
+
+      const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
+      const r = await fetch(url);
+
+      if (!r.ok) {
+        const text = await r.text();
+        console.error('Metered TURN request failed:', r.status, text);
+        return res.status(500).json({ error: 'Failed to fetch TURN credentials' });
+      }
+
+      const data = await r.json();
+      const iceServers = data.iceServers ?? data;
+      return res.json({ iceServers });
+    } catch (err) {
+      console.error('TURN credentials error:', err);
+      return res.status(500).json({ error: 'Server error fetching TURN credentials' });
+    }
+  });
+
   app.get('/api/games', async (req, res) => {
     try {
       const games = [

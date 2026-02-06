@@ -46,13 +46,13 @@ export default function LiveVideo() {
   
   const { toast } = useToast();
 
-  // ICE servers for WebRTC
-  const iceServers = {
+  const iceServersRef = useRef<RTCConfiguration>({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
     ]
-  };
+  });
+  const turnFetchedRef = useRef(false);
 
   // Load user session
   useEffect(() => {
@@ -283,6 +283,26 @@ export default function LiveVideo() {
     };
   }, [socket, isMatching, partnerId]);
 
+  const fetchTurnCredentials = async () => {
+    if (turnFetchedRef.current) return;
+    try {
+      console.log('[LiveVideo] Fetching TURN credentials...');
+      const res = await fetch('/api/turn');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.iceServers && data.iceServers.length > 0) {
+          iceServersRef.current = { iceServers: data.iceServers };
+          turnFetchedRef.current = true;
+          console.log('[LiveVideo] TURN credentials loaded, servers:', data.iceServers.length);
+        }
+      } else {
+        console.warn('[LiveVideo] TURN endpoint returned', res.status, '- falling back to STUN only');
+      }
+    } catch (err) {
+      console.warn('[LiveVideo] Failed to fetch TURN credentials, using STUN fallback:', err);
+    }
+  };
+
   // Initialize local video stream only when needed (privacy)
   const initLocalStream = async () => {
     if (localStreamRef.current) return; // Already initialized
@@ -346,7 +366,7 @@ export default function LiveVideo() {
   }, [isConnected]);
 
   const createPeerConnection = async (partnerIdParam: string, isOfferer: boolean) => {
-    const pc = new RTCPeerConnection(iceServers);
+    const pc = new RTCPeerConnection(iceServersRef.current);
     peerConnectionRef.current = pc;
 
     // Add local stream to peer connection
@@ -431,6 +451,8 @@ export default function LiveVideo() {
       });
       return;
     }
+
+    await fetchTurnCredentials();
 
     console.log('[LiveVideo] Emitting liveMatch:join event');
     setIsMatching(true);

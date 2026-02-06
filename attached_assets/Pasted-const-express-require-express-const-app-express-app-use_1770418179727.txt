@@ -1,0 +1,158 @@
+const express = require("express");
+
+const app = express();
+app.use(express.json());
+
+/**
+ * Secure TURN credentials endpoint.
+ * Keeps your Metered API key off the frontend.
+ */
+app.get("/api/turn", async (req, res) => {
+  try {
+    const appName = process.env.METERED_APP_NAME;
+    const apiKey = process.env.METERED_API_KEY;
+
+    if (!appName || !apiKey) {
+      return res.status(500).json({
+        error:
+          "Missing secrets. Add METERED_APP_NAME and METERED_API_KEY in Replit Tools → Secrets."
+      });
+    }
+
+    const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
+    const r = await fetch(url);
+
+    if (!r.ok) {
+      const text = await r.text();
+      return res.status(500).json({
+        error: "Metered request failed",
+        status: r.status,
+        body: text
+      });
+    }
+
+    const data = await r.json();
+    const iceServers = data.iceServers ?? data; // Metered may return {iceServers:[...]} or just [...]
+
+    return res.json({ iceServers });
+  } catch (err) {
+    return res.status(500).json({ error: "Server error", details: String(err) });
+  }
+});
+
+/**
+ * Home page: quick test + minimal WebRTC TURN fallback demo.
+ * This is NOT a full video chat app — it proves your TURN config is wired correctly.
+ */
+app.get("/", (req, res) => {
+  res.type("html").send(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>TURN Check (Metered)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 16px; }
+    button { padding: 10px 14px; font-size: 16px; }
+    pre { background: #f6f6f6; padding: 12px; overflow: auto; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    video { width: 320px; max-width: 100%; background: #000; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Metered TURN wiring test</h2>
+  <p>This page fetches <code>/api/turn</code> and builds a WebRTC peer connection using TURN as fallback (cheap).</p>
+
+  <div class="row">
+    <button id="btnFetch">1) Fetch TURN creds</button>
+    <button id="btnCam">2) Start camera</button>
+    <button id="btnPC">3) Create PeerConnection</button>
+  </div>
+
+  <h3>Output</h3>
+  <pre id="out">Click "Fetch TURN creds"</pre>
+
+  <h3>Local preview</h3>
+  <video id="v" autoplay playsinline muted></video>
+
+<script>
+  const out = document.getElementById("out");
+  const v = document.getElementById("v");
+  let iceServers = null;
+  let localStream = null;
+  let pc = null;
+
+  function log(...args) {
+    out.textContent += "\\n" + args.map(a => (typeof a === "string" ? a : JSON.stringify(a, null, 2))).join(" ");
+  }
+
+  async function fetchTurn() {
+    out.textContent = "";
+    const r = await fetch("/api/turn");
+    const data = await r.json();
+    if (!r.ok) {
+      out.textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+    iceServers = data.iceServers;
+    out.textContent = "✅ Got iceServers from backend. Count: " + (iceServers?.length || 0) + "\\n";
+    out.textContent += JSON.stringify(iceServers, null, 2);
+  }
+
+  async function startCam() {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      v.srcObject = localStream;
+      log("✅ Camera started");
+    } catch (e) {
+      log("❌ Camera error:", String(e));
+    }
+  }
+
+  // Cap video bitrate to reduce TURN cost if relay is used
+  async function capVideoBitrate(sender, kbps = 300) {
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings) params.encodings = [{}];
+      params.encodings[0].maxBitrate = kbps * 1000;
+      await sender.setParameters(params);
+      log("✅ Video bitrate capped to", kbps, "kbps");
+    } catch (e) {
+      log("⚠️ Could not cap bitrate:", String(e));
+    }
+  }
+
+  async function createPC() {
+    if (!iceServers) return log("❌ Fetch TURN creds first.");
+    pc = new RTCPeerConnection({
+      iceServers
+      // IMPORTANT for cost: do NOT set iceTransportPolicy:'relay'
+      // Leaving default means TURN is ONLY used if direct/STUN fails.
+    });
+
+    pc.oniceconnectionstatechange = () => log("ICE state:", pc.iceConnectionState);
+    pc.onconnectionstatechange = () => log("PC state:", pc.connectionState);
+
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        const sender = pc.addTrack(track, localStream);
+        if (track.kind === "video") capVideoBitrate(sender, 300);
+      });
+    }
+
+    log("✅ PeerConnection created with Metered iceServers.");
+    log("Tip: For a full call, your app still needs signaling + offer/answer exchange.");
+  }
+
+  document.getElementById("btnFetch").onclick = fetchTurn;
+  document.getElementById("btnCam").onclick = startCam;
+  document.getElementById("btnPC").onclick = createPC;
+</script>
+</body>
+</html>
+  `);
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("✅ Server running on port", PORT));
