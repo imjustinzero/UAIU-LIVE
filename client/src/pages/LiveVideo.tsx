@@ -42,7 +42,9 @@ export default function LiveVideo() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const partnerIdRef = useRef<string | null>(null); // Ref for current partnerId (avoids stale closure)
+  const partnerIdRef = useRef<string | null>(null);
+  const pendingOfferRef = useRef<{ offer: RTCSessionDescriptionInit; from: string } | null>(null);
+  const isReadyForOfferRef = useRef(false);
   
   const { toast } = useToast();
 
@@ -154,16 +156,20 @@ export default function LiveVideo() {
       });
 
       // WebRTC signaling events
-      newSocket.on('liveMatch:found', async (data: { partnerId: string; sessionId: string }) => {
+      newSocket.on('liveMatch:found', async (data: { partnerId: string; sessionId: string; isOfferer: boolean }) => {
         console.log('🎉 [LiveVideo] MATCH FOUND!');
         console.log('[LiveVideo] Partner ID:', data.partnerId);
         console.log('[LiveVideo] Session ID:', data.sessionId);
+        console.log('[LiveVideo] Is Offerer:', data.isOfferer);
         
         setIsMatching(false);
         setPartnerId(data.partnerId);
-        partnerIdRef.current = data.partnerId; // Update ref immediately
+        partnerIdRef.current = data.partnerId;
+        // Save any buffered offer before clearing
+        const earlyOffer = pendingOfferRef.current;
+        pendingOfferRef.current = null;
+        isReadyForOfferRef.current = false;
         
-        // Request camera/mic access now that match is found
         try {
           console.log('[LiveVideo] Requesting camera/mic access...');
           await initLocalStream();
@@ -172,34 +178,43 @@ export default function LiveVideo() {
           console.error('[LiveVideo] Failed to get media access:', err);
         }
         
-        console.log('[LiveVideo] Creating peer connection as offerer...');
-        await createPeerConnection(data.partnerId, true);
-        console.log('[LiveVideo] Peer connection created');
+        if (data.isOfferer) {
+          // Small delay to let the answerer set up their state
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('[LiveVideo] Creating peer connection as OFFERER...');
+          await createPeerConnection(data.partnerId, true);
+          console.log('[LiveVideo] Offer sent');
+        } else {
+          console.log('[LiveVideo] Ready to receive offer from partner...');
+          isReadyForOfferRef.current = true;
+          // Check if an offer arrived early (before we were ready)
+          if (earlyOffer && earlyOffer.from === data.partnerId) {
+            console.log('[LiveVideo] Processing buffered offer');
+            await handleIncomingOffer(earlyOffer.offer, earlyOffer.from, newSocket);
+          }
+        }
       });
 
       newSocket.on('liveMatch:offer', async (data: { offer: RTCSessionDescriptionInit; from: string }) => {
         console.log('[LiveVideo] Received offer from:', data.from);
         console.log('[LiveVideo] Current partnerIdRef:', partnerIdRef.current);
+        console.log('[LiveVideo] isReadyForOffer:', isReadyForOfferRef.current);
         
-        // Use ref to get current partnerId value (avoids stale closure)
         const currentPartnerId = partnerIdRef.current;
-        if (!currentPartnerId || currentPartnerId !== data.from) {
+        
+        // If not ready yet, buffer the offer for later processing
+        if (!currentPartnerId || !isReadyForOfferRef.current) {
+          console.log('[LiveVideo] Buffering offer - not ready yet');
+          pendingOfferRef.current = { offer: data.offer, from: data.from };
+          return;
+        }
+        
+        if (currentPartnerId !== data.from) {
           console.log('[LiveVideo] Ignoring offer - not from matched partner');
           return;
         }
         
-        try {
-          await createPeerConnection(data.from, false);
-          await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.offer));
-          const answer = await peerConnectionRef.current?.createAnswer();
-          if (answer) {
-            await peerConnectionRef.current?.setLocalDescription(answer);
-            newSocket.emit('liveMatch:answer', { answer, to: data.from });
-            console.log('[LiveVideo] Sent answer to:', data.from);
-          }
-        } catch (err) {
-          console.error('[LiveVideo] Error handling offer:', err);
-        }
+        await handleIncomingOffer(data.offer, data.from, newSocket);
       });
 
       newSocket.on('liveMatch:answer', async (data: { answer: RTCSessionDescriptionInit; from?: string }) => {
@@ -282,6 +297,27 @@ export default function LiveVideo() {
       }
     };
   }, [socket, isMatching, partnerId]);
+
+  const handleIncomingOffer = async (offer: RTCSessionDescriptionInit, from: string, sock: Socket) => {
+    try {
+      try {
+        await initLocalStream();
+      } catch (e) {
+        console.error('[LiveVideo] Could not get media for answering:', e);
+      }
+      
+      await createPeerConnection(from, false);
+      await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peerConnectionRef.current?.createAnswer();
+      if (answer) {
+        await peerConnectionRef.current?.setLocalDescription(answer);
+        sock.emit('liveMatch:answer', { answer, to: from });
+        console.log('[LiveVideo] Sent answer to:', from);
+      }
+    } catch (err) {
+      console.error('[LiveVideo] Error handling offer:', err);
+    }
+  };
 
   const fetchTurnCredentials = async () => {
     if (turnFetchedRef.current) return;
@@ -479,7 +515,9 @@ export default function LiveVideo() {
     }
     setIsConnected(false);
     setPartnerId(null);
-    partnerIdRef.current = null; // Clear ref too
+    partnerIdRef.current = null;
+    pendingOfferRef.current = null;
+    isReadyForOfferRef.current = false;
     setIsMatching(false);
   };
 

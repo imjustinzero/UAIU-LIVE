@@ -1390,13 +1390,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             timer,
           });
 
-          // Notify both clients using current socket IDs from mapping
-          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${currentSocketId} (user ${userId}) with partnerId ${partner.userId}`);
+          // Notify both clients - designate user1 (partner/waiter) as offerer to prevent race condition
+          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${currentSocketId} (user ${userId}) - answerer`);
           const currentSocket = io.sockets.sockets.get(currentSocketId);
-          currentSocket?.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id });
+          currentSocket?.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id, isOfferer: false });
           
-          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${partnerSocketId} (user ${partner.userId}) with partnerId ${userId}`);
-          partnerSocket.emit('liveMatch:found', { partnerId: userId, sessionId: dbSession.id });
+          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${partnerSocketId} (user ${partner.userId}) - offerer`);
+          partnerSocket.emit('liveMatch:found', { partnerId: userId, sessionId: dbSession.id, isOfferer: true });
           
           console.log('[LiveVideo] Both liveMatch:found events emitted successfully');
           matchFound = true;
