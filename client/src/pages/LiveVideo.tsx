@@ -43,6 +43,7 @@ export default function LiveVideo() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const partnerIdRef = useRef<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const pendingOfferRef = useRef<{ offer: RTCSessionDescriptionInit; from: string } | null>(null);
   const isReadyForOfferRef = useRef(false);
   
@@ -125,6 +126,7 @@ export default function LiveVideo() {
         timeout: 20000,
       });
       
+      socketRef.current = newSocket;
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
@@ -190,7 +192,7 @@ export default function LiveVideo() {
           // Check if an offer arrived early (before we were ready)
           if (earlyOffer && earlyOffer.from === data.partnerId) {
             console.log('[LiveVideo] Processing buffered offer');
-            await handleIncomingOffer(earlyOffer.offer, earlyOffer.from, newSocket);
+            await handleIncomingOffer(earlyOffer.offer, earlyOffer.from);
           }
         }
       });
@@ -214,7 +216,7 @@ export default function LiveVideo() {
           return;
         }
         
-        await handleIncomingOffer(data.offer, data.from, newSocket);
+        await handleIncomingOffer(data.offer, data.from);
       });
 
       newSocket.on('liveMatch:answer', async (data: { answer: RTCSessionDescriptionInit; from?: string }) => {
@@ -281,6 +283,7 @@ export default function LiveVideo() {
 
       return () => {
         console.log('[LiveVideo] Cleaning up socket connection');
+        socketRef.current = null;
         newSocket.disconnect();
       };
     }
@@ -291,14 +294,15 @@ export default function LiveVideo() {
     return () => {
       // Send leave event when component unmounts (user navigates away)
       // liveMatch:leave handles both queue and session cleanup
-      if (socket && (isMatching || partnerId)) {
+      const sock = socketRef.current;
+      if (sock && (isMatching || partnerId)) {
         console.log('[LiveVideo Client] Component unmounting - sending leave event');
-        socket.emit('liveMatch:leave');
+        sock.emit('liveMatch:leave');
       }
     };
-  }, [socket, isMatching, partnerId]);
+  }, [isMatching, partnerId]);
 
-  const handleIncomingOffer = async (offer: RTCSessionDescriptionInit, from: string, sock: Socket) => {
+  const handleIncomingOffer = async (offer: RTCSessionDescriptionInit, from: string) => {
     try {
       try {
         await initLocalStream();
@@ -311,8 +315,13 @@ export default function LiveVideo() {
       const answer = await peerConnectionRef.current?.createAnswer();
       if (answer) {
         await peerConnectionRef.current?.setLocalDescription(answer);
-        sock.emit('liveMatch:answer', { answer, to: from });
-        console.log('[LiveVideo] Sent answer to:', from);
+        const sock = socketRef.current;
+        if (sock) {
+          sock.emit('liveMatch:answer', { answer, to: from });
+          console.log('[LiveVideo] Sent answer to:', from);
+        } else {
+          console.error('[LiveVideo] No socket available to send answer!');
+        }
       }
     } catch (err) {
       console.error('[LiveVideo] Error handling offer:', err);
@@ -414,43 +423,56 @@ export default function LiveVideo() {
 
     // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log('Received remote track');
+      console.log('[LiveVideo] Received remote track');
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = event.streams[0];
       }
       setIsConnected(true);
     };
 
-    // Handle ICE candidates
+    // Handle ICE candidates - use socketRef to avoid stale closure
     pc.onicecandidate = (event) => {
-      if (event.candidate && socket) {
-        socket.emit('liveMatch:iceCandidate', {
+      const sock = socketRef.current;
+      if (event.candidate && sock) {
+        console.log('[LiveVideo] Sending ICE candidate to:', partnerIdParam);
+        sock.emit('liveMatch:iceCandidate', {
           candidate: event.candidate,
           to: partnerIdParam
         });
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log('[LiveVideo] ICE connection state:', pc.iceConnectionState);
+    };
+
     pc.onconnectionstatechange = () => {
-      console.log('Connection state:', pc.connectionState);
+      console.log('[LiveVideo] Connection state:', pc.connectionState);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         handleDisconnect();
       }
     };
 
-    // Create and send offer if initiator
+    // Create and send offer if initiator - use socketRef
     if (isOfferer) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket?.emit('liveMatch:offer', { offer, to: partnerIdParam });
+      const sock = socketRef.current;
+      if (sock) {
+        sock.emit('liveMatch:offer', { offer, to: partnerIdParam });
+        console.log('[LiveVideo] Offer sent via socketRef to:', partnerIdParam);
+      } else {
+        console.error('[LiveVideo] No socket available to send offer!');
+      }
     }
   };
 
   const handleFindMatch = async () => {
+    const sock = socketRef.current;
     console.log('[LiveVideo] handleFindMatch called');
     console.log('[LiveVideo] User:', user?.id);
-    console.log('[LiveVideo] Socket exists:', !!socket);
-    console.log('[LiveVideo] Socket connected:', socket?.connected);
+    console.log('[LiveVideo] Socket exists:', !!sock);
+    console.log('[LiveVideo] Socket connected:', sock?.connected);
     
     if (!user) {
       console.log('[LiveVideo] No user - showing auth modal');
@@ -458,7 +480,7 @@ export default function LiveVideo() {
       return;
     }
 
-    if (!socket) {
+    if (!sock) {
       console.error('[LiveVideo] Socket not initialized');
       toast({
         title: "Connection Error",
@@ -468,9 +490,9 @@ export default function LiveVideo() {
       return;
     }
 
-    if (!socket.connected) {
+    if (!sock.connected) {
       console.error('[LiveVideo] Socket not connected, attempting reconnect...');
-      socket.connect();
+      sock.connect();
       toast({
         title: "Reconnecting",
         description: "Attempting to reconnect to server...",
@@ -492,13 +514,14 @@ export default function LiveVideo() {
 
     console.log('[LiveVideo] Emitting liveMatch:join event');
     setIsMatching(true);
-    socket.emit('liveMatch:join');
+    sock.emit('liveMatch:join');
     console.log('[LiveVideo] Event emitted successfully');
   };
 
   const handleNext = () => {
-    if (socket && partnerId) {
-      socket.emit('liveMatch:next');
+    const sock = socketRef.current;
+    if (sock && partnerId) {
+      sock.emit('liveMatch:next');
     }
     handleDisconnect();
     handleFindMatch();
@@ -522,8 +545,9 @@ export default function LiveVideo() {
   };
 
   const handleLeaveSession = () => {
-    if (socket && isConnected) {
-      socket.emit('liveMatch:leave');
+    const sock = socketRef.current;
+    if (sock && isConnected) {
+      sock.emit('liveMatch:leave');
     }
     handleDisconnect();
   };
@@ -552,7 +576,7 @@ export default function LiveVideo() {
     localStorage.removeItem('pong-user');
     localStorage.removeItem('pong-session');
     setUser(null);
-    socket?.disconnect();
+    socketRef.current?.disconnect();
     navigate('/');
   };
 
