@@ -259,29 +259,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.get('/api/turn', async (req, res) => {
+  app.get('/api/turn', async (_req, res) => {
     try {
+      // Try Metered API first if configured
       let appName = process.env.METERED_APP_NAME;
       const apiKey = process.env.METERED_API_KEY;
 
-      if (!appName || !apiKey) {
-        return res.status(500).json({ error: 'TURN server not configured' });
+      if (appName && apiKey) {
+        appName = appName.replace(/\.metered\.live$/i, '');
+        try {
+          const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
+          const r = await fetch(url);
+          if (r.ok) {
+            const data = await r.json();
+            const iceServers = data.iceServers ?? data;
+            if (iceServers && iceServers.length > 0) {
+              return res.json({ iceServers });
+            }
+          }
+        } catch (e) {
+          console.warn('Metered API failed, using fallback TURN servers');
+        }
       }
 
-      // Handle both "uaiulive" and "uaiulive.metered.live" formats
-      appName = appName.replace(/\.metered\.live$/i, '');
-
-      const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
-      const r = await fetch(url);
-
-      if (!r.ok) {
-        const text = await r.text();
-        console.error('Metered TURN request failed:', r.status, text);
-        return res.status(500).json({ error: 'Failed to fetch TURN credentials' });
-      }
-
-      const data = await r.json();
-      const iceServers = data.iceServers ?? data;
+      // Fallback: free public STUN + Metered free TURN servers
+      const iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        {
+          urls: 'turn:global.relay.metered.ca:80',
+          username: 'e8dd65b92f8d2e2e00364186',
+          credential: 'rBNYMsL3bfXlEf3m',
+        },
+        {
+          urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+          username: 'e8dd65b92f8d2e2e00364186',
+          credential: 'rBNYMsL3bfXlEf3m',
+        },
+        {
+          urls: 'turn:global.relay.metered.ca:443',
+          username: 'e8dd65b92f8d2e2e00364186',
+          credential: 'rBNYMsL3bfXlEf3m',
+        },
+        {
+          urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+          username: 'e8dd65b92f8d2e2e00364186',
+          credential: 'rBNYMsL3bfXlEf3m',
+        },
+      ];
       return res.json({ iceServers });
     } catch (err) {
       console.error('TURN credentials error:', err);
