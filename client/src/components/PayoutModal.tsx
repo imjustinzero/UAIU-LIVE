@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getSessionId } from "@/lib/sessionHelper";
 
 interface PayoutModalProps {
   open: boolean;
@@ -37,7 +38,7 @@ export function PayoutModal({ open, onClose, credits, userId, onPayoutSuccess }:
 
     setIsLoading(true);
     try {
-      const sessionId = localStorage.getItem('pong-session');
+      const sessionId = getSessionId();
       const response = await fetch('/api/payout/request', {
         method: 'POST',
         headers: {

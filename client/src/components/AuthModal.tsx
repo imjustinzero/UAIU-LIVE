@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { setSessionId } from "@/lib/sessionHelper";
 import type { User } from "@shared/schema";
 
 interface AuthModalProps {
@@ -41,7 +42,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       const user = await response.json();
       
       if (user.sessionId) {
-        localStorage.setItem('pong-session', user.sessionId);
+        setSessionId(user.sessionId);
       }
       
       toast({
@@ -83,7 +84,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       const user = await response.json();
       
       if (user.sessionId) {
-        localStorage.setItem('pong-session', user.sessionId);
+        setSessionId(user.sessionId);
       }
       
       toast({

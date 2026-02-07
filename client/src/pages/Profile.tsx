@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { setUserData } from "@/lib/sessionHelper";
 import { 
   User as UserIcon, 
   Mail, 
@@ -138,7 +139,7 @@ export default function Profile() {
       apiRequest('PATCH', '/api/profile/update', data),
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(['/api/auth/me'], updatedUser);
-      localStorage.setItem('pong-user', JSON.stringify(updatedUser));
+      setUserData(JSON.stringify(updatedUser));
       setEditing(false);
       toast({
         title: "Success",

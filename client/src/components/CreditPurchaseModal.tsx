@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Gem, Loader2, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getSessionId } from "@/lib/sessionHelper";
 
 interface CreditPackage {
   productId: string;
@@ -35,7 +36,7 @@ export function CreditPurchaseModal({ open, onClose }: CreditPurchaseModalProps)
   const fetchPackages = async () => {
     setLoading(true);
     try {
-      const sessionId = localStorage.getItem('pong-session');
+      const sessionId = getSessionId();
       if (!sessionId) {
         toast({
           title: "Authentication Required",
@@ -83,7 +84,7 @@ export function CreditPurchaseModal({ open, onClose }: CreditPurchaseModalProps)
   const handlePurchase = async (priceId: string) => {
     setPurchasing(priceId);
     try {
-      const sessionId = localStorage.getItem('pong-session');
+      const sessionId = getSessionId();
       if (!sessionId) {
         toast({
           title: "Authentication Required",

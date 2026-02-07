@@ -6,6 +6,7 @@ UAIU is an online multiplayer gaming platform (/) featuring a pay-to-play model,
 Players can purchase credits via Stripe, compete in server-authoritative matches across multiple games, and request payouts. The platform includes a referral system, social feed, and an instant onboarding process with a free credit upon signup. Games run until natural completion, with AI bot fallback after 10 seconds if no opponent is found. Bots appear as real players and win ~96% of matches, ensuring platform credit economy balance.
 
 ## Recent Changes (February 2026)
+- **Session Storage Fix (iOS iCloud)**: Switched from localStorage to sessionStorage for session tokens (pong-session, pong-user) to prevent iCloud Safari sync between iOS devices sharing the same Apple ID. Session helper utility at `client/src/lib/sessionHelper.ts` centralizes all session read/write operations. Users log in per browser tab/session (more secure for credit-based platform).
 - **Home Page Updated**: UAIU Live Games is now the home page (/)
 - **Contact Button**: Added to header, links to JustinZaragoza.com
 - **Business Landing Page Removed**: Previous acquisition landing page has been removed

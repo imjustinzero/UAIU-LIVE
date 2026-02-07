@@ -14,6 +14,7 @@ import { ActionLog } from "@/components/ActionLog";
 import { PayoutModal } from "@/components/PayoutModal";
 import { ShareButton } from "@/components/ShareButton";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
+import { getSessionId, getUserData, setUserData, clearAllSession } from "@/lib/sessionHelper";
 import logoImg from "@assets/IMG_2786_1763969320612.jpeg";
 
 interface User {
@@ -52,8 +53,8 @@ export default function Play() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('pong-user');
-    const sessionId = localStorage.getItem('pong-session');
+    const savedUser = getUserData();
+    const sessionId = getSessionId();
     
     if (savedUser && sessionId) {
       const parsedUser = JSON.parse(savedUser);
@@ -66,8 +67,7 @@ export default function Play() {
       })
         .then(res => {
           if (!res.ok) {
-            localStorage.removeItem('pong-user');
-            localStorage.removeItem('pong-session');
+            clearAllSession();
             setUser(null);
             return null;
           }
@@ -76,7 +76,7 @@ export default function Play() {
         .then(freshUser => {
           if (freshUser) {
             setUser(freshUser);
-            localStorage.setItem('pong-user', JSON.stringify(freshUser));
+            setUserData(JSON.stringify(freshUser));
           }
         })
         .catch(err => {
@@ -93,7 +93,7 @@ export default function Play() {
 
   useEffect(() => {
     if (user) {
-      const sessionId = localStorage.getItem('pong-session');
+      const sessionId = getSessionId();
       if (!sessionId) {
         console.error('No session ID found, cannot connect to socket');
         return;
@@ -180,13 +180,12 @@ export default function Play() {
 
   const handleAuthSuccess = (newUser: User) => {
     setUser(newUser);
-    localStorage.setItem('pong-user', JSON.stringify(newUser));
+    setUserData(JSON.stringify(newUser));
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('pong-user');
-    localStorage.removeItem('pong-session');
+    clearAllSession();
     if (socket) {
       socket.close();
     }

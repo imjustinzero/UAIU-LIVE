@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getSessionId } from "./sessionHelper";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,7 +13,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const sessionId = localStorage.getItem('pong-session');
+  const sessionId = getSessionId();
   const headers: Record<string, string> = {};
   
   if (sessionId) {
@@ -40,7 +41,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const sessionId = localStorage.getItem('pong-session');
+    const sessionId = getSessionId();
     const headers: Record<string, string> = {};
     
     if (sessionId) {

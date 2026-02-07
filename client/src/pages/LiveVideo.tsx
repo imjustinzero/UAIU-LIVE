@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Video, VideoOff, Mic, MicOff, Users, Clock, Gem, LogOut, Home, Loader2, SkipForward, PhoneOff, Send, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
+import { getSessionId, getUserData, setUserData, clearAllSession } from "@/lib/sessionHelper";
 
 interface User {
   id: string;
@@ -89,8 +90,8 @@ export default function LiveVideo() {
   }, []);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('pong-user');
-    const sessionId = localStorage.getItem('pong-session');
+    const savedUser = getUserData();
+    const sessionId = getSessionId();
     
     if (savedUser && sessionId) {
       const parsedUser = JSON.parse(savedUser);
@@ -101,8 +102,7 @@ export default function LiveVideo() {
       })
         .then(res => {
           if (!res.ok) {
-            localStorage.removeItem('pong-user');
-            localStorage.removeItem('pong-session');
+            clearAllSession();
             setUser(null);
             return null;
           }
@@ -111,7 +111,7 @@ export default function LiveVideo() {
         .then(freshUser => {
           if (freshUser) {
             setUser(freshUser);
-            localStorage.setItem('pong-user', JSON.stringify(freshUser));
+            setUserData(JSON.stringify(freshUser));
           }
         })
         .catch(() => {});
@@ -120,7 +120,7 @@ export default function LiveVideo() {
 
   useEffect(() => {
     if (user) {
-      const sessionId = localStorage.getItem('pong-session');
+      const sessionId = getSessionId();
       if (!sessionId) return;
 
       const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
@@ -478,8 +478,7 @@ export default function LiveVideo() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('pong-user');
-    localStorage.removeItem('pong-session');
+    clearAllSession();
     setUser(null);
     cleanupMeeting();
     socketRef.current?.disconnect();
