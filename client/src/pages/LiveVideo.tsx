@@ -250,15 +250,19 @@ export default function LiveVideo() {
         console.log('[LiveVideo] Online participants:', participants.length);
       });
 
+      meeting.on('error', (error: any) => {
+        console.error('[LiveVideo] Metered SDK error:', error);
+      });
+
       const roomUrl = `${data.meteredDomain}/${data.roomName}`;
       console.log('[LiveVideo] Joining Metered room:', roomUrl);
 
-      await meeting.join({
+      const meetingInfo = await meeting.join({
         roomURL: roomUrl,
         name: user?.name || 'User',
       });
 
-      console.log('[LiveVideo] Joined Metered room successfully');
+      console.log('[LiveVideo] Joined Metered room successfully, info:', JSON.stringify(meetingInfo));
 
       try {
         await meeting.startVideo();
