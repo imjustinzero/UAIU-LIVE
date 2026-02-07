@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Video, VideoOff, Mic, MicOff, Users, Clock, Gem, LogOut, Home, Loader2, SkipForward, PhoneOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Video, VideoOff, Mic, MicOff, Users, Clock, Gem, LogOut, Home, Loader2, SkipForward, PhoneOff, Send, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 
@@ -22,6 +24,13 @@ interface MatchData {
   meteredDomain: string;
 }
 
+interface ChatMessage {
+  id: string;
+  from: 'me' | 'partner';
+  message: string;
+  timestamp: number;
+}
+
 export default function LiveVideo() {
   const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
@@ -34,9 +43,12 @@ export default function LiveVideo() {
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [currentRoom, setCurrentRoom] = useState<MatchData | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
 
   const socketRef = useRef<Socket | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const meetingRef = useRef<any>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -163,6 +175,15 @@ export default function LiveVideo() {
 
       newSocket.on('liveMatch:ended', () => {
         cleanupMeeting();
+      });
+
+      newSocket.on('liveMatch:chat', (data: { from: string; message: string }) => {
+        setChatMessages(prev => [...prev, {
+          id: `${Date.now()}-${Math.random()}`,
+          from: 'partner',
+          message: data.message,
+          timestamp: Date.now(),
+        }]);
       });
 
       newSocket.on('error', (data: { message: string }) => {
@@ -322,14 +343,10 @@ export default function LiveVideo() {
   useEffect(() => {
     if (isConnected) {
       setSessionTime(0);
+      setChatMessages([]);
+      setChatInput('');
       sessionTimerRef.current = setInterval(() => {
-        setSessionTime(prev => {
-          const newTime = prev + 1;
-          if (newTime >= 60) {
-            handleNext();
-          }
-          return newTime;
-        });
+        setSessionTime(prev => prev + 1);
       }, 1000);
     } else {
       if (sessionTimerRef.current) {
@@ -382,8 +399,7 @@ export default function LiveVideo() {
       console.log('[LiveVideo] Camera/mic permission granted');
     } catch (err: any) {
       console.error('[LiveVideo] getUserMedia error:', err);
-      toast({ title: "Camera Access Required", description: "Please allow camera and microphone access to use video chat.", variant: "destructive" });
-      return;
+      toast({ title: "Camera Not Available", description: "Video/audio unavailable. You can still use text chat.", variant: "default" });
     }
 
     setIsMatching(true);
@@ -409,6 +425,27 @@ export default function LiveVideo() {
     }
     cleanupMeeting();
   };
+
+  const sendChatMessage = () => {
+    const sock = socketRef.current;
+    if (!sock || !isConnected || !chatInput.trim()) return;
+
+    const message = chatInput.trim().substring(0, 500);
+    sock.emit('liveMatch:chat', { message });
+    setChatMessages(prev => [...prev, {
+      id: `${Date.now()}-${Math.random()}`,
+      from: 'me',
+      message,
+      timestamp: Date.now(),
+    }]);
+    setChatInput('');
+  };
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   const toggleVideo = async () => {
     if (!meetingRef.current) return;
@@ -509,7 +546,7 @@ export default function LiveVideo() {
                 <Users className="h-16 w-16 mx-auto mb-4 text-emerald-400" />
                 <h2 className="text-2xl font-bold mb-4">Welcome to Live Video Chat</h2>
                 <p className="text-muted-foreground mb-6">
-                  Connect with random people in 1-minute video sessions. 1 credit per session.
+                  Connect with random people via video, audio, and text chat. 1 credit per session.
                 </p>
                 <Button
                   size="lg"
@@ -534,7 +571,7 @@ export default function LiveVideo() {
                           </Badge>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-session-time">
                             <Clock className="h-4 w-4" />
-                            {formatTime(sessionTime)} / 1:00
+                            {formatTime(sessionTime)}
                           </div>
                         </>
                       ) : isMatching ? (
@@ -613,6 +650,68 @@ export default function LiveVideo() {
                   </CardContent>
                 </Card>
               </div>
+
+              {isConnected && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Text Chat
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <div
+                      ref={chatScrollRef}
+                      className="h-48 overflow-y-auto mb-3 space-y-2 p-3 rounded-md bg-slate-950/50 border border-border"
+                      data-testid="chat-messages"
+                    >
+                      {chatMessages.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Send a message to start chatting
+                        </p>
+                      )}
+                      {chatMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}
+                          data-testid={`chat-message-${msg.from}`}
+                        >
+                          <div
+                            className={`max-w-[75%] px-3 py-1.5 rounded-md text-sm ${
+                              msg.from === 'me'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-muted text-foreground'
+                            }`}
+                          >
+                            {msg.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); sendChatMessage(); }}
+                      className="flex gap-2"
+                    >
+                      <Input
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="Type a message..."
+                        maxLength={500}
+                        data-testid="input-chat-message"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        disabled={!chatInput.trim()}
+                        data-testid="button-send-chat"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardContent className="p-6">
@@ -702,9 +801,9 @@ export default function LiveVideo() {
 
               <Alert>
                 <AlertDescription>
-                  <strong>How it works:</strong> Each session costs 1 credit and lasts up to 1 minute. 
-                  Click "Find Match" to connect with a random person. Use "Next" to skip to another match, 
-                  or "Disconnect" to end your session.
+                  <strong>How it works:</strong> Each session costs 1 credit. 
+                  Click "Find Match" to connect with a random person. Chat via video, audio, or text for as long as you like. 
+                  Use "Next" to skip to another match, or "Disconnect" to end your session.
                 </AlertDescription>
               </Alert>
             </div>

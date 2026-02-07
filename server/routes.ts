@@ -1096,7 +1096,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       return null;
     }
     try {
-      const expireTime = Math.floor(Date.now() / 1000) + 120;
       const res = await fetch(`https://${METERED_DOMAIN}/api/v1/room?secretKey=${METERED_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1104,10 +1103,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           privacy: 'public',
           maxParticipants: 2,
           autoJoin: true,
-          ejectAtRoomExp: true,
-          deleteOnExp: true,
-          expireUnixSec: expireTime,
-          ejectAfterElapsedTimeInSec: 70,
         }),
       });
       if (!res.ok) {
@@ -1145,7 +1140,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     user1SocketId: string;
     user2SocketId: string;
     startedAt: number;
-    timer: NodeJS.Timeout;
     roomName: string;
   }>();
 
@@ -1311,8 +1305,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       console.log(`[LiveVideo] Ending session ${sessionId} (${reason})`);
 
-      clearTimeout(session.timer);
-
       const user1Socket = io.sockets.sockets.get(session.user1SocketId);
       const user2Socket = io.sockets.sockets.get(session.user2SocketId);
       
@@ -1327,10 +1319,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         deleteMeteredRoom(session.roomName).catch(() => {});
       }
 
+      const durationSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
       await db.update(liveMatchSessions)
         .set({ 
           status: 'completed',
-          endedAt: new Date()
+          endedAt: new Date(),
+          durationSeconds,
         })
         .where(eq(liveMatchSessions.id, sessionId));
 
@@ -1429,13 +1423,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
               user1Name: partnerUser.name,
               user2Id: userId,
               user2Name: user.name,
-              durationSeconds: 60,
+              durationSeconds: 0,
             })
             .returning();
-
-          const timer = setTimeout(async () => {
-            await endLiveVideoSession(dbSession.id, 'timeout');
-          }, 65000);
 
           liveVideoSessions.set(dbSession.id, {
             sessionId: dbSession.id,
@@ -1444,7 +1434,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             user1SocketId: partnerSocketId!,
             user2SocketId: currentSocketId!,
             startedAt: Date.now(),
-            timer,
             roomName,
           });
 
@@ -1490,6 +1479,26 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const sessionData = findUserSession(userId);
       if (sessionData) {
         await endLiveVideoSession(sessionData.sessionId, 'user_left');
+      }
+    });
+
+    socket.on('liveMatch:chat', (data: { message: string }) => {
+      const userId = (socket as any).userId;
+      if (!userId || !data.message || data.message.trim().length === 0) return;
+
+      const sessionData = findUserSession(userId);
+      if (!sessionData) return;
+
+      const { session } = sessionData;
+      const partnerId = session.user1Id === userId ? session.user2Id : session.user1Id;
+      const partnerSocketId = session.user1Id === userId ? session.user2SocketId : session.user1SocketId;
+      const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+
+      if (partnerSocket) {
+        partnerSocket.emit('liveMatch:chat', {
+          from: userId,
+          message: data.message.trim().substring(0, 500),
+        });
       }
     });
 
