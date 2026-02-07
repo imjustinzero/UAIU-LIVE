@@ -1,0 +1,29 @@
+We need to finalize the random chat feature on uaiu.live. When two users are matched they must be able to communicate via video, audio, and text, and the session should last as long as they want (no 1‑minute limit). Please implement this with minimal time and credit usage.
+
+1. **Cost‑efficient planning**  
+   - Start in **Plan Mode** and list only the necessary tasks. Use **Low or Medium autonomy** so I can approve each step.  
+   - Limit your work to the relevant files (video chat page, matching service, WebSocket handlers) and reuse existing components to save time and credits.
+
+2. **Remove the 1‑minute limit**  
+   - The current implementation ends sessions after one minute. Eliminate this timer so sessions run indefinitely until a user clicks an “End Call” button.  
+   - Adjust any backend logic that deducts credits on a per‑minute basis so that only one credit is deducted when the match is established. Make sure the credit deduction still happens once at the start of the session.
+
+3. **Camera/mic permission & connection**  
+   - Ensure `navigator.mediaDevices.getUserMedia({ video: true, audio: true })` is called when users join a match, triggering the permission dialog [oai_citation:0‡developer.mozilla.org](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia#:~:text=Secure%20context%3A%20This%20feature%20is,some%20or%20all%20supporting%20browsers).  
+   - Confirm the site and any Metered.ca embeds are served over HTTPS and that iframes have `allow="camera; microphone; autoplay; fullscreen"` attributes.
+
+4. **Matching & session handling**  
+   - Verify the server correctly pairs users, creates one Metered room, and sends the same room info to both clients. Ensure both clients join this room after they have their local media stream.
+
+5. **Add a text chat fallback**  
+   - Add a chat panel with a scrollable message area and input field on the video chat page.  
+   - Implement a WebSocket channel for text messages that activates immediately after matching. If media permissions are denied or no camera/mic exists, users should still be able to chat via text.
+
+6. **Testing & efficiency**  
+   - Use only the two test accounts (`originalsplashies@gmail.com / JustWin1!` and `joey@gmail.com / itsjoey1!`) for testing. Verify that:  
+     * Sessions do not end automatically (no timer).  
+     * A credit is deducted once at the start of the match.  
+     * Both users can text chat immediately and can use video/audio if permissions are granted.  
+   - Stop the agent as soon as these features work to avoid extra charges.
+
+Please generate a concise, actionable task list based on these instructions. I’ll review and approve before you begin coding.
