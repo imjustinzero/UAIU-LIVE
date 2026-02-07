@@ -1,0 +1,25 @@
+We need to add a “Random Video Chat” feature to our uaiu.live app similar to Ome.tv. The site already has a login system and a “Find Match” button that currently calls a placeholder function. Here’s what to implement:
+
+1. **Backend Matching Service**  
+   - Create a route (e.g., /api/match) that uses a simple queue to pair users.  
+   - When a user clicks “Find Match,” call this endpoint. If another user is waiting, pair them; otherwise, place the requester in the waiting queue.  
+   - On pairing, generate a unique room name (e.g., `room-<timestamp>`) and call the Metered.ca API to create a video room using our existing Metered API credentials (stored in environment variables). Return the room name and token for each user.  
+   - Use Socket.IO or a similar WebSocket library to notify clients when a match is found. Each user should receive the same room details.  
+   - Ensure that when the call ends or a user disconnects, the queue is updated and the room is cleaned up.
+
+2. **Front‑End Integration**  
+   - Modify the “Find Match” button to call `/api/match` via fetch/AJAX. Display “Finding a match…” while waiting.  
+   - Once a response is received, embed the Metered.ca room in an iframe or join via their SDK using the provided token and room name.  
+   - Add controls for ending the call, toggling camera/mic, and leaving the room. When a call ends, return the user to the “Find Match” screen.
+
+3. **Testing and Validation**  
+   - Use the two test accounts (`originalsplashies@gmail.com / JustWin1!` and `joey@gmail.com / itsjoey1!`) to simulate both sides of the match.  
+   - In one browser, log in and click “Find Match”; in another browser/incognito session, log in with the second account and click “Find Match.” Confirm that a room is created and both users see each other via video.  
+   - Verify that leaving the room removes users from the queue and cleans up the room in Metered.ca.
+
+4. **Cost and Autonomy Considerations**  
+   - Plan the implementation in this chat before making any code changes to reduce token usage [oai_citation:0‡docs.replit.com](https://docs.replit.com/billing/managing-spend#:~:text=Use%20Plan%20Mode%20for%20cost,collaboration).  
+   - Use a **Low** or **Medium** autonomy setting so I can review and approve each change [oai_citation:1‡docs.replit.com](https://docs.replit.com/replitai/autonomy-level#:~:text=Low).  
+   - After planning, execute the tasks in Build Mode and stop once the feature is working.
+
+Please generate a step‑by‑step task list for this work. Let me review and approve the plan before starting to code.
