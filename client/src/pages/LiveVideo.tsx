@@ -614,12 +614,12 @@ export default function LiveVideo() {
                         className="w-full h-full object-cover mirror"
                         data-testid="video-local"
                       />
-                      {!isConnected && (
+                      {!isConnected && !isMatching && (
                         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                           <Video className="h-12 w-12 text-muted-foreground" />
                         </div>
                       )}
-                      {isConnected && !videoEnabled && (
+                      {(isConnected || isMatching) && !videoEnabled && (
                         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                           <VideoOff className="h-12 w-12 text-muted-foreground" />
                         </div>
