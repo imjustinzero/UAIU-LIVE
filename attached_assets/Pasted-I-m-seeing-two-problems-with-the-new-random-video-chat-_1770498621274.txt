@@ -1,0 +1,14 @@
+I’m seeing two problems with the new random video chat feature:
+1. The browser never prompts for camera/microphone permission, so the user’s video stream doesn’t start.
+2. When two users click “Find Match,” they aren’t connected to each other (no room is created or joined).
+
+Please do the following in the most cost‑effective way possible:
+
+• **Plan before coding (Plan Mode)** – Break down the steps needed to debug and fix these issues. Keep the plan concise and avoid unnecessary file reads.  
+• **Use Low or Medium autonomy** so I can review each change before you commit it.  
+• **Camera/mic permission:** Confirm whether the front‑end calls `navigator.mediaDevices.getUserMedia({ video: true, audio: true })` when the user toggles the camera or clicks “Find Match.” If not, implement this call and assign the returned stream to the local video element. Remember that `getUserMedia()` only works on HTTPS pages [oai_citation:0‡developer.mozilla.org](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia#:~:text=Secure%20context%3A%20This%20feature%20is,some%20or%20all%20supporting%20browsers), so ensure our pages load securely.  
+• **Matching/room logic:** Check the backend matching endpoint and WebSocket logic. Ensure that when two users request a match, the server pairs them, creates a Metered.ca room, and notifies both clients with the same room name and tokens. Update the code if it currently creates separate rooms or fails to send room details.  
+• **Testing:** Use our two test accounts (`originalsplashies@gmail.com / JustWin1!` and `joey@gmail.com / itsjoey1!`) to simulate both sides of a call. After implementing the changes, open two sessions, click “Find Match” on one, then on the other, and verify that camera permission is requested and both users join the same room.  
+• **Keep costs low:** Avoid reading large files or unnecessary context; focus only on the files related to the video chat front‑end and matching logic. Once the fix works, stop the agent.
+
+Please generate a step‑by‑step task list for this debugging work. Let me review and approve the plan before you start making changes.
