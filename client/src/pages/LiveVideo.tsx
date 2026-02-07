@@ -41,6 +41,7 @@ export default function LiveVideo() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const sdkLoadedRef = useRef(false);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   const { toast } = useToast();
 
@@ -189,25 +190,33 @@ export default function LiveVideo() {
     try {
       const MeteredModule = (window as any).Metered;
       if (!MeteredModule) {
-        throw new Error('Metered SDK not loaded');
+        throw new Error('Metered SDK not loaded. Please refresh the page.');
+      }
+
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
       }
 
       const meeting = new MeteredModule.Meeting();
       meetingRef.current = meeting;
 
       meeting.on('localTrackStarted', (trackItem: any) => {
+        console.log('[LiveVideo] Local track started:', trackItem.type);
         if (trackItem.type === 'video' && localVideoRef.current) {
           localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
         }
       });
 
       meeting.on('localTrackUpdated', (trackItem: any) => {
+        console.log('[LiveVideo] Local track updated:', trackItem.type);
         if (trackItem.type === 'video' && localVideoRef.current) {
           localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
         }
       });
 
       meeting.on('remoteTrackStarted', (trackItem: any) => {
+        console.log('[LiveVideo] Remote track started:', trackItem.type);
         if (trackItem.type === 'video' && remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = new MediaStream([trackItem.track]);
         }
@@ -231,6 +240,7 @@ export default function LiveVideo() {
       });
 
       meeting.on('participantLeft', () => {
+        console.log('[LiveVideo] Participant left');
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = null;
         }
@@ -241,19 +251,28 @@ export default function LiveVideo() {
       });
 
       const roomUrl = `${data.meteredDomain}/${data.roomName}`;
-      console.log('[LiveVideo] Joining room: https://' + roomUrl);
+      console.log('[LiveVideo] Joining Metered room:', roomUrl);
 
       await meeting.join({
         roomURL: roomUrl,
         name: user?.name || 'User',
       });
 
-      console.log('[LiveVideo] Joined room successfully');
+      console.log('[LiveVideo] Joined Metered room successfully');
 
-      await meeting.startVideo();
-      await meeting.startAudio();
+      try {
+        await meeting.startVideo();
+        console.log('[LiveVideo] Video started');
+      } catch (videoErr) {
+        console.error('[LiveVideo] startVideo error:', videoErr);
+      }
 
-      console.log('[LiveVideo] Video and audio started');
+      try {
+        await meeting.startAudio();
+        console.log('[LiveVideo] Audio started');
+      } catch (audioErr) {
+        console.error('[LiveVideo] startAudio error:', audioErr);
+      }
     } catch (err) {
       console.error('[LiveVideo] Error joining Metered room:', err);
       throw err;
@@ -268,6 +287,10 @@ export default function LiveVideo() {
         console.error('[LiveVideo] Error leaving meeting:', e);
       }
       meetingRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
     }
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
@@ -342,8 +365,25 @@ export default function LiveVideo() {
       return;
     }
 
+    try {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      console.log('[LiveVideo] Camera/mic permission granted');
+    } catch (err: any) {
+      console.error('[LiveVideo] getUserMedia error:', err);
+      toast({ title: "Camera Access Required", description: "Please allow camera and microphone access to use video chat.", variant: "destructive" });
+      return;
+    }
+
     setIsMatching(true);
     sock.emit('liveMatch:join');
+    console.log('[LiveVideo] Emitted liveMatch:join');
   };
 
   const handleNext = () => {
@@ -612,6 +652,11 @@ export default function LiveVideo() {
                         onClick={() => {
                           const sock = socketRef.current;
                           if (sock) sock.emit('liveMatch:leave');
+                          if (localStreamRef.current) {
+                            localStreamRef.current.getTracks().forEach(t => t.stop());
+                            localStreamRef.current = null;
+                          }
+                          if (localVideoRef.current) localVideoRef.current.srcObject = null;
                           setIsMatching(false);
                         }}
                         data-testid="button-cancel-match"

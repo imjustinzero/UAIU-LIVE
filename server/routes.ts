@@ -1085,6 +1085,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   METERED_APP_NAME = METERED_APP_NAME.replace(/\.metered\.live$/i, '');
   const METERED_DOMAIN = `${METERED_APP_NAME}.metered.live`;
 
+  console.log('[Metered] Config - API Key set:', !!METERED_API_KEY, ', App Name:', METERED_APP_NAME || '(empty)', ', Domain:', METERED_DOMAIN);
+  if (!METERED_API_KEY || !METERED_APP_NAME) {
+    console.error('[Metered] WARNING: Missing METERED_API_KEY or METERED_APP_NAME - live video will not work!');
+  }
+
   async function createMeteredRoom(): Promise<string | null> {
     if (!METERED_API_KEY || !METERED_APP_NAME) {
       console.error('[Metered] Missing API key or app name');
