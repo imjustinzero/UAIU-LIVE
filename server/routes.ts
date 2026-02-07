@@ -1079,9 +1079,60 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // GameManager handles all matchmaking including bot fallback
 
+  // Metered.ca configuration
+  const METERED_API_KEY = process.env.METERED_API_KEY;
+  let METERED_APP_NAME = process.env.METERED_APP_NAME || '';
+  METERED_APP_NAME = METERED_APP_NAME.replace(/\.metered\.live$/i, '');
+  const METERED_DOMAIN = `${METERED_APP_NAME}.metered.live`;
+
+  async function createMeteredRoom(): Promise<string | null> {
+    if (!METERED_API_KEY || !METERED_APP_NAME) {
+      console.error('[Metered] Missing API key or app name');
+      return null;
+    }
+    try {
+      const expireTime = Math.floor(Date.now() / 1000) + 120;
+      const res = await fetch(`https://${METERED_DOMAIN}/api/v1/room?secretKey=${METERED_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          privacy: 'public',
+          maxParticipants: 2,
+          autoJoin: true,
+          ejectAtRoomExp: true,
+          deleteOnExp: true,
+          expireUnixSec: expireTime,
+          ejectAfterElapsedTimeInSec: 70,
+        }),
+      });
+      if (!res.ok) {
+        console.error('[Metered] Room creation failed:', res.status, await res.text());
+        return null;
+      }
+      const data = await res.json();
+      console.log('[Metered] Room created:', data.roomName);
+      return data.roomName;
+    } catch (err) {
+      console.error('[Metered] Room creation error:', err);
+      return null;
+    }
+  }
+
+  async function deleteMeteredRoom(roomName: string): Promise<void> {
+    if (!METERED_API_KEY || !METERED_APP_NAME) return;
+    try {
+      await fetch(`https://${METERED_DOMAIN}/api/v1/room/${roomName}?secretKey=${METERED_API_KEY}`, {
+        method: 'DELETE',
+      });
+      console.log('[Metered] Room deleted:', roomName);
+    } catch (err) {
+      console.error('[Metered] Room deletion error:', err);
+    }
+  }
+
   // Live video chat matchmaking queue and active sessions
   const liveVideoQueue: { userId: string; joinedAt: number }[] = [];
-  const userSocketMap = new Map<string, string>(); // userId -> socketId mapping
+  const userSocketMap = new Map<string, string>();
   const liveVideoSessions = new Map<string, {
     sessionId: string;
     user1Id: string;
@@ -1090,6 +1141,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     user2SocketId: string;
     startedAt: number;
     timer: NodeJS.Timeout;
+    roomName: string;
   }>();
 
   io.on('connection', (socket: Socket) => {
@@ -1238,7 +1290,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
     // Helper function to find active session for a user
     const findUserSession = (userId: string) => {
-      for (const [sessionId, session] of liveVideoSessions.entries()) {
+      const entries = Array.from(liveVideoSessions.entries());
+      for (let i = 0; i < entries.length; i++) {
+        const [sessionId, session] = entries[i];
         if (session.user1Id === userId || session.user2Id === userId) {
           return { sessionId, session };
         }
@@ -1246,17 +1300,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       return null;
     };
 
-    // Helper function to end a live video session
     const endLiveVideoSession = async (sessionId: string, reason: string = 'completed') => {
       const session = liveVideoSessions.get(sessionId);
       if (!session) return;
 
       console.log(`[LiveVideo] Ending session ${sessionId} (${reason})`);
 
-      // Clear timer
       clearTimeout(session.timer);
 
-      // Notify both clients
       const user1Socket = io.sockets.sockets.get(session.user1SocketId);
       const user2Socket = io.sockets.sockets.get(session.user2SocketId);
       
@@ -1267,7 +1318,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         user2Socket.emit('liveMatch:ended');
       }
 
-      // Update database - mark session as completed
+      if (session.roomName) {
+        deleteMeteredRoom(session.roomName).catch(() => {});
+      }
+
       await db.update(liveMatchSessions)
         .set({ 
           status: 'completed',
@@ -1275,7 +1329,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         })
         .where(eq(liveMatchSessions.id, sessionId));
 
-      // Remove from active sessions
       liveVideoSessions.delete(sessionId);
     };
 
@@ -1331,40 +1384,40 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
         console.log(`[LiveVideo] User ${userId} (${user.name}) joining queue with socket ${socket.id}`);
 
-        // Check if there's someone waiting
         let matchFound = false;
         while (liveVideoQueue.length > 0 && !matchFound) {
           const partner = liveVideoQueue.shift()!;
           
-          // Get partner's CURRENT socket ID from mapping
           const partnerSocketId = userSocketMap.get(partner.userId);
           const partnerSocket = partnerSocketId ? io.sockets.sockets.get(partnerSocketId) : null;
           const partnerUser = await storage.getUser(partner.userId);
           
           if (!partnerSocket || !partnerUser || partnerUser.credits < 1) {
-            console.log(`[LiveVideo] Partner ${partner.userId} invalid (socket: ${partnerSocketId}), skipping`);
-            // If partner lacks credits or isn't connected, skip
+            console.log(`[LiveVideo] Partner ${partner.userId} invalid, skipping`);
             continue;
           }
           
-          // Get current user's socket ID from mapping
           const currentSocketId = userSocketMap.get(userId);
           if (!currentSocketId) {
-            console.log(`[LiveVideo] Current user ${userId} socket not found in mapping`);
             socket.emit('error', { message: 'Connection error' });
             return;
           }
 
-          // Match found! Deduct credits from both users
+          const roomName = await createMeteredRoom();
+          if (!roomName) {
+            socket.emit('error', { message: 'Failed to create video room. Please try again.' });
+            liveVideoQueue.unshift(partner);
+            return;
+          }
+
           await storage.updateUserCredits(partner.userId, partnerUser.credits - 1);
           await storage.updateUserCredits(userId, user.credits - 1);
           
           partnerSocket.emit('creditsUpdated', partnerUser.credits - 1);
           socket.emit('creditsUpdated', user.credits - 1);
 
-          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}`);
+          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}, room: ${roomName}`);
           
-          // Create database record
           const [dbSession] = await db.insert(liveMatchSessions)
             .values({
               user1Id: partner.userId,
@@ -1375,35 +1428,36 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             })
             .returning();
 
-          // Create in-memory session with 60-second timer
           const timer = setTimeout(async () => {
             await endLiveVideoSession(dbSession.id, 'timeout');
-          }, 60000); // 60 seconds
+          }, 65000);
 
           liveVideoSessions.set(dbSession.id, {
             sessionId: dbSession.id,
             user1Id: partner.userId,
             user2Id: userId,
-            user1SocketId: partnerSocketId!, // Safe because partnerSocket exists
-            user2SocketId: currentSocketId!, // Safe because currentSocket will be checked
+            user1SocketId: partnerSocketId!,
+            user2SocketId: currentSocketId!,
             startedAt: Date.now(),
             timer,
+            roomName,
           });
 
-          // Notify both clients - designate user1 (partner/waiter) as offerer to prevent race condition
-          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${currentSocketId} (user ${userId}) - answerer`);
+          const matchData = {
+            sessionId: dbSession.id,
+            roomName,
+            meteredDomain: METERED_DOMAIN,
+          };
+
           const currentSocket = io.sockets.sockets.get(currentSocketId);
-          currentSocket?.emit('liveMatch:found', { partnerId: partner.userId, sessionId: dbSession.id, isOfferer: false });
+          currentSocket?.emit('liveMatch:found', matchData);
+          partnerSocket.emit('liveMatch:found', matchData);
           
-          console.log(`[LiveVideo] Emitting liveMatch:found to socket ${partnerSocketId} (user ${partner.userId}) - offerer`);
-          partnerSocket.emit('liveMatch:found', { partnerId: userId, sessionId: dbSession.id, isOfferer: true });
-          
-          console.log('[LiveVideo] Both liveMatch:found events emitted successfully');
+          console.log('[LiveVideo] Both users notified with room:', roomName);
           matchFound = true;
         }
 
         if (!matchFound) {
-          // Add to queue (socketId tracked in userSocketMap)
           liveVideoQueue.push({ userId, joinedAt: Date.now() });
           console.log(`[LiveVideo] User ${userId} added to queue. Queue size: ${liveVideoQueue.length}`);
         }
@@ -1413,90 +1467,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
     });
 
-    socket.on('liveMatch:offer', (data: { offer: RTCSessionDescriptionInit; to: string }) => {
-      const fromUserId = (socket as any).userId;
-      if (!fromUserId) return;
-      
-      // Verify this is a valid matched pair
-      const sessionData = findUserSession(fromUserId);
-      if (!sessionData) {
-        console.log(`[LiveVideo] Rejected offer from ${fromUserId}: not in session`);
-        return;
-      }
-
-      const { session } = sessionData;
-      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
-      
-      // Verify recipient matches the partner
-      if (data.to !== partnerId) {
-        console.log(`[LiveVideo] Rejected offer from ${fromUserId} to ${data.to}: not matched partner`);
-        return;
-      }
-
-      console.log(`[LiveVideo] Forwarding offer from ${fromUserId} to ${data.to}`);
-      
-      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
-      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
-      
-      if (recipientSocket) {
-        recipientSocket.emit('liveMatch:offer', { offer: data.offer, from: fromUserId });
-      }
-    });
-
-    socket.on('liveMatch:answer', (data: { answer: RTCSessionDescriptionInit; to: string }) => {
-      const fromUserId = (socket as any).userId;
-      if (!fromUserId) return;
-      
-      // Verify this is a valid matched pair
-      const sessionData = findUserSession(fromUserId);
-      if (!sessionData) {
-        console.log(`[LiveVideo] Rejected answer from ${fromUserId}: not in session`);
-        return;
-      }
-
-      const { session } = sessionData;
-      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
-      
-      // Verify recipient matches the partner
-      if (data.to !== partnerId) {
-        console.log(`[LiveVideo] Rejected answer from ${fromUserId} to ${data.to}: not matched partner`);
-        return;
-      }
-
-      console.log(`[LiveVideo] Forwarding answer from ${fromUserId} to ${data.to}`);
-      
-      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
-      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
-      
-      if (recipientSocket) {
-        recipientSocket.emit('liveMatch:answer', { answer: data.answer });
-      }
-    });
-
-    socket.on('liveMatch:iceCandidate', (data: { candidate: RTCIceCandidateInit; to: string }) => {
-      const fromUserId = (socket as any).userId;
-      if (!fromUserId) return;
-      
-      // Verify this is a valid matched pair
-      const sessionData = findUserSession(fromUserId);
-      if (!sessionData) return;
-
-      const { session } = sessionData;
-      const partnerId = session.user1Id === fromUserId ? session.user2Id : session.user1Id;
-      
-      // Verify recipient matches the partner
-      if (data.to !== partnerId) return;
-      
-      const recipientSocketId = session.user1Id === data.to ? session.user1SocketId : session.user2SocketId;
-      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
-      
-      if (recipientSocket) {
-        recipientSocket.emit('liveMatch:iceCandidate', { 
-          candidate: data.candidate, 
-          from: fromUserId 
-        });
-      }
-    });
 
     socket.on('liveMatch:leave', async () => {
       const userId = (socket as any).userId;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -16,64 +16,75 @@ interface User {
   credits: number;
 }
 
-interface PeerConnection {
-  pc: RTCPeerConnection;
-  partnerId: string;
+interface MatchData {
+  sessionId: string;
+  roomName: string;
+  meteredDomain: string;
 }
 
 export default function LiveVideo() {
-  // Debug: Log when component mounts
-  console.log('[LiveVideo] Component rendering...');
-  
   const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [socketConnected, setSocketConnected] = useState(false); // Track socket connection status
+  const [socketConnected, setSocketConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [partnerId, setPartnerId] = useState<string | null>(null);
-  
+  const [currentRoom, setCurrentRoom] = useState<MatchData | null>(null);
+
+  const socketRef = useRef<Socket | null>(null);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const meetingRef = useRef<any>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const partnerIdRef = useRef<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const pendingOfferRef = useRef<{ offer: RTCSessionDescriptionInit; from: string } | null>(null);
-  const isReadyForOfferRef = useRef(false);
-  
+  const sdkLoadedRef = useRef(false);
+
   const { toast } = useToast();
 
-  const iceServersRef = useRef<RTCConfiguration>({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ]
-  });
-  const turnFetchedRef = useRef(false);
+  const loadMeteredSdk = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      if ((window as any).Metered) {
+        sdkLoadedRef.current = true;
+        resolve();
+        return;
+      }
+      if (sdkLoadedRef.current) {
+        resolve();
+        return;
+      }
+      const existing = document.querySelector('script[src*="metered"]');
+      if (existing) {
+        existing.addEventListener('load', () => {
+          sdkLoadedRef.current = true;
+          resolve();
+        });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.metered.ca/sdk/video/1.4.6/sdk.min.js';
+      script.async = true;
+      script.onload = () => {
+        sdkLoadedRef.current = true;
+        resolve();
+      };
+      script.onerror = () => reject(new Error('Failed to load Metered SDK'));
+      document.head.appendChild(script);
+    });
+  }, []);
 
-  // Load user session
   useEffect(() => {
-    console.log('[LiveVideo] Loading user session...');
     const savedUser = localStorage.getItem('pong-user');
     const sessionId = localStorage.getItem('pong-session');
-    console.log('[LiveVideo] savedUser exists:', !!savedUser);
-    console.log('[LiveVideo] sessionId exists:', !!sessionId);
     
     if (savedUser && sessionId) {
       const parsedUser = JSON.parse(savedUser);
-      console.log('[LiveVideo] User parsed:', parsedUser?.id);
       setUser(parsedUser);
       
       fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${sessionId}`,
-        },
+        headers: { 'Authorization': `Bearer ${sessionId}` },
       })
         .then(res => {
           if (!res.ok) {
@@ -90,33 +101,16 @@ export default function LiveVideo() {
             localStorage.setItem('pong-user', JSON.stringify(freshUser));
           }
         })
-        .catch(err => {
-          console.error('[LiveVideo] Failed to refresh user data:', err);
-        });
-    } else {
-      console.log('[LiveVideo] No saved user or session - user needs to log in');
+        .catch(() => {});
     }
   }, []);
 
-  // Initialize socket connection
   useEffect(() => {
     if (user) {
       const sessionId = localStorage.getItem('pong-session');
-      if (!sessionId) {
-        console.error('[LiveVideo] No session ID found, cannot connect to socket');
-        return;
-      }
+      if (!sessionId) return;
 
-      console.log('[LiveVideo] Creating socket connection...');
-      console.log('[LiveVideo] window.location.origin:', window.location.origin);
-      console.log('[LiveVideo] Session ID (first 8 chars):', sessionId.substring(0, 8) + '...');
-
-      // Determine Socket.IO URL
-      // Use VITE_SOCKET_URL env var if set, otherwise fallback to current origin
       const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
-      console.log('[LiveVideo] VITE_SOCKET_URL:', import.meta.env.VITE_SOCKET_URL || '(not set)');
-      console.log('[LiveVideo] Using socket URL:', socketUrl);
-
       const newSocket = io(socketUrl, {
         auth: { sessionId },
         transports: ['polling', 'websocket'],
@@ -130,265 +124,179 @@ export default function LiveVideo() {
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('✅ [LiveVideo] Socket connected! ID:', newSocket.id);
         setSocketConnected(true);
-        toast({
-          title: "Connected",
-          description: "Ready to find a match!",
-        });
+        toast({ title: "Connected", description: "Ready to find a match!" });
       });
 
-      newSocket.on('connect_error', (error) => {
-        console.error('❌ [LiveVideo] Socket connection error:', error.message);
+      newSocket.on('connect_error', () => {
         setSocketConnected(false);
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect to server. Please refresh the page.",
-          variant: "destructive",
-        });
+        toast({ title: "Connection Error", description: "Failed to connect. Please refresh.", variant: "destructive" });
       });
 
-      newSocket.on('disconnect', (reason) => {
-        console.log('[LiveVideo] Socket disconnected:', reason);
-        setSocketConnected(false);
-      });
+      newSocket.on('disconnect', () => setSocketConnected(false));
 
       newSocket.on('creditsUpdated', (newCredits: number) => {
         setUser(prev => prev ? { ...prev, credits: newCredits } : null);
       });
 
-      // WebRTC signaling events
-      newSocket.on('liveMatch:found', async (data: { partnerId: string; sessionId: string; isOfferer: boolean }) => {
-        console.log('🎉 [LiveVideo] MATCH FOUND!');
-        console.log('[LiveVideo] Partner ID:', data.partnerId);
-        console.log('[LiveVideo] Session ID:', data.sessionId);
-        console.log('[LiveVideo] Is Offerer:', data.isOfferer);
-        
+      newSocket.on('liveMatch:found', async (data: MatchData) => {
+        console.log('[LiveVideo] Match found! Room:', data.roomName);
         setIsMatching(false);
-        setPartnerId(data.partnerId);
-        partnerIdRef.current = data.partnerId;
-        // Save any buffered offer before clearing
-        const earlyOffer = pendingOfferRef.current;
-        pendingOfferRef.current = null;
-        isReadyForOfferRef.current = false;
-        
+        setCurrentRoom(data);
+        setIsConnected(true);
+
         try {
-          console.log('[LiveVideo] Requesting camera/mic access...');
-          await initLocalStream();
-          console.log('[LiveVideo] Media access granted');
+          await loadMeteredSdk();
+          await joinMeteredRoom(data);
         } catch (err) {
-          console.error('[LiveVideo] Failed to get media access:', err);
-        }
-        
-        if (data.isOfferer) {
-          // Small delay to let the answerer set up their state
-          await new Promise(resolve => setTimeout(resolve, 500));
-          console.log('[LiveVideo] Creating peer connection as OFFERER...');
-          await createPeerConnection(data.partnerId, true);
-          console.log('[LiveVideo] Offer sent');
-        } else {
-          console.log('[LiveVideo] Ready to receive offer from partner...');
-          isReadyForOfferRef.current = true;
-          // Check if an offer arrived early (before we were ready)
-          if (earlyOffer && earlyOffer.from === data.partnerId) {
-            console.log('[LiveVideo] Processing buffered offer');
-            await handleIncomingOffer(earlyOffer.offer, earlyOffer.from);
-          }
-        }
-      });
-
-      newSocket.on('liveMatch:offer', async (data: { offer: RTCSessionDescriptionInit; from: string }) => {
-        console.log('[LiveVideo] Received offer from:', data.from);
-        console.log('[LiveVideo] Current partnerIdRef:', partnerIdRef.current);
-        console.log('[LiveVideo] isReadyForOffer:', isReadyForOfferRef.current);
-        
-        const currentPartnerId = partnerIdRef.current;
-        
-        // If not ready yet, buffer the offer for later processing
-        if (!currentPartnerId || !isReadyForOfferRef.current) {
-          console.log('[LiveVideo] Buffering offer - not ready yet');
-          pendingOfferRef.current = { offer: data.offer, from: data.from };
-          return;
-        }
-        
-        if (currentPartnerId !== data.from) {
-          console.log('[LiveVideo] Ignoring offer - not from matched partner');
-          return;
-        }
-        
-        await handleIncomingOffer(data.offer, data.from);
-      });
-
-      newSocket.on('liveMatch:answer', async (data: { answer: RTCSessionDescriptionInit; from?: string }) => {
-        console.log('[LiveVideo] Received answer from:', data.from);
-        
-        // Use ref for current partnerId (avoids stale closure)
-        const currentPartnerId = partnerIdRef.current;
-        if (!currentPartnerId || (data.from && data.from !== currentPartnerId)) {
-          console.log('[LiveVideo] Ignoring answer - not from matched partner');
-          return;
-        }
-        
-        try {
-          await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.answer));
-          console.log('[LiveVideo] Set remote description from answer');
-        } catch (err) {
-          console.error('[LiveVideo] Error setting remote description:', err);
-        }
-      });
-
-      newSocket.on('liveMatch:iceCandidate', async (data: { candidate: RTCIceCandidateInit; from: string }) => {
-        console.log('[LiveVideo] Received ICE candidate from:', data.from);
-        
-        // Use ref for current partnerId (avoids stale closure)
-        const currentPartnerId = partnerIdRef.current;
-        if (!currentPartnerId || currentPartnerId !== data.from) {
-          console.log('[LiveVideo] Ignoring ICE candidate - not from matched partner');
-          return;
-        }
-        
-        if (peerConnectionRef.current) {
-          try {
-            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-          } catch (err) {
-            console.error('[LiveVideo] Error adding ICE candidate:', err);
-          }
+          console.error('[LiveVideo] Failed to join room:', err);
+          toast({ title: "Video Error", description: "Failed to start video. Please try again.", variant: "destructive" });
+          cleanupMeeting();
         }
       });
 
       newSocket.on('liveMatch:partnerDisconnected', () => {
-        console.log('[LiveVideo] Partner disconnected');
-        handleDisconnect();
-        toast({
-          title: "Partner Disconnected",
-          description: "Your partner has left the session",
-          variant: "destructive",
-        });
+        toast({ title: "Partner Disconnected", description: "Your partner has left the session", variant: "destructive" });
+        cleanupMeeting();
       });
 
       newSocket.on('liveMatch:ended', () => {
-        console.log('[LiveVideo] Session ended');
-        handleDisconnect();
+        cleanupMeeting();
       });
 
       newSocket.on('error', (data: { message: string }) => {
-        console.error('[LiveVideo] Server error:', data.message);
-        toast({
-          title: "Error",
-          description: data.message,
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: data.message, variant: "destructive" });
         setIsMatching(false);
       });
 
       return () => {
-        console.log('[LiveVideo] Cleaning up socket connection');
         socketRef.current = null;
         newSocket.disconnect();
       };
     }
-  }, [user?.id]); // Only reconnect if user ID changes, not on credit updates
+  }, [user?.id]);
 
-  // Cleanup when leaving page
   useEffect(() => {
     return () => {
-      // Send leave event when component unmounts (user navigates away)
-      // liveMatch:leave handles both queue and session cleanup
       const sock = socketRef.current;
-      if (sock && (isMatching || partnerId)) {
-        console.log('[LiveVideo Client] Component unmounting - sending leave event');
+      if (sock && (isMatching || currentRoom)) {
         sock.emit('liveMatch:leave');
       }
     };
-  }, [isMatching, partnerId]);
+  }, [isMatching, currentRoom]);
 
-  const handleIncomingOffer = async (offer: RTCSessionDescriptionInit, from: string) => {
+  const joinMeteredRoom = async (data: MatchData) => {
     try {
-      try {
-        await initLocalStream();
-      } catch (e) {
-        console.error('[LiveVideo] Could not get media for answering:', e);
+      const MeteredModule = (window as any).Metered;
+      if (!MeteredModule) {
+        throw new Error('Metered SDK not loaded');
       }
-      
-      await createPeerConnection(from, false);
-      await peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peerConnectionRef.current?.createAnswer();
-      if (answer) {
-        await peerConnectionRef.current?.setLocalDescription(answer);
-        const sock = socketRef.current;
-        if (sock) {
-          sock.emit('liveMatch:answer', { answer, to: from });
-          console.log('[LiveVideo] Sent answer to:', from);
-        } else {
-          console.error('[LiveVideo] No socket available to send answer!');
+
+      const meeting = new MeteredModule.Meeting();
+      meetingRef.current = meeting;
+
+      meeting.on('localTrackStarted', (trackItem: any) => {
+        if (trackItem.type === 'video' && localVideoRef.current) {
+          localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
         }
-      }
-    } catch (err) {
-      console.error('[LiveVideo] Error handling offer:', err);
-    }
-  };
+      });
 
-  const fetchTurnCredentials = async () => {
-    if (turnFetchedRef.current) return;
-    try {
-      console.log('[LiveVideo] Fetching TURN credentials...');
-      const res = await fetch('/api/turn');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.iceServers && data.iceServers.length > 0) {
-          iceServersRef.current = { iceServers: data.iceServers };
-          turnFetchedRef.current = true;
-          console.log('[LiveVideo] TURN credentials loaded, servers:', data.iceServers.length);
+      meeting.on('localTrackUpdated', (trackItem: any) => {
+        if (trackItem.type === 'video' && localVideoRef.current) {
+          localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
         }
-      } else {
-        console.warn('[LiveVideo] TURN endpoint returned', res.status, '- falling back to STUN only');
-      }
-    } catch (err) {
-      console.warn('[LiveVideo] Failed to fetch TURN credentials, using STUN fallback:', err);
-    }
-  };
+      });
 
-  // Initialize local video stream only when needed (privacy)
-  const initLocalStream = async () => {
-    if (localStreamRef.current) return; // Already initialized
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+      meeting.on('remoteTrackStarted', (trackItem: any) => {
+        if (trackItem.type === 'video' && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = new MediaStream([trackItem.track]);
+        }
+        if (trackItem.type === 'audio') {
+          const audio = document.createElement('audio');
+          audio.srcObject = new MediaStream([trackItem.track]);
+          audio.autoplay = true;
+          audio.id = `remote-audio-${trackItem.participantSessionId}`;
+          document.body.appendChild(audio);
+        }
       });
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
+
+      meeting.on('remoteTrackStopped', (trackItem: any) => {
+        if (trackItem.type === 'video' && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+        if (trackItem.type === 'audio') {
+          const el = document.getElementById(`remote-audio-${trackItem.participantSessionId}`);
+          if (el) el.remove();
+        }
+      });
+
+      meeting.on('participantLeft', () => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+      });
+
+      meeting.on('onlineParticipants', (participants: any[]) => {
+        console.log('[LiveVideo] Online participants:', participants.length);
+      });
+
+      const roomUrl = `${data.meteredDomain}/${data.roomName}`;
+      console.log('[LiveVideo] Joining room: https://' + roomUrl);
+
+      await meeting.join({
+        roomURL: roomUrl,
+        name: user?.name || 'User',
+      });
+
+      console.log('[LiveVideo] Joined room successfully');
+
+      await meeting.startVideo();
+      await meeting.startAudio();
+
+      console.log('[LiveVideo] Video and audio started');
     } catch (err) {
-      console.error('Error accessing media devices:', err);
-      toast({
-        title: "Camera Access Denied",
-        description: "Please allow camera and microphone access to use live video",
-        variant: "destructive",
-      });
+      console.error('[LiveVideo] Error joining Metered room:', err);
       throw err;
     }
   };
 
-  // Cleanup streams on unmount
+  const cleanupMeeting = useCallback(() => {
+    if (meetingRef.current) {
+      try {
+        meetingRef.current.leaveMeeting();
+      } catch (e) {
+        console.error('[LiveVideo] Error leaving meeting:', e);
+      }
+      meetingRef.current = null;
+    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+
+    document.querySelectorAll('audio[id^="remote-audio-"]').forEach(el => el.remove());
+
+    setIsConnected(false);
+    setCurrentRoom(null);
+    setIsMatching(false);
+    setVideoEnabled(true);
+    setAudioEnabled(true);
+  }, []);
+
   useEffect(() => {
     return () => {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
+      if (meetingRef.current) {
+        try { meetingRef.current.leaveMeeting(); } catch (e) {}
+        meetingRef.current = null;
       }
+      document.querySelectorAll('audio[id^="remote-audio-"]').forEach(el => el.remove());
     };
   }, []);
 
-  // Session timer
   useEffect(() => {
     if (isConnected) {
       setSessionTime(0);
       sessionTimerRef.current = setInterval(() => {
         setSessionTime(prev => {
           const newTime = prev + 1;
-          // Auto-end session after 60 seconds
           if (newTime >= 60) {
             handleNext();
           }
@@ -404,144 +312,49 @@ export default function LiveVideo() {
     }
 
     return () => {
-      if (sessionTimerRef.current) {
-        clearInterval(sessionTimerRef.current);
-      }
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     };
   }, [isConnected]);
 
-  const createPeerConnection = async (partnerIdParam: string, isOfferer: boolean) => {
-    const pc = new RTCPeerConnection(iceServersRef.current);
-    peerConnectionRef.current = pc;
-
-    // Add local stream to peer connection
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
-    }
-
-    // Handle incoming tracks
-    pc.ontrack = (event) => {
-      console.log('[LiveVideo] Received remote track');
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      }
-      setIsConnected(true);
-    };
-
-    // Handle ICE candidates - use socketRef to avoid stale closure
-    pc.onicecandidate = (event) => {
-      const sock = socketRef.current;
-      if (event.candidate && sock) {
-        console.log('[LiveVideo] Sending ICE candidate to:', partnerIdParam);
-        sock.emit('liveMatch:iceCandidate', {
-          candidate: event.candidate,
-          to: partnerIdParam
-        });
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[LiveVideo] ICE connection state:', pc.iceConnectionState);
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log('[LiveVideo] Connection state:', pc.connectionState);
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        handleDisconnect();
-      }
-    };
-
-    // Create and send offer if initiator - use socketRef
-    if (isOfferer) {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const sock = socketRef.current;
-      if (sock) {
-        sock.emit('liveMatch:offer', { offer, to: partnerIdParam });
-        console.log('[LiveVideo] Offer sent via socketRef to:', partnerIdParam);
-      } else {
-        console.error('[LiveVideo] No socket available to send offer!');
-      }
-    }
-  };
-
   const handleFindMatch = async () => {
     const sock = socketRef.current;
-    console.log('[LiveVideo] handleFindMatch called');
-    console.log('[LiveVideo] User:', user?.id);
-    console.log('[LiveVideo] Socket exists:', !!sock);
-    console.log('[LiveVideo] Socket connected:', sock?.connected);
     
     if (!user) {
-      console.log('[LiveVideo] No user - showing auth modal');
       setShowAuthModal(true);
       return;
     }
 
-    if (!sock) {
-      console.error('[LiveVideo] Socket not initialized');
-      toast({
-        title: "Connection Error",
-        description: "Please wait for connection or refresh the page",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!sock.connected) {
-      console.error('[LiveVideo] Socket not connected, attempting reconnect...');
-      sock.connect();
-      toast({
-        title: "Reconnecting",
-        description: "Attempting to reconnect to server...",
-      });
+    if (!sock || !sock.connected) {
+      toast({ title: "Connection Error", description: "Please wait for connection or refresh the page", variant: "destructive" });
+      if (sock && !sock.connected) sock.connect();
       return;
     }
 
     if (user.credits < 1) {
-      console.log('[LiveVideo] Insufficient credits');
-      toast({
-        title: "Not Enough Credits",
-        description: "You need 1 credit to start a live video session",
-        variant: "destructive",
-      });
+      toast({ title: "Not Enough Credits", description: "You need 1 credit to start a live video session", variant: "destructive" });
       return;
     }
 
-    await fetchTurnCredentials();
+    try {
+      await loadMeteredSdk();
+    } catch {
+      toast({ title: "Error", description: "Failed to load video system. Please refresh.", variant: "destructive" });
+      return;
+    }
 
-    console.log('[LiveVideo] Emitting liveMatch:join event');
     setIsMatching(true);
     sock.emit('liveMatch:join');
-    console.log('[LiveVideo] Event emitted successfully');
   };
 
   const handleNext = () => {
     const sock = socketRef.current;
-    if (sock && partnerId) {
+    if (sock && currentRoom) {
       sock.emit('liveMatch:next');
     }
-    handleDisconnect();
-    handleFindMatch();
-  };
-
-  const handleDisconnect = () => {
-    console.log('[LiveVideo] handleDisconnect called');
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-    setIsConnected(false);
-    setPartnerId(null);
-    partnerIdRef.current = null;
-    pendingOfferRef.current = null;
-    isReadyForOfferRef.current = false;
-    setIsMatching(false);
+    cleanupMeeting();
+    setTimeout(() => {
+      handleFindMatch();
+    }, 500);
   };
 
   const handleLeaveSession = () => {
@@ -549,26 +362,36 @@ export default function LiveVideo() {
     if (sock && isConnected) {
       sock.emit('liveMatch:leave');
     }
-    handleDisconnect();
+    cleanupMeeting();
   };
 
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setVideoEnabled(videoTrack.enabled);
+  const toggleVideo = async () => {
+    if (!meetingRef.current) return;
+    try {
+      if (videoEnabled) {
+        await meetingRef.current.stopVideo();
+        setVideoEnabled(false);
+      } else {
+        await meetingRef.current.startVideo();
+        setVideoEnabled(true);
       }
+    } catch (err) {
+      console.error('[LiveVideo] Toggle video error:', err);
     }
   };
 
-  const toggleAudio = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setAudioEnabled(audioTrack.enabled);
+  const toggleAudio = async () => {
+    if (!meetingRef.current) return;
+    try {
+      if (audioEnabled) {
+        await meetingRef.current.stopAudio();
+        setAudioEnabled(false);
+      } else {
+        await meetingRef.current.startAudio();
+        setAudioEnabled(true);
       }
+    } catch (err) {
+      console.error('[LiveVideo] Toggle audio error:', err);
     }
   };
 
@@ -576,6 +399,7 @@ export default function LiveVideo() {
     localStorage.removeItem('pong-user');
     localStorage.removeItem('pong-session');
     setUser(null);
+    cleanupMeeting();
     socketRef.current?.disconnect();
     navigate('/');
   };
@@ -588,10 +412,9 @@ export default function LiveVideo() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900">
-      {/* Header */}
       <header className="border-b border-emerald-500/20 bg-slate-900/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
@@ -601,10 +424,10 @@ export default function LiveVideo() {
               >
                 <Home className="h-5 w-5" />
               </Button>
-              <h1 className="text-2xl font-bold text-emerald-400">Live Video Chat</h1>
+              <h1 className="text-2xl font-bold text-emerald-400" data-testid="text-page-title">Live Video Chat</h1>
             </div>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               {user ? (
                 <>
                   <Badge variant="secondary" className="gap-2 px-4 py-2" data-testid="badge-credits">
@@ -633,7 +456,6 @@ export default function LiveVideo() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           {!user ? (
@@ -655,10 +477,9 @@ export default function LiveVideo() {
             </Card>
           ) : (
             <div className="space-y-6">
-              {/* Status Bar */}
               <Card>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-4">
                       {isConnected ? (
                         <>
@@ -689,16 +510,14 @@ export default function LiveVideo() {
                       )}
                     </div>
                     
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground" data-testid="text-cost-info">
                       Cost: 1 credit per session
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Video Grid */}
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Local Video */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm">You</CardTitle>
@@ -713,7 +532,12 @@ export default function LiveVideo() {
                         className="w-full h-full object-cover mirror"
                         data-testid="video-local"
                       />
-                      {!videoEnabled && (
+                      {!isConnected && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                          <Video className="h-12 w-12 text-muted-foreground" />
+                        </div>
+                      )}
+                      {isConnected && !videoEnabled && (
                         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                           <VideoOff className="h-12 w-12 text-muted-foreground" />
                         </div>
@@ -722,7 +546,6 @@ export default function LiveVideo() {
                   </CardContent>
                 </Card>
 
-                {/* Remote Video */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm">Partner</CardTitle>
@@ -746,15 +569,14 @@ export default function LiveVideo() {
                 </Card>
               </div>
 
-              {/* Controls */}
               <Card>
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-center gap-4">
-                    {/* Media Controls */}
+                  <div className="flex items-center justify-center gap-4 flex-wrap">
                     <Button
                       variant={videoEnabled ? "default" : "destructive"}
                       size="icon"
                       onClick={toggleVideo}
+                      disabled={!isConnected}
                       data-testid="button-toggle-video"
                     >
                       {videoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
@@ -764,12 +586,12 @@ export default function LiveVideo() {
                       variant={audioEnabled ? "default" : "destructive"}
                       size="icon"
                       onClick={toggleAudio}
+                      disabled={!isConnected}
                       data-testid="button-toggle-audio"
                     >
                       {audioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
                     </Button>
 
-                    {/* Session Controls */}
                     {!isConnected && !isMatching && (
                       <Button
                         size="lg"
@@ -780,6 +602,23 @@ export default function LiveVideo() {
                       >
                         <Users className="h-5 w-5" />
                         Find Match (1 credit)
+                      </Button>
+                    )}
+
+                    {isMatching && (
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={() => {
+                          const sock = socketRef.current;
+                          if (sock) sock.emit('liveMatch:leave');
+                          setIsMatching(false);
+                        }}
+                        data-testid="button-cancel-match"
+                        className="gap-2"
+                      >
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Cancel
                       </Button>
                     )}
 
@@ -811,7 +650,6 @@ export default function LiveVideo() {
                 </CardContent>
               </Card>
 
-              {/* Info */}
               <Alert>
                 <AlertDescription>
                   <strong>How it works:</strong> Each session costs 1 credit and lasts up to 1 minute. 
@@ -827,8 +665,8 @@ export default function LiveVideo() {
       <AuthModal
         open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onAuthSuccess={(user: User) => {
-          setUser(user);
+        onAuthSuccess={(authUser: User) => {
+          setUser(authUser);
           setShowAuthModal(false);
         }}
       />

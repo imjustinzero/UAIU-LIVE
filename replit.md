@@ -39,10 +39,10 @@ The frontend uses React and TypeScript, styled with Tailwind CSS in a vibrant ga
 - **Referral System**: Unique 8-character affiliate codes, rewards for referrers based on referred user purchases.
 - **Social Feed**: Posts, likes, comments, and friend management. Admin users can make posts public.
 - **Send Credits**: Users can send credits to friends via the Friends tab. Minimum transfer is 1 credit. Transfers are logged in the action log.
-- **Live Video Chat**: Standalone random video chat matching at /live route. Users pay 1 credit per session for 1-minute peer-to-peer video calls via WebRTC. Features include matchmaking queue, server-enforced 60-second time limit, video/audio controls, Next/Disconnect buttons, and session tracking in database.
+- **Live Video Chat**: Random video chat matching at /live route using Metered.ca managed video rooms. Users pay 1 credit per session for 1-minute video calls. Server creates Metered rooms via REST API on match, both users join via Metered JavaScript SDK (loaded from CDN). Features include Socket.IO matchmaking queue, server-enforced 60-second time limit, video/audio controls, Next/Disconnect/Cancel buttons, automatic room cleanup on disconnect/leave/timeout, and session tracking in database.
 
 ### System Design Choices
-The system utilizes a client-server architecture. The server manages all critical game logic, credit transactions, user authentication, and live video session management to ensure fairness and security. Data is stored in PostgreSQL. Socket.IO provides low-latency real-time game state synchronization and WebRTC signaling for peer-to-peer video connections. All signaling messages are validated to ensure they originate from and target matched partners only. Live video sessions are tracked in-memory with automatic 60-second timeouts and database records for session history. Due to Neon HTTP driver limitations, credit operations for likes/comments use sequential atomic updates instead of full database transactions, with manual rollback on failure.
+The system utilizes a client-server architecture. The server manages all critical game logic, credit transactions, user authentication, and live video session management to ensure fairness and security. Data is stored in PostgreSQL. Socket.IO provides low-latency real-time game state synchronization and matchmaking for live video chat. Live video uses Metered.ca managed rooms (created/deleted via REST API server-side) instead of custom WebRTC signaling, with the Metered JavaScript SDK handling all media on the client side. Live video sessions are tracked in-memory with automatic 60-second timeouts and database records for session history. Due to Neon HTTP driver limitations, credit operations for likes/comments use sequential atomic updates instead of full database transactions, with manual rollback on failure.
 
 ## External Dependencies
 - **Stripe**: For credit purchases and webhook-based credit fulfillment.
@@ -52,3 +52,4 @@ The system utilizes a client-server architecture. The server manages all critica
 - **Bcrypt**: For secure password hashing.
 - **TanStack Query**: For client-side API data fetching and caching.
 - **Shadcn UI**: For UI components.
+- **Metered.ca**: For managed video chat rooms (REST API for room management, JavaScript SDK from CDN for client-side video).
