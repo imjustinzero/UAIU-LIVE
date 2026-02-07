@@ -252,6 +252,7 @@ export default function LiveVideo() {
 
       meeting.on('error', (error: any) => {
         console.error('[LiveVideo] Metered SDK error:', error);
+        toast({ title: "Video Error", description: "A video connection error occurred. Please try again.", variant: "destructive" });
       });
 
       const roomUrl = `${data.meteredDomain}/${data.roomName}`;
