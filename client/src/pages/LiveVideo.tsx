@@ -51,6 +51,8 @@ export default function LiveVideo() {
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const callObjectRef = useRef<DailyCall | null>(null);
+
+  const joiningSessionIdRef = useRef<string | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -108,6 +110,8 @@ export default function LiveVideo() {
       newSocket.on('connect', () => {
         setSocketConnected(true);
         toast({ title: "Connected", description: "Ready to find a match!" });
+        // Recover an in-progress session after reconnects (common on mobile)
+        newSocket.emit('liveMatch:resume');
       });
 
       newSocket.on('connect_error', () => {
@@ -123,6 +127,13 @@ export default function LiveVideo() {
 
       newSocket.on('liveMatch:found', async (data: MatchData) => {
         console.log('[LiveVideo] Match found! Room:', data.roomUrl);
+
+        // Prevent duplicate joins if matchFound is re-emitted (multi-socket / reconnect)
+        if (joiningSessionIdRef.current === data.sessionId) {
+          console.log('[LiveVideo] Duplicate liveMatch:found ignored for session', data.sessionId);
+          return;
+        }
+        joiningSessionIdRef.current = data.sessionId;
         setIsMatching(false);
         setCurrentRoom(data);
         setIsConnected(true);
@@ -330,6 +341,7 @@ export default function LiveVideo() {
 
     setIsConnected(false);
     setCurrentRoom(null);
+    joiningSessionIdRef.current = null;
     setIsMatching(false);
     setVideoEnabled(true);
     setAudioEnabled(true);
@@ -375,6 +387,8 @@ export default function LiveVideo() {
 
   const handleFindMatch = async () => {
     const sock = socketRef.current;
+
+    if (isMatching) return;
     
     if (!user) {
       setShowAuthModal(true);

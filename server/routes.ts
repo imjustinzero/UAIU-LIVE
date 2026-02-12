@@ -1134,9 +1134,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     user2Id: string;
     startedAt: number;
     roomName: string;
+    roomUrl: string;
   }>();
   const userToSession = new Map<string, string>();
   const disconnectGraceTimers = new Map<string, NodeJS.Timeout>();
+
+  function removeFromLiveVideoQueue(userId: string) {
+    const idx = liveVideoQueue.findIndex(p => p.userId === userId);
+    if (idx !== -1) {
+      liveVideoQueue.splice(idx, 1);
+      console.log(`[LiveVideo] Removed ${userId} from queue (cleanup)`);
+    }
+  }
 
   function addUserSocket(userId: string, socketId: string) {
     let set = userSocketMap.get(userId);
@@ -1156,8 +1165,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     const set = userSocketMap.get(userId);
     if (!set) return [];
     const sockets: Socket[] = [];
-    for (const sid of set) {
-      const s = io.sockets.sockets.get(sid);
+    const sids = Array.from(set);
+    for (let i = 0; i < sids.length; i++) {
+      const s = io.sockets.sockets.get(sids[i]);
       if (s) sockets.push(s);
     }
     return sockets;
@@ -1350,6 +1360,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       emitToUser(session.user1Id, 'liveMatch:ended', payload);
       emitToUser(session.user2Id, 'liveMatch:ended', payload);
 
+      // Ensure users can match again immediately
+      removeFromLiveVideoQueue(session.user1Id);
+      removeFromLiveVideoQueue(session.user2Id);
+
       userToSession.delete(session.user1Id);
       userToSession.delete(session.user2Id);
 
@@ -1375,7 +1389,35 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       console.log(`[LiveVideo] Session ${sessionId} cleaned up, both users freed`);
     };
 
-    // Live video chat events
+    
+    socket.on('liveMatch:resume', async () => {
+      try {
+        const userId = (socket as any).userId;
+        if (!userId) return;
+        const sessionData = findUserSession(userId);
+        if (!sessionData) return;
+
+        const { sessionId, session } = sessionData;
+
+        // Re-issue a fresh token for this user and re-send room info
+        const user = await storage.getUser(userId);
+        const token = await createDailyToken(session.roomName, user?.name || 'User');
+        if (!token) return;
+
+        emitToUser(userId, 'liveMatch:found', {
+          sessionId,
+          roomUrl: session.roomUrl,
+          token,
+          resumed: true,
+        });
+
+        console.log(`[LiveVideo] Resumed session ${sessionId} for ${userId}`);
+      } catch (err) {
+        console.error('[LiveVideo] Error in liveMatch:resume:', err);
+      }
+    });
+
+// Live video chat events
     socket.on('liveMatch:join', async () => {
       console.log('[LiveVideo] liveMatch:join from socket', socket.id);
       try {
@@ -1496,6 +1538,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             user2Id: userId,
             startedAt: Date.now(),
             roomName: dailyRoom.roomName,
+            roomUrl: dailyRoom.roomUrl,
           });
           userToSession.set(partner.userId, dbSession.id);
           userToSession.set(userId, dbSession.id);
