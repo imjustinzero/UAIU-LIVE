@@ -1,0 +1,113 @@
+UAIU.LIVE — Build Ome.tv-style Random Video+Text Chat using Daily (uaiulive.daily.co)
+
+DOMAIN:
+- Daily room domain: uaiulive.daily.co
+SECRETS REQUIRED (Replit Secrets):
+- DAILY_API_KEY (required)
+- DAILY_ROOM_DOMAIN=uaiulive.daily.co
+- DAILY_BASE_URL=https://api.daily.co/v1 (optional)
+
+HARD REQUIREMENT: This must work end-to-end in Replit Preview with two logged-in accounts:
+- originalsplashies@gmail.com / JustWin1!
+- joey@gmail.com / itsjoey1!
+
+COST/SPEED RULES (minimize credits):
+- Start in PLAN MODE: produce a short task list (<=10 items) + list exact files you will edit/add.
+- Use LOW autonomy. Make small targeted changes only. Do not refactor unrelated code.
+- After each major step, run and test quickly.
+
+WHAT TO BUILD (MVP that works):
+1) Matchmaking like Ome.tv (no time limit)
+- When user clicks Start, they enter a waiting queue.
+- When a second user clicks Start, pair them immediately.
+- Create a private Daily room server-side and issue meeting tokens server-side.
+- Send BOTH users the same {matchId, roomUrl, token} in real time.
+- Session continues indefinitely until user clicks Next/End (NO 1-minute timer or auto end).
+
+2) Text chat always works (even if camera/mic denied)
+- On match, enable a live chat panel with message list + input + send.
+- Messages send over Socket.IO and are delivered to the matched partner instantly.
+- If video fails or permissions are denied, keep the match alive and keep text chat working.
+
+3) Video+audio via Daily Prebuilt embed
+- Embed Daily Prebuilt in the match view using daily-js createFrame().
+- Join room using roomUrl + token (token should be passed to prebuilt join).
+- Provide UI buttons: Next, End, mute, camera toggle (can be minimal; Daily prebuilt controls OK, but Next/End must be ours).
+
+4) Ome.tv-like UI flow
+- Start screen: Start button.
+- Waiting: “Looking for someone…” + Cancel.
+- Matched screen: Video area + Chat panel + Next button prominent + status text.
+- Show partner disconnected message if the other user leaves.
+
+BACKEND REQUIREMENTS:
+- Use Node/Express (or whatever server exists) + Socket.IO.
+- Implement an in-memory queue + match map:
+  - waitingQueue: array of socketIds
+  - matches: map matchId -> {aSocketId, bSocketId, roomUrl}
+- Events:
+  - match:start (client -> server) enter queue or pair
+  - match:cancel (client -> server) remove from queue
+  - match:next (client -> server) leave match and requeue
+  - match:leave (client -> server) end match and notify partner
+  - chat:send (client -> server) broadcast to partner
+  - match:found (server -> client) contains {matchId, roomUrl, token, partner}
+  - chat:message (server -> client) contains {from, text, ts}
+  - match:partner_left (server -> client)
+
+DAILY API DETAILS (server-side only):
+- Create room:
+  POST https://api.daily.co/v1/rooms
+  body: { name: "<matchId>", privacy: "private" }
+  header: Authorization: Bearer ${DAILY_API_KEY}
+- Create meeting token (one per user):
+  POST https://api.daily.co/v1/meeting-tokens
+  body: { room_name: "<matchId>", user_name: "<username>", is_owner: false }
+- Room URL must be:
+  https://uaiulive.daily.co/<matchId>
+
+FRONTEND REQUIREMENTS:
+- On the existing “Video” page (top menu), replace current 1-minute system with this new flow.
+- Connect socket after login (or on page load).
+- Start button -> emit match:start.
+- Waiting UI while in queue.
+- On match:found:
+  - show chat panel
+  - mount Daily prebuilt iframe using daily-js createFrame() in a container
+  - join with token
+- Next button:
+  - destroy daily frame
+  - clear match UI
+  - emit match:next
+- End button:
+  - destroy daily frame
+  - emit match:leave
+  - return to start screen
+- Chat input sends chat:send {matchId, text}
+
+IMPORTANT “NO WASTED TIME” DEBUGGING:
+- Add minimal logs for match events on both server and client.
+- If camera prompt doesn’t appear, still keep text chat alive. Do not fail the session.
+- If tokens/room creation fails, surface the error in UI and console.
+
+TEST PLAN (must be executed by you in Replit preview):
+1) Open normal window: login as originalsplashies@gmail.com
+2) Open incognito: login as joey@gmail.com
+3) Both go to Video page
+4) Click Start on A (shows waiting)
+5) Click Start on B (both should match instantly)
+6) Confirm:
+   - Text chat works both ways immediately
+   - Daily video loads; camera/mic prompt appears when joining (if device supports)
+7) Click Next on A:
+   - A returns to waiting
+   - B sees partner left and can click Next/Start to continue
+
+DELIVERABLES:
+- Working feature in preview
+- README section: How to set DAILY_API_KEY + DAILY_ROOM_DOMAIN
+- Short list of socket events and where the code lives
+
+NOW:
+Start in PLAN MODE: output the task list + exact files you will modify/add.
+Then switch to BUILD MODE and implement.
