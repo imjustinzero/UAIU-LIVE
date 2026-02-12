@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { useLocation } from "wouter";
+import DailyIframe, { DailyCall } from "@daily-co/daily-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Video, VideoOff, Mic, MicOff, Users, Clock, Gem, LogOut, Home, Loader2, SkipForward, PhoneOff, Send, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
@@ -21,8 +21,8 @@ interface User {
 
 interface MatchData {
   sessionId: string;
-  roomName: string;
-  meteredDomain: string;
+  roomUrl: string;
+  token: string;
 }
 
 interface ChatMessage {
@@ -50,44 +50,12 @@ export default function LiveVideo() {
   const socketRef = useRef<Socket | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const meetingRef = useRef<any>(null);
+  const callObjectRef = useRef<DailyCall | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const sdkLoadedRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
 
   const { toast } = useToast();
-
-  const loadMeteredSdk = useCallback(() => {
-    return new Promise<void>((resolve, reject) => {
-      if ((window as any).Metered) {
-        sdkLoadedRef.current = true;
-        resolve();
-        return;
-      }
-      if (sdkLoadedRef.current) {
-        resolve();
-        return;
-      }
-      const existing = document.querySelector('script[src*="metered"]');
-      if (existing) {
-        existing.addEventListener('load', () => {
-          sdkLoadedRef.current = true;
-          resolve();
-        });
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.metered.ca/sdk/video/1.4.6/sdk.min.js';
-      script.async = true;
-      script.onload = () => {
-        sdkLoadedRef.current = true;
-        resolve();
-      };
-      script.onerror = () => reject(new Error('Failed to load Metered SDK'));
-      document.head.appendChild(script);
-    });
-  }, []);
 
   useEffect(() => {
     const savedUser = getUserData();
@@ -153,28 +121,27 @@ export default function LiveVideo() {
       });
 
       newSocket.on('liveMatch:found', async (data: MatchData) => {
-        console.log('[LiveVideo] Match found! Room:', data.roomName);
+        console.log('[LiveVideo] Match found! Room:', data.roomUrl);
         setIsMatching(false);
         setCurrentRoom(data);
         setIsConnected(true);
 
         try {
-          await loadMeteredSdk();
-          await joinMeteredRoom(data);
+          await joinDailyRoom(data);
         } catch (err) {
           console.error('[LiveVideo] Failed to join room:', err);
           toast({ title: "Video Error", description: "Failed to start video. Please try again.", variant: "destructive" });
-          cleanupMeeting();
+          cleanupCall();
         }
       });
 
       newSocket.on('liveMatch:partnerDisconnected', () => {
         toast({ title: "Partner Disconnected", description: "Your partner has left the session", variant: "destructive" });
-        cleanupMeeting();
+        cleanupCall();
       });
 
       newSocket.on('liveMatch:ended', () => {
-        cleanupMeeting();
+        cleanupCall();
       });
 
       newSocket.on('liveMatch:chat', (data: { from: string; message: string }) => {
@@ -207,112 +174,100 @@ export default function LiveVideo() {
     };
   }, [isMatching, currentRoom]);
 
-  const joinMeteredRoom = async (data: MatchData) => {
+  const joinDailyRoom = async (data: MatchData) => {
     try {
-      const MeteredModule = (window as any).Metered;
-      if (!MeteredModule) {
-        throw new Error('Metered SDK not loaded. Please refresh the page.');
-      }
-
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
         localStreamRef.current = null;
       }
 
-      const meeting = new MeteredModule.Meeting();
-      meetingRef.current = meeting;
+      if (callObjectRef.current) {
+        try { await callObjectRef.current.destroy(); } catch (e) {}
+        callObjectRef.current = null;
+      }
 
-      meeting.on('localTrackStarted', (trackItem: any) => {
-        console.log('[LiveVideo] Local track started:', trackItem.type);
-        if (trackItem.type === 'video' && localVideoRef.current) {
-          localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
+      const callObject = DailyIframe.createCallObject({
+        audioSource: true,
+        videoSource: true,
+      });
+      callObjectRef.current = callObject;
+
+      callObject.on('track-started', (event) => {
+        if (!event || !event.track) return;
+        const { track, participant } = event;
+
+        if (participant?.local) {
+          if (track.kind === 'video' && localVideoRef.current) {
+            localVideoRef.current.srcObject = new MediaStream([track]);
+          }
+        } else {
+          if (track.kind === 'video' && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = new MediaStream([track]);
+          }
+          if (track.kind === 'audio') {
+            const audio = document.createElement('audio');
+            audio.srcObject = new MediaStream([track]);
+            audio.autoplay = true;
+            audio.id = `daily-remote-audio-${participant?.session_id || 'unknown'}`;
+            document.body.appendChild(audio);
+          }
         }
       });
 
-      meeting.on('localTrackUpdated', (trackItem: any) => {
-        console.log('[LiveVideo] Local track updated:', trackItem.type);
-        if (trackItem.type === 'video' && localVideoRef.current) {
-          localVideoRef.current.srcObject = new MediaStream([trackItem.track]);
+      callObject.on('track-stopped', (event) => {
+        if (!event || !event.track) return;
+        const { track, participant } = event;
+
+        if (participant?.local) {
+          if (track.kind === 'video' && localVideoRef.current) {
+            localVideoRef.current.srcObject = null;
+          }
+        } else {
+          if (track.kind === 'video' && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = null;
+          }
+          if (track.kind === 'audio' && participant) {
+            const el = document.getElementById(`daily-remote-audio-${participant.session_id}`);
+            if (el) el.remove();
+          }
         }
       });
 
-      meeting.on('remoteTrackStarted', (trackItem: any) => {
-        console.log('[LiveVideo] Remote track started:', trackItem.type);
-        if (trackItem.type === 'video' && remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = new MediaStream([trackItem.track]);
-        }
-        if (trackItem.type === 'audio') {
-          const audio = document.createElement('audio');
-          audio.srcObject = new MediaStream([trackItem.track]);
-          audio.autoplay = true;
-          audio.id = `remote-audio-${trackItem.participantSessionId}`;
-          document.body.appendChild(audio);
-        }
-      });
-
-      meeting.on('remoteTrackStopped', (trackItem: any) => {
-        if (trackItem.type === 'video' && remoteVideoRef.current) {
+      callObject.on('participant-left', (event) => {
+        console.log('[Daily] Participant left');
+        if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = null;
         }
-        if (trackItem.type === 'audio') {
-          const el = document.getElementById(`remote-audio-${trackItem.participantSessionId}`);
+        if (event?.participant) {
+          const el = document.getElementById(`daily-remote-audio-${event.participant.session_id}`);
           if (el) el.remove();
         }
       });
 
-      meeting.on('participantLeft', () => {
-        console.log('[LiveVideo] Participant left');
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = null;
-        }
+      callObject.on('error', (event) => {
+        console.error('[Daily] Call error:', event);
+        toast({ title: "Video Error", description: "A video connection error occurred.", variant: "destructive" });
       });
 
-      meeting.on('onlineParticipants', (participants: any[]) => {
-        console.log('[LiveVideo] Online participants:', participants.length);
-      });
+      console.log('[Daily] Joining room:', data.roomUrl);
+      await callObject.join({ url: data.roomUrl, token: data.token });
+      console.log('[Daily] Joined room successfully');
 
-      meeting.on('error', (error: any) => {
-        console.error('[LiveVideo] Metered SDK error:', error);
-        toast({ title: "Video Error", description: "A video connection error occurred. Please try again.", variant: "destructive" });
-      });
-
-      const roomUrl = `${data.meteredDomain}/${data.roomName}`;
-      console.log('[LiveVideo] Joining Metered room:', roomUrl);
-
-      const meetingInfo = await meeting.join({
-        roomURL: roomUrl,
-        name: user?.name || 'User',
-      });
-
-      console.log('[LiveVideo] Joined Metered room successfully, info:', JSON.stringify(meetingInfo));
-
-      try {
-        await meeting.startVideo();
-        console.log('[LiveVideo] Video started');
-      } catch (videoErr) {
-        console.error('[LiveVideo] startVideo error:', videoErr);
-      }
-
-      try {
-        await meeting.startAudio();
-        console.log('[LiveVideo] Audio started');
-      } catch (audioErr) {
-        console.error('[LiveVideo] startAudio error:', audioErr);
-      }
     } catch (err) {
-      console.error('[LiveVideo] Error joining Metered room:', err);
+      console.error('[Daily] Error joining room:', err);
       throw err;
     }
   };
 
-  const cleanupMeeting = useCallback(() => {
-    if (meetingRef.current) {
+  const cleanupCall = useCallback(() => {
+    if (callObjectRef.current) {
       try {
-        meetingRef.current.leaveMeeting();
+        callObjectRef.current.leave();
+        callObjectRef.current.destroy();
       } catch (e) {
-        console.error('[LiveVideo] Error leaving meeting:', e);
+        console.error('[Daily] Error leaving call:', e);
       }
-      meetingRef.current = null;
+      callObjectRef.current = null;
     }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
@@ -321,7 +276,7 @@ export default function LiveVideo() {
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
-    document.querySelectorAll('audio[id^="remote-audio-"]').forEach(el => el.remove());
+    document.querySelectorAll('audio[id^="daily-remote-audio-"]').forEach(el => el.remove());
 
     setIsConnected(false);
     setCurrentRoom(null);
@@ -332,11 +287,11 @@ export default function LiveVideo() {
 
   useEffect(() => {
     return () => {
-      if (meetingRef.current) {
-        try { meetingRef.current.leaveMeeting(); } catch (e) {}
-        meetingRef.current = null;
+      if (callObjectRef.current) {
+        try { callObjectRef.current.leave(); callObjectRef.current.destroy(); } catch (e) {}
+        callObjectRef.current = null;
       }
-      document.querySelectorAll('audio[id^="remote-audio-"]').forEach(el => el.remove());
+      document.querySelectorAll('audio[id^="daily-remote-audio-"]').forEach(el => el.remove());
     };
   }, []);
 
@@ -381,13 +336,6 @@ export default function LiveVideo() {
     }
 
     try {
-      await loadMeteredSdk();
-    } catch {
-      toast({ title: "Error", description: "Failed to load video system. Please refresh.", variant: "destructive" });
-      return;
-    }
-
-    try {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
@@ -412,7 +360,7 @@ export default function LiveVideo() {
     if (sock && currentRoom) {
       sock.emit('liveMatch:next');
     }
-    cleanupMeeting();
+    cleanupCall();
     setTimeout(() => {
       handleFindMatch();
     }, 500);
@@ -423,7 +371,7 @@ export default function LiveVideo() {
     if (sock && isConnected) {
       sock.emit('liveMatch:leave');
     }
-    cleanupMeeting();
+    cleanupCall();
   };
 
   const sendChatMessage = () => {
@@ -448,39 +396,39 @@ export default function LiveVideo() {
   }, [chatMessages]);
 
   const toggleVideo = async () => {
-    if (!meetingRef.current) return;
+    if (!callObjectRef.current) return;
     try {
       if (videoEnabled) {
-        await meetingRef.current.stopVideo();
+        callObjectRef.current.setLocalVideo(false);
         setVideoEnabled(false);
       } else {
-        await meetingRef.current.startVideo();
+        callObjectRef.current.setLocalVideo(true);
         setVideoEnabled(true);
       }
     } catch (err) {
-      console.error('[LiveVideo] Toggle video error:', err);
+      console.error('[Daily] Toggle video error:', err);
     }
   };
 
   const toggleAudio = async () => {
-    if (!meetingRef.current) return;
+    if (!callObjectRef.current) return;
     try {
       if (audioEnabled) {
-        await meetingRef.current.stopAudio();
+        callObjectRef.current.setLocalAudio(false);
         setAudioEnabled(false);
       } else {
-        await meetingRef.current.startAudio();
+        callObjectRef.current.setLocalAudio(true);
         setAudioEnabled(true);
       }
     } catch (err) {
-      console.error('[LiveVideo] Toggle audio error:', err);
+      console.error('[Daily] Toggle audio error:', err);
     }
   };
 
   const handleLogout = () => {
     clearAllSession();
     setUser(null);
-    cleanupMeeting();
+    cleanupCall();
     socketRef.current?.disconnect();
     navigate('/');
   };

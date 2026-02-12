@@ -261,52 +261,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.get('/api/turn', async (_req, res) => {
     try {
-      // Try Metered API first if configured
-      let appName = process.env.METERED_APP_NAME;
-      const apiKey = process.env.METERED_API_KEY;
-
-      if (appName && apiKey) {
-        appName = appName.replace(/\.metered\.live$/i, '');
-        try {
-          const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
-          const r = await fetch(url);
-          if (r.ok) {
-            const data = await r.json();
-            const iceServers = data.iceServers ?? data;
-            if (iceServers && iceServers.length > 0) {
-              return res.json({ iceServers });
-            }
-          }
-        } catch (e) {
-          console.warn('Metered API failed, using fallback TURN servers');
-        }
-      }
-
-      // Fallback: free public STUN + Metered free TURN servers
       const iceServers = [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.relay.metered.ca:80' },
-        {
-          urls: 'turn:global.relay.metered.ca:80',
-          username: 'e8dd65b92f8d2e2e00364186',
-          credential: 'rBNYMsL3bfXlEf3m',
-        },
-        {
-          urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-          username: 'e8dd65b92f8d2e2e00364186',
-          credential: 'rBNYMsL3bfXlEf3m',
-        },
-        {
-          urls: 'turn:global.relay.metered.ca:443',
-          username: 'e8dd65b92f8d2e2e00364186',
-          credential: 'rBNYMsL3bfXlEf3m',
-        },
-        {
-          urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-          username: 'e8dd65b92f8d2e2e00364186',
-          credential: 'rBNYMsL3bfXlEf3m',
-        },
       ];
       return res.json({ iceServers });
     } catch (err) {
@@ -1079,54 +1036,92 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // GameManager handles all matchmaking including bot fallback
 
-  // Metered.ca configuration
-  const METERED_API_KEY = process.env.METERED_API_KEY;
-  let METERED_APP_NAME = process.env.METERED_APP_NAME || '';
-  METERED_APP_NAME = METERED_APP_NAME.replace(/\.metered\.live$/i, '');
-  const METERED_DOMAIN = `${METERED_APP_NAME}.metered.live`;
+  // Daily.co configuration
+  const DAILY_API_KEY = process.env.DAILY_API_KEY;
+  const DAILY_ROOM_DOMAIN = process.env.DAILY_ROOM_DOMAIN || '';
 
-  console.log('[Metered] Config - API Key set:', !!METERED_API_KEY, ', App Name:', METERED_APP_NAME || '(empty)', ', Domain:', METERED_DOMAIN);
-  if (!METERED_API_KEY || !METERED_APP_NAME) {
-    console.error('[Metered] WARNING: Missing METERED_API_KEY or METERED_APP_NAME - live video will not work!');
+  console.log('[Daily] Config - API Key set:', !!DAILY_API_KEY, ', Domain:', DAILY_ROOM_DOMAIN || '(empty)');
+  if (!DAILY_API_KEY) {
+    console.error('[Daily] WARNING: Missing DAILY_API_KEY - live video will not work!');
   }
 
-  async function createMeteredRoom(): Promise<string | null> {
-    if (!METERED_API_KEY || !METERED_APP_NAME) {
-      console.error('[Metered] Missing API key or app name');
+  async function createDailyRoom(): Promise<{ roomName: string; roomUrl: string } | null> {
+    if (!DAILY_API_KEY) {
+      console.error('[Daily] Missing API key');
       return null;
     }
     try {
-      const res = await fetch(`https://${METERED_DOMAIN}/api/v1/room?secretKey=${METERED_API_KEY}`, {
+      const roomName = `uaiu-${nanoid(10)}`;
+      const res = await fetch('https://api.daily.co/v1/rooms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+        },
         body: JSON.stringify({
-          privacy: 'public',
-          maxParticipants: 2,
-          autoJoin: true,
+          name: roomName,
+          privacy: 'private',
+          properties: {
+            max_participants: 2,
+            enable_chat: false,
+            enable_knocking: false,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+          },
         }),
       });
       if (!res.ok) {
-        console.error('[Metered] Room creation failed:', res.status, await res.text());
+        console.error('[Daily] Room creation failed:', res.status, await res.text());
         return null;
       }
       const data = await res.json();
-      console.log('[Metered] Room created:', data.roomName);
-      return data.roomName;
+      console.log('[Daily] Room created:', data.name, data.url);
+      return { roomName: data.name, roomUrl: data.url };
     } catch (err) {
-      console.error('[Metered] Room creation error:', err);
+      console.error('[Daily] Room creation error:', err);
       return null;
     }
   }
 
-  async function deleteMeteredRoom(roomName: string): Promise<void> {
-    if (!METERED_API_KEY || !METERED_APP_NAME) return;
+  async function createDailyToken(roomName: string, userName: string): Promise<string | null> {
+    if (!DAILY_API_KEY) return null;
     try {
-      await fetch(`https://${METERED_DOMAIN}/api/v1/room/${roomName}?secretKey=${METERED_API_KEY}`, {
-        method: 'DELETE',
+      const res = await fetch('https://api.daily.co/v1/meeting-tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+        },
+        body: JSON.stringify({
+          properties: {
+            room_name: roomName,
+            user_name: userName,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            enable_screenshare: false,
+          },
+        }),
       });
-      console.log('[Metered] Room deleted:', roomName);
+      if (!res.ok) {
+        console.error('[Daily] Token creation failed:', res.status, await res.text());
+        return null;
+      }
+      const data = await res.json();
+      return data.token;
     } catch (err) {
-      console.error('[Metered] Room deletion error:', err);
+      console.error('[Daily] Token creation error:', err);
+      return null;
+    }
+  }
+
+  async function deleteDailyRoom(roomName: string): Promise<void> {
+    if (!DAILY_API_KEY) return;
+    try {
+      await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${DAILY_API_KEY}` },
+      });
+      console.log('[Daily] Room deleted:', roomName);
+    } catch (err) {
+      console.error('[Daily] Room deletion error:', err);
     }
   }
 
@@ -1316,7 +1311,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       if (session.roomName) {
-        deleteMeteredRoom(session.roomName).catch(() => {});
+        deleteDailyRoom(session.roomName).catch(() => {});
       }
 
       const durationSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
@@ -1402,9 +1397,21 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             return;
           }
 
-          const roomName = await createMeteredRoom();
-          if (!roomName) {
+          const dailyRoom = await createDailyRoom();
+          if (!dailyRoom) {
             socket.emit('error', { message: 'Failed to create video room. Please try again.' });
+            liveVideoQueue.unshift(partner);
+            return;
+          }
+
+          const [token1, token2] = await Promise.all([
+            createDailyToken(dailyRoom.roomName, partnerUser.name),
+            createDailyToken(dailyRoom.roomName, user.name),
+          ]);
+
+          if (!token1 || !token2) {
+            socket.emit('error', { message: 'Failed to create video tokens. Please try again.' });
+            deleteDailyRoom(dailyRoom.roomName).catch(() => {});
             liveVideoQueue.unshift(partner);
             return;
           }
@@ -1415,7 +1422,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           partnerSocket.emit('creditsUpdated', partnerUser.credits - 1);
           socket.emit('creditsUpdated', user.credits - 1);
 
-          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}, room: ${roomName}`);
+          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}, room: ${dailyRoom.roomName}`);
           
           const [dbSession] = await db.insert(liveMatchSessions)
             .values({
@@ -1434,20 +1441,22 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             user1SocketId: partnerSocketId!,
             user2SocketId: currentSocketId!,
             startedAt: Date.now(),
-            roomName,
+            roomName: dailyRoom.roomName,
           });
 
-          const matchData = {
-            sessionId: dbSession.id,
-            roomName,
-            meteredDomain: METERED_DOMAIN,
-          };
-
           const currentSocket = io.sockets.sockets.get(currentSocketId);
-          currentSocket?.emit('liveMatch:found', matchData);
-          partnerSocket.emit('liveMatch:found', matchData);
+          currentSocket?.emit('liveMatch:found', {
+            sessionId: dbSession.id,
+            roomUrl: dailyRoom.roomUrl,
+            token: token2,
+          });
+          partnerSocket.emit('liveMatch:found', {
+            sessionId: dbSession.id,
+            roomUrl: dailyRoom.roomUrl,
+            token: token1,
+          });
           
-          console.log('[LiveVideo] Both users notified with room:', roomName);
+          console.log('[LiveVideo] Both users notified with room:', dailyRoom.roomName);
           matchFound = true;
         }
 
