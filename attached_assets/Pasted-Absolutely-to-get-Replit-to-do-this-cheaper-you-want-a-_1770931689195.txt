@@ -1,0 +1,81 @@
+Absolutely — to get Replit to do this cheaper, you want a prompt that is:
+	•	Smaller scope
+	•	No “build a whole new system”
+	•	Patch only the 4 bugs
+	•	Tell it exactly where to change + what NOT to touch
+	•	Avoid extra endpoints / extra features
+
+Below is a lean, low-cost prompt that still fixes the problem the first time.
+
+⸻
+
+Cheap / focused Replit Prompt (paste as-is)
+
+Patch my existing UAIU.live matchmaking + Daily.co join flow. Do NOT refactor the app. Do NOT add new architecture. Only fix the bugs causing: two users click “Find Match”, it looks like connecting, then fails; retries never work.
+
+Search repo for: "liveMatch", "findMatch", "Find Match", "queue", "socket map", "disconnect", "DailyIframe", "createCallObject", "call.join".
+
+Fix ONLY these 4 issues:
+
+BUG 1: Silent session end (client)
+- When client receives "liveMatch:ended", it currently resets UI silently.
+- Change it to always show a visible message (toast/banner/alert is fine) using payload fields:
+  - reasonCode, message
+- Then reset UI state.
+
+BUG 2: Self-matching (server)
+- Prevent matching a userId with itself.
+- If user is already in queue or already in a match, DO NOT add them again.
+- If user opens two tabs with same account, they must never match each other.
+
+BUG 3: Socket map overwrites (server)
+- Replace any userId -> single socketId mapping with userId -> Set<socketId>.
+- On match notifications, emit to ALL sockets for each userId.
+- On disconnect, remove socket from the set; only treat user offline if the set is empty.
+
+BUG 4: Disconnect race condition (server)
+- Do NOT end a match immediately on disconnect.
+- If a user has no sockets remaining AND is in a match, start a grace timer (15 seconds).
+- If user reconnects within 15 seconds, cancel the timer and keep match alive.
+- Only after grace expires should you emit "liveMatch:ended" to both users with reasonCode "peer_disconnected".
+
+Daily retry fix (client)
+- On any join failure OR on liveMatch:ended:
+  - await call.leave().catch(()=>{})
+  - call.destroy()
+  - call = null
+- Ensure a NEW Daily call object is created on retry
+- Prevent duplicate event listeners (attach once per call object)
+
+Implementation rules:
+- Make the smallest edits possible in the existing files.
+- Keep existing event names (liveMatch:*).
+- Keep existing room/token creation logic; do NOT redesign it.
+- Add minimal console logs on server and client for: match created, match ended (with reason), disconnect grace start/cancel, join error.
+
+Output:
+1) List the files you changed.
+2) Paste only the modified code sections (diff-style).
+3) Explain briefly how each of the 4 bugs is fixed.
+
+
+⸻
+
+Why this is cheaper (and still works)
+	•	It doesn’t ask Replit to build new endpoints, new match objects, or new databases.
+	•	It forces 4 surgical patches that address the exact behavior you saw.
+	•	It prevents the expensive “rewrite everything” tendency.
+
+⸻
+
+One extra “keep it cheap” instruction (optional)
+
+If Replit still tries to overbuild, paste this after the prompt:
+
+“Keep changes under 150 lines total unless absolutely necessary.”
+
+That usually reduces the bill a lot.
+
+⸻
+
+If you want, paste the filenames Replit shows for your matchmaking server + Find Match client (just the paths), and I’ll tailor the prompt to those exact files so it’s even cheaper (it won’t waste tokens searching).

@@ -1,0 +1,61 @@
+Fix my UAIU.live “Find Match” + Daily.co issue for REAL mobile use: two different accounts on two iPhones. Current bug: both press Find Match, UI looks like connecting, then it fails; after failure pressing Find Match again does not work.
+
+Important: I am NOT matching myself. Assume two separate userIds. Focus on disconnect race + stuck Daily call object + stale match state.
+
+Rules:
+- Minimal patch only (no rewrites, no new architecture, no DB).
+- Keep existing liveMatch:* event names and existing room/token logic.
+- Fix reliability + retries. Add only essential logs.
+
+Step 1: Locate files by searching repo for:
+"liveMatch", "Find Match", "findMatch", "queue", "match", "disconnect", "ended", "DailyIframe", "createCallObject", "call.join"
+
+Fix these issues:
+
+A) Disconnect grace (SERVER) — this is the main bug
+- When a socket disconnects, DO NOT immediately end the match.
+- If the disconnect happens while user is in a match OR joining, start a 15s grace timer for that user/match.
+- If user reconnects within 15s, cancel the timer and keep the match alive.
+- Only after the grace expires, emit liveMatch:ended to BOTH users with reasonCode="peer_disconnected".
+- Also clear server-side match state so both users can match again (no stuck sessions).
+
+B) Stale match/queue state (SERVER)
+- Ensure a user cannot be simultaneously “queued” and “matched”.
+- On liveMatch:ended or match cleanup, remove BOTH users from:
+  - active match map
+  - queue (if present)
+  - any user->match pointers
+- Make findMatch idempotent:
+  - If user already queued, don’t add again.
+  - If user has an active match, return/emit that match.
+  - If user is marked ended/stale, clear it and allow new find.
+
+C) Silent end UX (CLIENT)
+- When receiving liveMatch:ended, show a visible message (toast/banner/alert OK) that includes reasonCode/message from server.
+- Only after showing message, reset UI to idle.
+- Add console log of ended payload.
+
+D) Daily call hard reset (CLIENT) — this fixes “retry never works”
+- On ANY join failure, join timeout, or liveMatch:ended:
+  - await call.leave().catch(()=>{})
+  - call.destroy()
+  - call = null
+- Ensure on retry a BRAND NEW Daily call object is created.
+- Ensure Daily event handlers are not duplicated (attach once per call instance).
+- Add a join timeout (20s). If it times out, hard reset and show an error.
+
+Optional but small (SERVER):
+- If you currently store userId -> socketId, change to userId -> Set(socketId) and emit to all sockets for that user. This should be a small change.
+
+Deliverables:
+1) List files changed.
+2) Show diff-style patches for ONLY the edited sections.
+3) Briefly explain how A-D were implemented.
+4) Add minimal logs:
+   - server: match created, match ended (with reason), disconnect grace start/cancel, match cleanup
+   - client: join attempt, join success, join error, ended payload
+
+Acceptance:
+- Two accounts on two iPhones can match and join the same Daily room reliably.
+- If either side briefly disconnects during joining, the match does NOT end immediately.
+- If a match ends/fails, pressing Find Match again works immediately (no stuck state).
