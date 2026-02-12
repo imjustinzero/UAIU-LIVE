@@ -1,0 +1,438 @@
+Yep — I can’t directly edit your Replit, but I can give you a near drop-in implementation (server + client patterns) that covers ~99% of the real work, plus a “patch prompt” you paste into Replit so it wires it into your existing code as cheaply as possible.
+
+Below is a battle-tested approach for Daily.co matchmaking that fixes the exact “connects then fails, retries never work” symptom: atomic matching + idempotent requests + hard client cleanup + server-side timeouts.
+
+⸻
+
+The fix in one sentence
+
+Your retries are failing because either (a) the Daily call object is stuck (not left/destroyed) or (b) your matchmaker is racing and handing out mismatched rooms/tokens.
+So we implement a matchmaker that is atomic + idempotent, and a client that always resets Daily state on any failure.
+
+⸻
+
+What you’ll add (minimal architecture)
+
+Server (Node/Express)
+	•	POST /api/match/find → puts user in queue or returns a match
+	•	POST /api/match/cancel → removes user from queue
+	•	POST /api/match/confirm → client tells server “I joined” (helps debug + cleanup)
+	•	In-memory queue + active matches (good enough for 1 server; cheaper than Redis)
+
+Daily
+	•	Create a new room per match (fast + avoids stale rooms)
+	•	Create a meeting token per user (optional but recommended)
+
+Client
+	•	“Find Match” button becomes a state machine:
+	•	searching → matched → joining → in-call
+	•	On any join error OR timeout:
+	•	await call.leave() then call.destroy() then create a fresh call object
+
+⸻
+
+Server code (drop-in)
+
+Create a file like: server/matchmaker.js (or wherever your server lives)
+
+Assumes you already have Express running. If not, Replit can integrate it.
+
+// server/matchmaker.js
+import crypto from "crypto";
+
+const WAIT_TTL_MS = 60_000;      // how long someone can wait in queue
+const MATCH_TTL_MS = 3 * 60_000; // match expires if nobody joins
+const JOIN_TIMEOUT_MS = 20_000;  // client join timeout suggestion
+
+// In-memory state (cheap). If you run multiple instances, use Redis.
+const waitingQueue = []; // [{ userId, email, ts, requestId }]
+const waitingIndex = new Map(); // userId -> position-ish marker
+const activeMatches = new Map(); // matchId -> match object
+const userToMatch = new Map();   // userId -> matchId
+
+function now() { return Date.now(); }
+function id() { return crypto.randomBytes(16).toString("hex"); }
+
+function purgeStale() {
+  const cutoff = now() - WAIT_TTL_MS;
+  // rebuild queue removing stale
+  const fresh = [];
+  waitingIndex.clear();
+  for (const item of waitingQueue) {
+    if (item.ts >= cutoff && !userToMatch.has(item.userId)) {
+      fresh.push(item);
+      waitingIndex.set(item.userId, true);
+    }
+  }
+  waitingQueue.length = 0;
+  waitingQueue.push(...fresh);
+
+  // expire old matches
+  const matchCutoff = now() - MATCH_TTL_MS;
+  for (const [mid, m] of activeMatches.entries()) {
+    if (m.createdAt < matchCutoff || m.ended) {
+      activeMatches.delete(mid);
+      if (m?.users) {
+        for (const u of m.users) userToMatch.delete(u.userId);
+      }
+    }
+  }
+}
+
+// ---- Daily helpers (you'll implement with your Daily API key) ----
+async function createDailyRoom({ privacy = "private" } = {}) {
+  const resp = await fetch("https://api.daily.co/v1/rooms", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
+    },
+    body: JSON.stringify({
+      privacy,
+      properties: {
+        exp: Math.floor(Date.now() / 1000) + 60 * 30, // room expires in 30 min
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Daily room create failed: ${resp.status} ${text}`);
+  }
+
+  const data = await resp.json();
+  return data.url; // room URL
+}
+
+async function createDailyToken({ roomUrl, userId }) {
+  // Token endpoint uses room_name not roomUrl.
+  const roomName = roomUrl.split("/").pop();
+
+  const resp = await fetch("https://api.daily.co/v1/meeting-tokens", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
+    },
+    body: JSON.stringify({
+      properties: {
+        room_name: roomName,
+        user_id: userId,
+        exp: Math.floor(Date.now() / 1000) + 60 * 30,
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Daily token create failed: ${resp.status} ${text}`);
+  }
+  const data = await resp.json();
+  return data.token;
+}
+
+// ---- Matchmaker core ----
+async function matchTwoUsers(userA, userB) {
+  const matchId = id();
+  const roomUrl = await createDailyRoom();
+
+  const [tokenA, tokenB] = await Promise.all([
+    createDailyToken({ roomUrl, userId: userA.userId }),
+    createDailyToken({ roomUrl, userId: userB.userId }),
+  ]);
+
+  const match = {
+    matchId,
+    roomUrl,
+    createdAt: now(),
+    ended: false,
+    users: [
+      { ...userA, joined: false, token: tokenA },
+      { ...userB, joined: false, token: tokenB },
+    ],
+  };
+
+  activeMatches.set(matchId, match);
+  userToMatch.set(userA.userId, matchId);
+  userToMatch.set(userB.userId, matchId);
+
+  return match;
+}
+
+export function attachMatchmakerRoutes(app, { requireAuth }) {
+  // Find match (idempotent by requestId per user)
+  app.post("/api/match/find", requireAuth, async (req, res) => {
+    try {
+      purgeStale();
+
+      const userId = req.user.id;         // adapt to your auth
+      const email = req.user.email;
+      const requestId = req.body?.requestId || id();
+
+      // If already matched, return existing match
+      const existingMatchId = userToMatch.get(userId);
+      if (existingMatchId) {
+        const m = activeMatches.get(existingMatchId);
+        if (m && !m.ended) {
+          const me = m.users.find(u => u.userId === userId);
+          return res.json({
+            status: "matched",
+            matchId: m.matchId,
+            roomUrl: m.roomUrl,
+            token: me.token,
+            joinTimeoutMs: JOIN_TIMEOUT_MS,
+          });
+        }
+      }
+
+      // If already waiting, don't enqueue again
+      if (waitingIndex.has(userId)) {
+        return res.json({ status: "waiting", requestId });
+      }
+
+      // Try match with the first waiting user that's not self
+      const other = waitingQueue.shift();
+      if (other && other.userId !== userId && !userToMatch.has(other.userId)) {
+        waitingIndex.delete(other.userId);
+
+        const me = { userId, email, ts: now(), requestId };
+        const match = await matchTwoUsers(other, me);
+
+        // Return match payload for current user
+        const myRecord = match.users.find(u => u.userId === userId);
+        return res.json({
+          status: "matched",
+          matchId: match.matchId,
+          roomUrl: match.roomUrl,
+          token: myRecord.token,
+          joinTimeoutMs: JOIN_TIMEOUT_MS,
+        });
+      }
+
+      // No partner: enqueue
+      const entry = { userId, email, ts: now(), requestId };
+      waitingQueue.push(entry);
+      waitingIndex.set(userId, true);
+
+      return res.json({ status: "waiting", requestId });
+    } catch (e) {
+      console.error("[match/find] error", e);
+      res.status(500).json({ error: "match_find_failed", message: String(e.message || e) });
+    }
+  });
+
+  app.post("/api/match/cancel", requireAuth, (req, res) => {
+    const userId = req.user.id;
+    // remove from queue
+    if (waitingIndex.has(userId)) {
+      waitingIndex.delete(userId);
+      const filtered = waitingQueue.filter(x => x.userId !== userId);
+      waitingQueue.length = 0;
+      waitingQueue.push(...filtered);
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/match/confirm", requireAuth, (req, res) => {
+    const userId = req.user.id;
+    const matchId = userToMatch.get(userId);
+    const m = matchId ? activeMatches.get(matchId) : null;
+    if (m) {
+      const me = m.users.find(u => u.userId === userId);
+      if (me) me.joined = true;
+    }
+    res.json({ ok: true });
+  });
+
+  // Debug endpoint (protect this)
+  app.get("/api/debug/matchmaking", requireAuth, (req, res) => {
+    // optionally restrict to admin emails
+    res.json({
+      queueLength: waitingQueue.length,
+      activeMatches: [...activeMatches.values()].map(m => ({
+        matchId: m.matchId,
+        createdAt: m.createdAt,
+        ended: m.ended,
+        users: m.users.map(u => ({ userId: u.userId, email: u.email, joined: u.joined })),
+      })),
+    });
+  });
+}
+
+Important server notes
+	•	You must set DAILY_API_KEY in Replit Secrets.
+	•	If your app runs multiple server instances, in-memory queues won’t work. (Most Replit setups = single instance, so you’re fine and it’s cheapest.)
+
+⸻
+
+Client code (the part that usually causes “retry never works”)
+
+This is the critical part: ensure fresh call object on every attempt after failure.
+
+import DailyIframe from "@daily-co/daily-js";
+
+let call = null;
+
+function logDaily(event, payload) {
+  console.log(`[daily] ${event}`, payload || "");
+}
+
+async function hardResetDaily() {
+  try {
+    if (call) {
+      logDaily("reset.leave.start");
+      await call.leave();
+      logDaily("reset.leave.done");
+      call.destroy();
+      logDaily("reset.destroy.done");
+    }
+  } catch (e) {
+    console.warn("hardResetDaily error", e);
+    try { call?.destroy(); } catch {}
+  } finally {
+    call = null;
+  }
+}
+
+function attachHandlersOnce(c) {
+  c.on("joined-meeting", (e) => logDaily("joined-meeting", e));
+  c.on("participant-joined", (e) => logDaily("participant-joined", e));
+  c.on("participant-left", (e) => logDaily("participant-left", e));
+  c.on("error", (e) => logDaily("error", e));
+  c.on("camera-error", (e) => logDaily("camera-error", e));
+  c.on("network-quality-change", (e) => logDaily("network-quality-change", e));
+}
+
+async function joinMatch({ roomUrl, token, joinTimeoutMs = 20000 }) {
+  await hardResetDaily();
+
+  call = DailyIframe.createCallObject({
+    // optional: daily config here
+  });
+  attachHandlersOnce(call);
+
+  // Join with a timeout so UI never gets stuck
+  const joinPromise = call.join({ url: roomUrl, token });
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("join_timeout")), joinTimeoutMs)
+  );
+
+  try {
+    await Promise.race([joinPromise, timeoutPromise]);
+    // Tell server we joined (helps debugging)
+    await fetch("/api/match/confirm", { method: "POST", headers: { "Content-Type": "application/json" }});
+    return true;
+  } catch (e) {
+    console.error("joinMatch failed:", e);
+    await hardResetDaily();
+    return false;
+  }
+}
+
+export async function findMatchFlow(setUIState) {
+  // UI state: idle | searching | matched | joining | inCall | error
+  setUIState({ status: "searching" });
+
+  const requestId = crypto.randomUUID?.() || String(Date.now());
+
+  // Poll until matched (cheap + simple)
+  const start = Date.now();
+  const maxWait = 60000;
+
+  while (Date.now() - start < maxWait) {
+    const resp = await fetch("/api/match/find", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestId }),
+    });
+
+    const data = await resp.json();
+
+    if (data.status === "matched") {
+      setUIState({ status: "joining" });
+      const ok = await joinMatch({
+        roomUrl: data.roomUrl,
+        token: data.token,
+        joinTimeoutMs: data.joinTimeoutMs || 20000,
+      });
+
+      if (ok) {
+        setUIState({ status: "inCall" });
+        return;
+      } else {
+        setUIState({ status: "error", message: "Join failed. Try again." });
+        return;
+      }
+    }
+
+    // still waiting
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  // timed out waiting
+  await fetch("/api/match/cancel", { method: "POST" });
+  setUIState({ status: "error", message: "No match found. Try again." });
+}
+
+Why this fixes your issue
+	•	If Daily “half-joined” and got stuck, hardResetDaily clears it.
+	•	If your server previously matched wrong, the atomic match creation prevents it.
+	•	If user clicks Find Match twice, the server is idempotent (won’t double enqueue).
+
+⸻
+
+The “cheapest Replit prompt” to apply this to YOUR code
+
+Paste this into Replit (AI / Ghostwriter / Assistant) and it should implement the patch inside your actual file structure:
+
+You are working inside my existing Replit project for UAIU.live (Daily.co video chat). There is a “Find Match” button that fails after looking like it will connect, then retries never work.
+
+Do NOT rewrite my whole app. Patch the existing code.
+
+Implement robust matchmaking + Daily client reset using these exact requirements:
+
+SERVER:
+- Add /api/match/find (POST), /api/match/cancel (POST), /api/match/confirm (POST), /api/debug/matchmaking (GET, auth-protected).
+- Use in-memory queue + maps to store waiting users and active matches (single-instance acceptable).
+- Matching must be atomic and idempotent:
+  - A user can’t be queued twice.
+  - If already matched, return the same match again.
+- For each match: create ONE Daily room and return the SAME roomUrl + a per-user meeting token.
+- Use DAILY_API_KEY from environment secrets.
+- Add logs for queue enter, match created, roomUrl returned, token created, confirm join.
+
+CLIENT:
+- Modify Find Match handler to use a state machine (idle/searching/joining/inCall/error).
+- Disable Find Match while searching or joining.
+- On any join error or timeout, fully reset Daily call state:
+    await call.leave(); call.destroy(); call = null;
+  then allow retry.
+- Ensure event listeners are NOT duplicated across retries.
+- Log Daily events: joined-meeting, participant-joined, participant-left, error, camera-error, network-quality-change.
+
+Acceptance:
+- Two logged-in users click Find Match and reliably join the same call.
+- If it fails once, pressing Find Match again immediately works (no stuck state).
+- No memory leaks from repeated retries.
+
+Start by locating my existing server routes and Find Match client code. Then implement these endpoints and wire the client to them. Output a list of files changed and the diffs.
+
+
+⸻
+
+Two gotchas to check in your project (fast)
+	1.	Are you using multiple servers/instances?
+If yes, in-memory queue won’t work → you need Redis/Upstash. If you’re on standard Replit single instance, you’re good.
+	2.	Do you reuse the same Daily call object across matches?
+If yes, that’s probably the entire bug. The hard reset fixes it.
+
+⸻
+
+If you want me to tailor this exactly to your repo
+
+If you paste just these two snippets here (no secrets):
+	1.	Your current “Find Match” front-end function/component
+	2.	Your current server endpoint or socket code that does matchmaking (if any)
+
+…I’ll rewrite them to fit your actual structure precisely (same framework, same auth objects, same routing), so Replit has almost nothing to “figure out” (cheapest + fastest).

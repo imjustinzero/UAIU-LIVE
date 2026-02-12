@@ -1,0 +1,46 @@
+You are a senior full-stack engineer. I have a Daily.co video chat app on UAIU.live with a “Find Match” button. Two users (imjustinzero@gmail.com and Originalsplashies@gmail.com) can sign in and click Find Match. The UI shows it’s about to connect, then fails and prompts both users to press Find Match again, but it never matches again.
+
+Goal: Fix matchmaking reliability so two users consistently connect on the first attempt, and retries work.
+
+Constraints:
+- Uses Daily.co (daily-js on client).
+- There is a server/matchmaker component (or create one if missing).
+- Must handle multiple concurrent users, avoid race conditions, and always clean up call state on failure.
+- Add detailed logging and error reporting so we can see the exact failure reason (client + server).
+
+Tasks:
+1) Audit current “Find Match” flow end-to-end: client click -> server queue/match -> room creation / token -> join call -> remote participant connected.
+2) Identify why first connection attempt fails after “acting like it will connect”. Check:
+   - using the same Daily room URL for both matched users
+   - tokens/meeting session tokens validity/expiration, domain restrictions, and required fields
+   - call object lifecycle: createCallObject called multiple times, not destroyed on failure, or stale event listeners
+   - leaving/cleanup not happening (daily.leave / daily.destroy) so new join attempts fail
+   - server matchmaker sending mismatched room URL, stale match, or not acknowledging both clients
+   - websocket/socket signaling issues (disconnect/reconnect)
+   - CORS/env config issues in prod vs dev
+3) Implement a robust matchmaker:
+   - Maintain a queue of waiting users (in-memory acceptable for now; if already exists, fix it).
+   - When two users are available, create one room (or select an available pre-made room) and return the same room URL + token to both.
+   - Ensure the match is atomic (no double-assigning users).
+   - Add timeouts + retry-safe behavior (idempotent “find match” request).
+4) Implement client-side fixes:
+   - Disable Find Match button while searching/matching; re-enable only after a timeout or failure.
+   - On any join error: show a useful message and fully reset call state by calling:
+       await call.leave();
+       call.destroy();
+     then create a fresh call object for retry.
+   - Ensure we attach event handlers once and clean them up.
+   - Add event logs for daily events: joined-meeting, participant-joined, participant-left, error, camera-error, network-quality-change.
+5) Add diagnostics:
+   - Server logs: when user enters queue, when match occurs, room URL/token returned, when client confirms join.
+   - Client logs: full error object (Daily error msg/code), join state, room URL (redact token), network events.
+   - Add a /health endpoint and a /debug/matchmaking endpoint that shows queue length and active matches (admin-only).
+6) Provide the exact code changes across files with explanations. Ensure production build works on UAIU.live.
+
+Acceptance criteria:
+- Two signed-in users can click Find Match and join the same call reliably.
+- If the call fails, pressing Find Match again works immediately (no stuck state).
+- No memory leaks: repeated matches do not accumulate listeners or call objects.
+- Logs clearly show where failures happen.
+
+Start by locating the current matchmaking and Daily join code. Then propose and implement fixes.

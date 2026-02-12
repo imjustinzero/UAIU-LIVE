@@ -54,6 +54,7 @@ export default function LiveVideo() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const cleanupInProgressRef = useRef<Promise<void> | null>(null);
 
   const { toast } = useToast();
 
@@ -130,18 +131,28 @@ export default function LiveVideo() {
           await joinDailyRoom(data);
         } catch (err) {
           console.error('[LiveVideo] Failed to join room:', err);
-          toast({ title: "Video Error", description: "Failed to start video. Please try again.", variant: "destructive" });
-          cleanupCall();
+          const isTimeout = err instanceof Error && err.message === 'join_timeout';
+          toast({
+            title: isTimeout ? "Connection Timeout" : "Video Error",
+            description: isTimeout
+              ? "Could not connect to the video room in time. Please try again."
+              : "Failed to start video. Please try again.",
+            variant: "destructive"
+          });
+          if (newSocket.connected) {
+            newSocket.emit('liveMatch:leave');
+          }
+          await cleanupCall();
         }
       });
 
-      newSocket.on('liveMatch:partnerDisconnected', () => {
+      newSocket.on('liveMatch:partnerDisconnected', async () => {
         toast({ title: "Partner Disconnected", description: "Your partner has left the session", variant: "destructive" });
-        cleanupCall();
+        await cleanupCall();
       });
 
-      newSocket.on('liveMatch:ended', () => {
-        cleanupCall();
+      newSocket.on('liveMatch:ended', async () => {
+        await cleanupCall();
       });
 
       newSocket.on('liveMatch:chat', (data: { from: string; message: string }) => {
@@ -174,6 +185,34 @@ export default function LiveVideo() {
     };
   }, [isMatching, currentRoom]);
 
+  const hardResetDaily = async () => {
+    if (cleanupInProgressRef.current) {
+      await cleanupInProgressRef.current;
+      return;
+    }
+    const call = callObjectRef.current;
+    if (!call) return;
+
+    const doCleanup = async () => {
+      try {
+        console.log('[Daily] hardReset: leaving...');
+        await call.leave();
+        console.log('[Daily] hardReset: left, destroying...');
+        call.destroy();
+        console.log('[Daily] hardReset: destroyed');
+      } catch (e) {
+        console.warn('[Daily] hardReset error during leave/destroy:', e);
+        try { call.destroy(); } catch {}
+      } finally {
+        callObjectRef.current = null;
+        cleanupInProgressRef.current = null;
+      }
+    };
+
+    cleanupInProgressRef.current = doCleanup();
+    await cleanupInProgressRef.current;
+  };
+
   const joinDailyRoom = async (data: MatchData) => {
     try {
       if (localStreamRef.current) {
@@ -181,10 +220,7 @@ export default function LiveVideo() {
         localStreamRef.current = null;
       }
 
-      if (callObjectRef.current) {
-        try { await callObjectRef.current.destroy(); } catch (e) {}
-        callObjectRef.current = null;
-      }
+      await hardResetDaily();
 
       const callObject = DailyIframe.createCallObject({
         audioSource: true,
@@ -244,31 +280,36 @@ export default function LiveVideo() {
         }
       });
 
-      callObject.on('error', (event) => {
+      callObject.on('error', async (event) => {
         console.error('[Daily] Call error:', event);
         toast({ title: "Video Error", description: "A video connection error occurred.", variant: "destructive" });
+        const sock = socketRef.current;
+        if (sock?.connected) {
+          sock.emit('liveMatch:leave');
+        }
+        await cleanupCall();
       });
 
       console.log('[Daily] Joining room:', data.roomUrl);
-      await callObject.join({ url: data.roomUrl, token: data.token });
+
+      const joinPromise = callObject.join({ url: data.roomUrl, token: data.token });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('join_timeout')), 20000)
+      );
+
+      await Promise.race([joinPromise, timeoutPromise]);
       console.log('[Daily] Joined room successfully');
 
     } catch (err) {
       console.error('[Daily] Error joining room:', err);
+      await hardResetDaily();
       throw err;
     }
   };
 
-  const cleanupCall = useCallback(() => {
-    if (callObjectRef.current) {
-      try {
-        callObjectRef.current.leave();
-        callObjectRef.current.destroy();
-      } catch (e) {
-        console.error('[Daily] Error leaving call:', e);
-      }
-      callObjectRef.current = null;
-    }
+  const cleanupCall = useCallback(async () => {
+    await hardResetDaily();
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
       localStreamRef.current = null;
@@ -287,9 +328,16 @@ export default function LiveVideo() {
 
   useEffect(() => {
     return () => {
-      if (callObjectRef.current) {
-        try { callObjectRef.current.leave(); callObjectRef.current.destroy(); } catch (e) {}
+      const call = callObjectRef.current;
+      if (call) {
+        call.leave().catch(() => {}).finally(() => {
+          try { call.destroy(); } catch {}
+        });
         callObjectRef.current = null;
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
       }
       document.querySelectorAll('audio[id^="daily-remote-audio-"]').forEach(el => el.remove());
     };
@@ -355,23 +403,23 @@ export default function LiveVideo() {
     console.log('[LiveVideo] Emitted liveMatch:join');
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const sock = socketRef.current;
     if (sock && currentRoom) {
       sock.emit('liveMatch:next');
     }
-    cleanupCall();
+    await cleanupCall();
     setTimeout(() => {
       handleFindMatch();
     }, 500);
   };
 
-  const handleLeaveSession = () => {
+  const handleLeaveSession = async () => {
     const sock = socketRef.current;
     if (sock && isConnected) {
       sock.emit('liveMatch:leave');
     }
-    cleanupCall();
+    await cleanupCall();
   };
 
   const sendChatMessage = () => {
@@ -425,10 +473,10 @@ export default function LiveVideo() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     clearAllSession();
     setUser(null);
-    cleanupCall();
+    await cleanupCall();
     socketRef.current?.disconnect();
     navigate('/');
   };

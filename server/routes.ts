@@ -1346,24 +1346,31 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           return;
         }
 
-        // Check if already in a session
+        // Check if already in a session - but auto-clean stale ones
         const existingSession = findUserSession(userId);
         if (existingSession) {
-          console.log(`[LiveVideo] User ${userId} already in active session ${existingSession.sessionId}`);
-          console.log('[LiveVideo] Existing session details:', {
-            sessionId: existingSession.sessionId,
-            user1: existingSession.session.user1Id,
-            user2: existingSession.session.user2Id,
-            startedAt: new Date(existingSession.session.startedAt).toISOString()
-          });
-          socket.emit('error', { message: 'Already in a session. Please refresh the page and try again.' });
-          return;
+          const { sessionId, session } = existingSession;
+          const sessionAge = Date.now() - session.startedAt;
+          const partner1Socket = io.sockets.sockets.get(session.user1SocketId);
+          const partner2Socket = io.sockets.sockets.get(session.user2SocketId);
+          const bothDisconnected = !partner1Socket && !partner2Socket;
+          const isStale = sessionAge > 5 * 60 * 1000;
+
+          if (bothDisconnected || isStale) {
+            console.log(`[LiveVideo] Auto-cleaning stale session ${sessionId} (age: ${Math.round(sessionAge/1000)}s, bothDisconnected: ${bothDisconnected})`);
+            await endLiveVideoSession(sessionId, 'stale_cleanup');
+          } else {
+            console.log(`[LiveVideo] User ${userId} already in active session ${sessionId}`);
+            socket.emit('error', { message: 'Already in a session. Please disconnect first or refresh the page.' });
+            return;
+          }
         }
 
-        // Check if already in queue
-        if (liveVideoQueue.some(p => p.userId === userId)) {
-          console.log(`[LiveVideo] User ${userId} already in queue`);
-          return;
+        // Check if already in queue - remove stale entry first
+        const existingQueueIdx = liveVideoQueue.findIndex(p => p.userId === userId);
+        if (existingQueueIdx !== -1) {
+          liveVideoQueue.splice(existingQueueIdx, 1);
+          console.log(`[LiveVideo] Removed stale queue entry for ${userId}`);
         }
         
         // Update socket mapping (in case of reconnection)
@@ -1377,6 +1384,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         }
 
         console.log(`[LiveVideo] User ${userId} (${user.name}) joining queue with socket ${socket.id}`);
+
+        // Purge stale queue entries (>60s old or disconnected sockets)
+        const queueCutoff = Date.now() - 60000;
+        for (let i = liveVideoQueue.length - 1; i >= 0; i--) {
+          const entry = liveVideoQueue[i];
+          const entrySockId = userSocketMap.get(entry.userId);
+          const entrySock = entrySockId ? io.sockets.sockets.get(entrySockId) : null;
+          if (!entrySock || entry.joinedAt < queueCutoff) {
+            console.log(`[LiveVideo] Purging stale queue entry: ${entry.userId}`);
+            liveVideoQueue.splice(i, 1);
+          }
+        }
 
         let matchFound = false;
         while (liveVideoQueue.length > 0 && !matchFound) {
