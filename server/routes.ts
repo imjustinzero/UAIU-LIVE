@@ -1127,21 +1127,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // Live video chat matchmaking queue and active sessions
   const liveVideoQueue: { userId: string; joinedAt: number }[] = [];
-  const userSocketMap = new Map<string, string>();
+  const userSocketMap = new Map<string, Set<string>>();
   const liveVideoSessions = new Map<string, {
     sessionId: string;
     user1Id: string;
     user2Id: string;
-    user1SocketId: string;
-    user2SocketId: string;
     startedAt: number;
     roomName: string;
   }>();
+  const userToSession = new Map<string, string>();
+  const disconnectGraceTimers = new Map<string, NodeJS.Timeout>();
+
+  function addUserSocket(userId: string, socketId: string) {
+    let set = userSocketMap.get(userId);
+    if (!set) { set = new Set(); userSocketMap.set(userId, set); }
+    set.add(socketId);
+  }
+
+  function removeUserSocket(userId: string, socketId: string) {
+    const set = userSocketMap.get(userId);
+    if (set) {
+      set.delete(socketId);
+      if (set.size === 0) userSocketMap.delete(userId);
+    }
+  }
+
+  function getUserSockets(userId: string): Socket[] {
+    const set = userSocketMap.get(userId);
+    if (!set) return [];
+    const sockets: Socket[] = [];
+    for (const sid of set) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) sockets.push(s);
+    }
+    return sockets;
+  }
+
+  function emitToUser(userId: string, event: string, data?: any) {
+    for (const s of getUserSockets(userId)) {
+      s.emit(event, data);
+    }
+  }
+
+  function isUserOnline(userId: string): boolean {
+    return getUserSockets(userId).length > 0;
+  }
 
   io.on('connection', (socket: Socket) => {
-    console.log('=== SOCKET CONNECTION ATTEMPT ===');
+    console.log('=== SOCKET CONNECTION ===');
     console.log('Socket ID:', socket.id);
-    console.log('================================');
     const sessionId = (socket.handshake.auth as any).sessionId;
     if (!sessionId) {
       console.error('Socket connection rejected: No sessionId in auth');
@@ -1159,10 +1193,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     (socket as any).userId = session.userId;
     (socket as any).userEmail = session.email;
     
-    // Update userId -> socketId mapping for live video matchmaking
-    userSocketMap.set(session.userId, socket.id);
+    addUserSocket(session.userId, socket.id);
     console.log('Client connected:', socket.id, 'User:', session.userId, session.email);
-    console.log('[LiveVideo] Updated socket mapping:', session.userId, '->', socket.id);
+
+    const existingGrace = disconnectGraceTimers.get(session.userId);
+    if (existingGrace) {
+      clearTimeout(existingGrace);
+      disconnectGraceTimers.delete(session.userId);
+      console.log(`[LiveVideo] Reconnect within grace period for ${session.userId}, match preserved`);
+    }
 
     socket.on('joinMatchmaking', async (data: { gameType: GameType; betAmount?: number }) => {
       try {
@@ -1282,33 +1321,42 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
     });
 
-    // Helper function to find active session for a user
     const findUserSession = (userId: string) => {
-      const entries = Array.from(liveVideoSessions.entries());
-      for (let i = 0; i < entries.length; i++) {
-        const [sessionId, session] = entries[i];
-        if (session.user1Id === userId || session.user2Id === userId) {
-          return { sessionId, session };
-        }
-      }
-      return null;
+      const sessionId = userToSession.get(userId);
+      if (!sessionId) return null;
+      const session = liveVideoSessions.get(sessionId);
+      if (!session) { userToSession.delete(userId); return null; }
+      return { sessionId, session };
     };
 
-    const endLiveVideoSession = async (sessionId: string, reason: string = 'completed') => {
+    const reasonMessages: Record<string, string> = {
+      'completed': 'Session ended.',
+      'user_left': 'You left the session.',
+      'user_next': 'Moving to next match...',
+      'peer_disconnected': 'Your partner disconnected.',
+      'stale_cleanup': 'Session expired.',
+      'disconnect': 'Connection lost.',
+      'join_failed': 'Failed to connect to video room.',
+    };
+
+    const endLiveVideoSession = async (sessionId: string, reasonCode: string = 'completed') => {
       const session = liveVideoSessions.get(sessionId);
       if (!session) return;
 
-      console.log(`[LiveVideo] Ending session ${sessionId} (${reason})`);
+      console.log(`[LiveVideo] Ending session ${sessionId} (reason: ${reasonCode})`);
 
-      const user1Socket = io.sockets.sockets.get(session.user1SocketId);
-      const user2Socket = io.sockets.sockets.get(session.user2SocketId);
-      
-      if (user1Socket) {
-        user1Socket.emit('liveMatch:ended');
-      }
-      if (user2Socket) {
-        user2Socket.emit('liveMatch:ended');
-      }
+      const payload = { reasonCode, message: reasonMessages[reasonCode] || 'Session ended.' };
+
+      emitToUser(session.user1Id, 'liveMatch:ended', payload);
+      emitToUser(session.user2Id, 'liveMatch:ended', payload);
+
+      userToSession.delete(session.user1Id);
+      userToSession.delete(session.user2Id);
+
+      const grace1 = disconnectGraceTimers.get(session.user1Id);
+      if (grace1) { clearTimeout(grace1); disconnectGraceTimers.delete(session.user1Id); }
+      const grace2 = disconnectGraceTimers.get(session.user2Id);
+      if (grace2) { clearTimeout(grace2); disconnectGraceTimers.delete(session.user2Id); }
 
       if (session.roomName) {
         deleteDailyRoom(session.roomName).catch(() => {});
@@ -1324,96 +1372,85 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         .where(eq(liveMatchSessions.id, sessionId));
 
       liveVideoSessions.delete(sessionId);
+      console.log(`[LiveVideo] Session ${sessionId} cleaned up, both users freed`);
     };
 
     // Live video chat events
     socket.on('liveMatch:join', async () => {
-      console.log('[LiveVideo] ===== liveMatch:join event received =====');
+      console.log('[LiveVideo] liveMatch:join from socket', socket.id);
       try {
         const userId = (socket as any).userId;
-        console.log('[LiveVideo] User ID:', userId);
         if (!userId) {
-          console.log('[LiveVideo] No userId found - unauthorized');
           socket.emit('error', { message: 'Unauthorized' });
           return;
         }
 
         const user = await storage.getUser(userId);
-        console.log('[LiveVideo] User fetched:', user?.name, 'Credits:', user?.credits);
         if (!user) {
-          console.log('[LiveVideo] User not found in database');
           socket.emit('error', { message: 'User not found' });
           return;
         }
 
-        // Check if already in a session - but auto-clean stale ones
+        console.log(`[LiveVideo] User ${userId} (${user.name}) credits=${user.credits}`);
+
+        // Idempotent: if already in active session, clean stale or reject
         const existingSession = findUserSession(userId);
         if (existingSession) {
           const { sessionId, session } = existingSession;
           const sessionAge = Date.now() - session.startedAt;
-          const partner1Socket = io.sockets.sockets.get(session.user1SocketId);
-          const partner2Socket = io.sockets.sockets.get(session.user2SocketId);
-          const bothDisconnected = !partner1Socket && !partner2Socket;
-          const isStale = sessionAge > 5 * 60 * 1000;
+          const u1Online = isUserOnline(session.user1Id);
+          const u2Online = isUserOnline(session.user2Id);
 
-          if (bothDisconnected || isStale) {
-            console.log(`[LiveVideo] Auto-cleaning stale session ${sessionId} (age: ${Math.round(sessionAge/1000)}s, bothDisconnected: ${bothDisconnected})`);
+          if ((!u1Online && !u2Online) || sessionAge > 5 * 60 * 1000) {
+            console.log(`[LiveVideo] Auto-cleaning stale session ${sessionId}`);
             await endLiveVideoSession(sessionId, 'stale_cleanup');
           } else {
-            console.log(`[LiveVideo] User ${userId} already in active session ${sessionId}`);
-            socket.emit('error', { message: 'Already in a session. Please disconnect first or refresh the page.' });
+            socket.emit('error', { message: 'Already in a session. Disconnect first.' });
             return;
           }
         }
 
-        // Check if already in queue - remove stale entry first
-        const existingQueueIdx = liveVideoQueue.findIndex(p => p.userId === userId);
-        if (existingQueueIdx !== -1) {
-          liveVideoQueue.splice(existingQueueIdx, 1);
-          console.log(`[LiveVideo] Removed stale queue entry for ${userId}`);
+        // Idempotent: remove any existing queue entry for this user
+        const qIdx = liveVideoQueue.findIndex(p => p.userId === userId);
+        if (qIdx !== -1) {
+          liveVideoQueue.splice(qIdx, 1);
+          console.log(`[LiveVideo] Removed existing queue entry for ${userId}`);
         }
-        
-        // Update socket mapping (in case of reconnection)
-        userSocketMap.set(userId, socket.id);
 
-        // Check credits (don't deduct yet - only on match)
         if (user.credits < 1) {
-          console.log('[LiveVideo] Insufficient credits');
-          socket.emit('error', { message: 'Not enough credits. You need 1 credit for a live video session.' });
+          socket.emit('error', { message: 'Not enough credits. You need 1 credit.' });
           return;
         }
 
-        console.log(`[LiveVideo] User ${userId} (${user.name}) joining queue with socket ${socket.id}`);
-
-        // Purge stale queue entries (>60s old or disconnected sockets)
-        const queueCutoff = Date.now() - 60000;
+        // Purge stale queue entries (>60s or offline)
         for (let i = liveVideoQueue.length - 1; i >= 0; i--) {
           const entry = liveVideoQueue[i];
-          const entrySockId = userSocketMap.get(entry.userId);
-          const entrySock = entrySockId ? io.sockets.sockets.get(entrySockId) : null;
-          if (!entrySock || entry.joinedAt < queueCutoff) {
-            console.log(`[LiveVideo] Purging stale queue entry: ${entry.userId}`);
+          if (!isUserOnline(entry.userId) || (Date.now() - entry.joinedAt) > 60000) {
+            console.log(`[LiveVideo] Purging stale queue: ${entry.userId}`);
             liveVideoQueue.splice(i, 1);
           }
         }
 
+        // Try to find a match (skip self)
         let matchFound = false;
         while (liveVideoQueue.length > 0 && !matchFound) {
           const partner = liveVideoQueue.shift()!;
-          
-          const partnerSocketId = userSocketMap.get(partner.userId);
-          const partnerSocket = partnerSocketId ? io.sockets.sockets.get(partnerSocketId) : null;
-          const partnerUser = await storage.getUser(partner.userId);
-          
-          if (!partnerSocket || !partnerUser || partnerUser.credits < 1) {
-            console.log(`[LiveVideo] Partner ${partner.userId} invalid, skipping`);
+
+          // BUG 2 FIX: never match a user with themselves
+          if (partner.userId === userId) {
+            console.log(`[LiveVideo] Skipping self-match for ${userId}`);
             continue;
           }
-          
-          const currentSocketId = userSocketMap.get(userId);
-          if (!currentSocketId) {
-            socket.emit('error', { message: 'Connection error' });
-            return;
+
+          if (!isUserOnline(partner.userId)) {
+            console.log(`[LiveVideo] Partner ${partner.userId} offline, skipping`);
+            continue;
+          }
+
+          const partnerUser = await storage.getUser(partner.userId);
+          if (!partnerUser || partnerUser.credits < 1) {
+            console.log(`[LiveVideo] Partner ${partner.userId} invalid, skipping`);
+            continue;
           }
 
           const dailyRoom = await createDailyRoom();
@@ -1437,12 +1474,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
           await storage.updateUserCredits(partner.userId, partnerUser.credits - 1);
           await storage.updateUserCredits(userId, user.credits - 1);
-          
-          partnerSocket.emit('creditsUpdated', partnerUser.credits - 1);
-          socket.emit('creditsUpdated', user.credits - 1);
 
-          console.log(`[LiveVideo] Match found: ${userId} <-> ${partner.userId}, room: ${dailyRoom.roomName}`);
-          
+          emitToUser(partner.userId, 'creditsUpdated', partnerUser.credits - 1);
+          emitToUser(userId, 'creditsUpdated', user.credits - 1);
+
+          console.log(`[LiveVideo] Match created: ${userId} <-> ${partner.userId}, room: ${dailyRoom.roomName}`);
+
           const [dbSession] = await db.insert(liveMatchSessions)
             .values({
               user1Id: partner.userId,
@@ -1457,34 +1494,33 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             sessionId: dbSession.id,
             user1Id: partner.userId,
             user2Id: userId,
-            user1SocketId: partnerSocketId!,
-            user2SocketId: currentSocketId!,
             startedAt: Date.now(),
             roomName: dailyRoom.roomName,
           });
+          userToSession.set(partner.userId, dbSession.id);
+          userToSession.set(userId, dbSession.id);
 
-          const currentSocket = io.sockets.sockets.get(currentSocketId);
-          currentSocket?.emit('liveMatch:found', {
+          emitToUser(userId, 'liveMatch:found', {
             sessionId: dbSession.id,
             roomUrl: dailyRoom.roomUrl,
             token: token2,
           });
-          partnerSocket.emit('liveMatch:found', {
+          emitToUser(partner.userId, 'liveMatch:found', {
             sessionId: dbSession.id,
             roomUrl: dailyRoom.roomUrl,
             token: token1,
           });
-          
-          console.log('[LiveVideo] Both users notified with room:', dailyRoom.roomName);
+
+          console.log(`[LiveVideo] Both users notified, room: ${dailyRoom.roomName}`);
           matchFound = true;
         }
 
         if (!matchFound) {
           liveVideoQueue.push({ userId, joinedAt: Date.now() });
-          console.log(`[LiveVideo] User ${userId} added to queue. Queue size: ${liveVideoQueue.length}`);
+          console.log(`[LiveVideo] ${userId} queued. Queue size: ${liveVideoQueue.length}`);
         }
       } catch (error) {
-        console.error('[LiveVideo] Error joining match:', error);
+        console.error('[LiveVideo] Error in liveMatch:join:', error);
         socket.emit('error', { message: 'Failed to join live video match' });
       }
     });
@@ -1496,14 +1532,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       
       console.log(`[LiveVideo] User ${userId} left session`);
       
-      // Remove from queue if present
       const queueIndex = liveVideoQueue.findIndex(p => p.userId === userId);
       if (queueIndex !== -1) {
         liveVideoQueue.splice(queueIndex, 1);
-        console.log(`[LiveVideo] Removed ${userId} from queue`);
       }
       
-      // End active session if present
       const sessionData = findUserSession(userId);
       if (sessionData) {
         await endLiveVideoSession(sessionData.sessionId, 'user_left');
@@ -1519,15 +1552,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const { session } = sessionData;
       const partnerId = session.user1Id === userId ? session.user2Id : session.user1Id;
-      const partnerSocketId = session.user1Id === userId ? session.user2SocketId : session.user1SocketId;
-      const partnerSocket = io.sockets.sockets.get(partnerSocketId);
-
-      if (partnerSocket) {
-        partnerSocket.emit('liveMatch:chat', {
-          from: userId,
-          message: data.message.trim().substring(0, 500),
-        });
-      }
+      emitToUser(partnerId, 'liveMatch:chat', {
+        from: userId,
+        message: data.message.trim().substring(0, 500),
+      });
     });
 
     socket.on('liveMatch:next', async () => {
@@ -1536,31 +1564,47 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       
       console.log(`[LiveVideo] User ${userId} clicked next`);
       
-      // End current session
       const sessionData = findUserSession(userId);
       if (sessionData) {
         await endLiveVideoSession(sessionData.sessionId, 'user_next');
       }
-      
-      // Frontend will automatically rejoin queue
     });
 
     socket.on('disconnect', async () => {
-      console.log('Client disconnected:', socket.id);
-      
       const userId = (socket as any).userId;
+      console.log(`Client disconnected: ${socket.id} (user: ${userId})`);
+
       if (userId) {
-        // Remove from live video queue if present
-        const queueIndex = liveVideoQueue.findIndex(p => p.userId === userId);
-        if (queueIndex !== -1) {
-          liveVideoQueue.splice(queueIndex, 1);
-          console.log(`[LiveVideo] Removed user ${userId} from queue on disconnect`);
-        }
-        
-        // End active live video session if present
-        const sessionData = findUserSession(userId);
-        if (sessionData) {
-          await endLiveVideoSession(sessionData.sessionId, 'disconnect');
+        removeUserSocket(userId, socket.id);
+
+        // Remove from queue if they have no sockets left
+        if (!isUserOnline(userId)) {
+          const queueIndex = liveVideoQueue.findIndex(p => p.userId === userId);
+          if (queueIndex !== -1) {
+            liveVideoQueue.splice(queueIndex, 1);
+            console.log(`[LiveVideo] Removed ${userId} from queue (all sockets gone)`);
+          }
+
+          // BUG 4 FIX: grace period instead of immediate session end
+          const sessionData = findUserSession(userId);
+          if (sessionData) {
+            console.log(`[LiveVideo] Starting 15s grace timer for ${userId} (session ${sessionData.sessionId})`);
+            const timer = setTimeout(async () => {
+              disconnectGraceTimers.delete(userId);
+              if (!isUserOnline(userId)) {
+                console.log(`[LiveVideo] Grace expired for ${userId}, ending session`);
+                const stillActive = findUserSession(userId);
+                if (stillActive) {
+                  await endLiveVideoSession(stillActive.sessionId, 'peer_disconnected');
+                }
+              } else {
+                console.log(`[LiveVideo] Grace expired but ${userId} reconnected, keeping session`);
+              }
+            }, 15000);
+            disconnectGraceTimers.set(userId, timer);
+          }
+        } else {
+          console.log(`[LiveVideo] ${userId} still has ${getUserSockets(userId).length} socket(s), not triggering grace`);
         }
       }
       

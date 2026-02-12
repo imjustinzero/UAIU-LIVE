@@ -151,7 +151,16 @@ export default function LiveVideo() {
         await cleanupCall();
       });
 
-      newSocket.on('liveMatch:ended', async () => {
+      newSocket.on('liveMatch:ended', async (payload?: { reasonCode?: string; message?: string }) => {
+        console.log('[LiveVideo] liveMatch:ended payload:', payload);
+        const msg = payload?.message || 'Session ended.';
+        const code = payload?.reasonCode || 'unknown';
+        const isError = ['peer_disconnected', 'disconnect', 'join_failed'].includes(code);
+        toast({
+          title: isError ? "Session Ended" : "Session Ended",
+          description: msg,
+          variant: isError ? "destructive" : "default",
+        });
         await cleanupCall();
       });
 
