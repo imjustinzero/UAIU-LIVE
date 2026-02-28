@@ -3,6 +3,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import SkipLink from "@/components/SkipLink";
+import { SettingsProvider } from "@/lib/settings";
 import Play from "@/pages/Play";
 import Profile from "@/pages/Profile";
 import Feed from "@/pages/Feed";
@@ -24,10 +26,15 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <SettingsProvider>
+        <TooltipProvider>
+          <SkipLink />
+          <Toaster />
+          <main id="main" className="min-h-screen">
+            <Router />
+          </main>
+        </TooltipProvider>
+      </SettingsProvider>
     </QueryClientProvider>
   );
 }

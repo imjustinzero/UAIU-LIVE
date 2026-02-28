@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Video, VideoOff, Mic, MicOff, Users, Clock, Gem, LogOut, Home, Loader2, SkipForward, PhoneOff, Send, MessageSquare, WifiOff, RefreshCw, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import AccessibilitySettings from "@/components/AccessibilitySettings";
 import { AuthModal } from "@/components/AuthModal";
 import { getSessionId, getUserData, setUserData, clearAllSession } from "@/lib/sessionHelper";
 
@@ -583,14 +584,17 @@ export default function LiveVideo() {
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="button-home">
+                <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Go to home" data-testid="button-home">
                   <Home className="h-5 w-5" />
                 </Button>
                 <h1 className="text-2xl font-bold text-emerald-400" data-testid="text-page-title">UAIU Live</h1>
               </div>
-              <Button onClick={() => setShowAuthModal(true)} data-testid="button-login">
-                Login / Sign Up
-              </Button>
+              <div className="flex items-center gap-2">
+                <AccessibilitySettings />
+                <Button onClick={() => setShowAuthModal(true)} data-testid="button-login">
+                  Login / Sign Up
+                </Button>
+              </div>
             </div>
           </div>
         </header>
@@ -628,7 +632,7 @@ export default function LiveVideo() {
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="button-home">
+              <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Go to home" data-testid="button-home">
                 <Home className="h-5 w-5" />
               </Button>
               <h1 className="text-xl font-bold text-emerald-400" data-testid="text-page-title">UAIU Live</h1>
@@ -654,7 +658,8 @@ export default function LiveVideo() {
                   {formatTime(sessionTime)}
                 </Badge>
               )}
-              <Button variant="ghost" size="icon" onClick={handleLogout} data-testid="button-logout">
+              <AccessibilitySettings />
+              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out" data-testid="button-logout">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
