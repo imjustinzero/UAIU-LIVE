@@ -9,6 +9,7 @@ import Play from "@/pages/Play";
 import Profile from "@/pages/Profile";
 import Feed from "@/pages/Feed";
 import LiveVideo from "@/pages/LiveVideo";
+import Exchange from "@/pages/Exchange";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/feed" component={Feed} />
       <Route path="/live" component={LiveVideo} />
+      <Route path="/x" component={Exchange} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -19,6 +19,12 @@ import {
   type InsertReferralPayout,
   type LiveMatchSession,
   type InsertLiveMatchSession,
+  type ExchangeListing,
+  type InsertExchangeListing,
+  type ExchangeAccount,
+  type InsertExchangeAccount,
+  type ExchangeCreditListing,
+  type InsertExchangeCreditListing,
   users,
   matches,
   payoutRequests,
@@ -29,6 +35,9 @@ import {
   friendships,
   referralPayouts,
   liveMatchSessions,
+  exchangeListings,
+  exchangeAccounts,
+  exchangeCreditListings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
@@ -80,6 +89,12 @@ export interface IStorage {
   
   // Live video chat sessions
   createLiveMatchSession(session: InsertLiveMatchSession): Promise<LiveMatchSession>;
+
+  // Exchange
+  getExchangeListings(standard?: string): Promise<ExchangeListing[]>;
+  seedExchangeListings(listings: InsertExchangeListing[]): Promise<void>;
+  createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
+  createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing>;
 }
 
 export class DbStorage implements IStorage {
@@ -487,6 +502,30 @@ export class DbStorage implements IStorage {
     const [result] = await db.insert(liveMatchSessions)
       .values(session)
       .returning();
+    return result;
+  }
+
+  async getExchangeListings(standard?: string): Promise<ExchangeListing[]> {
+    if (standard && standard !== 'ALL') {
+      return db.select().from(exchangeListings)
+        .where(eq(exchangeListings.standard, standard))
+        .orderBy(desc(exchangeListings.pricePerTonne));
+    }
+    return db.select().from(exchangeListings)
+      .orderBy(desc(exchangeListings.pricePerTonne));
+  }
+
+  async seedExchangeListings(listings: InsertExchangeListing[]): Promise<void> {
+    await db.insert(exchangeListings).values(listings);
+  }
+
+  async createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount> {
+    const [result] = await db.insert(exchangeAccounts).values(account).returning();
+    return result;
+  }
+
+  async createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing> {
+    const [result] = await db.insert(exchangeCreditListings).values(listing).returning();
     return result;
   }
 }

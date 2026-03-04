@@ -46,6 +46,46 @@ export async function sendFormSubmissionEmail(formType: string, data: Record<str
   }
 }
 
+export async function sendExchangeEmail(formType: string, data: Record<string, any>) {
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    const sender = fromEmail.includes('gmail.com') ? 'UAIU Exchange <onboarding@resend.dev>' : fromEmail;
+
+    const fields = Object.entries(data)
+      .map(([key, value]) => `
+        <tr style="border-bottom: 1px solid #065f46;">
+          <td style="padding: 10px; color: #6ee7b7; font-weight: bold; white-space:nowrap;">${key}:</td>
+          <td style="padding: 10px; color: #ecfdf5;">${value}</td>
+        </tr>
+      `).join('');
+
+    await client.emails.send({
+      from: sender,
+      to: 'info@uaiu.live',
+      subject: `[UAIU.LIVE/X] ${formType}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #022c22; color: #ecfdf5;">
+          <h2 style="color: #34d399; border-bottom: 2px solid #34d399; padding-bottom: 10px; margin: 0 0 20px;">
+            UAIU.LIVE/X — ${formType}
+          </h2>
+          <table style="border-collapse: collapse; width: 100%; background: #064e3b; border-radius: 8px; overflow: hidden;">
+            ${fields}
+          </table>
+          <p style="color: #6ee7b7; font-size: 12px; margin-top: 16px;">
+            Submitted: ${new Date().toISOString()}
+          </p>
+        </div>
+      `,
+    });
+
+    console.log(`✅ Exchange email sent: ${formType}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send exchange email:', error);
+    return false;
+  }
+}
+
 export async function sendSignupNotification(email: string, name: string, timestamp: Date) {
   try {
     const { client, fromEmail } = await getUncachableResendClient();

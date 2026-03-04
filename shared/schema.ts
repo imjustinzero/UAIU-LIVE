@@ -283,6 +283,63 @@ export type ReferralPayout = typeof referralPayouts.$inferSelect;
 export type InsertLiveMatchSession = z.infer<typeof insertLiveMatchSessionSchema>;
 export type LiveMatchSession = typeof liveMatchSessions.$inferSelect;
 
+export const exchangeListings = pgTable("exchange_listings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  standard: varchar("standard").notNull(),
+  badgeLabel: varchar("badge_label").notNull(),
+  name: varchar("name").notNull(),
+  origin: varchar("origin").notNull(),
+  pricePerTonne: real("price_per_tonne").notNull(),
+  changePercent: real("change_percent").notNull().default(0),
+  changeDirection: varchar("change_direction").notNull().default('up'),
+  status: varchar("status").notNull().default('active'),
+  isAcceptingOrders: boolean("is_accepting_orders").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const exchangeAccounts = pgTable("exchange_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgName: varchar("org_name").notNull(),
+  contactName: varchar("contact_name").notNull(),
+  email: varchar("email").notNull(),
+  role: varchar("role").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const exchangeCreditListings = pgTable("exchange_credit_listings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgName: varchar("org_name").notNull(),
+  contactName: varchar("contact_name").notNull(),
+  email: varchar("email").notNull(),
+  standard: varchar("standard").notNull(),
+  creditType: varchar("credit_type").notNull(),
+  volumeTonnes: varchar("volume_tonnes").notNull(),
+  askingPricePerTonne: varchar("asking_price_per_tonne").notNull(),
+  projectOrigin: varchar("project_origin").notNull(),
+  registrySerial: varchar("registry_serial"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertExchangeAccountSchema = createInsertSchema(exchangeAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExchangeListing = typeof exchangeListings.$inferSelect;
+export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
+export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
+export type InsertExchangeAccount = z.infer<typeof insertExchangeAccountSchema>;
+export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
+export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
+
 export interface GameState {
   matchId: string;
   player1: { id: string; name: string; y: number; score: number };

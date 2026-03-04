@@ -9,7 +9,8 @@ import type { GameState } from "@shared/schema";
 import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
-import { sendSignupNotification, sendFormSubmissionEmail } from "./email-service";
+import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
+import { insertExchangeAccountSchema, insertExchangeCreditListingSchema } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1020,6 +1021,82 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.status(500).json({ message: 'Failed to submit form' });
     }
   });
+
+  // ==================== EXCHANGE ROUTES ====================
+
+  const EXCHANGE_SEED_LISTINGS = [
+    { standard: 'EU ETS', badgeLabel: 'EU ETS', name: 'EU ETS Compliance Credits', origin: 'Caribbean Basin · EU Registered', pricePerTonne: 63.40, changePercent: 2.3, changeDirection: 'up', status: 'active', isAcceptingOrders: true },
+    { standard: 'VCS', badgeLabel: 'VCS', name: 'SwissX B100 Biofuel Credits', origin: 'Antigua, Caribbean · FOB Bunkering', pricePerTonne: 71.80, changePercent: 4.2, changeDirection: 'up', status: 'active', isAcceptingOrders: true },
+    { standard: 'GOLD STD', badgeLabel: 'GOLD STD', name: 'REDD++ Forest Conservation', origin: 'Honduras · Antigua · Verified 2024', pricePerTonne: 58.20, changePercent: 1.1, changeDirection: 'up', status: 'active', isAcceptingOrders: true },
+    { standard: 'VCS', badgeLabel: 'VCS', name: 'Blue Carbon Seagrass Fields', origin: 'Antigua & Barbuda · 28M Acres', pricePerTonne: 45.60, changePercent: 0.8, changeDirection: 'down', status: 'active', isAcceptingOrders: true },
+    { standard: 'CORSIA', badgeLabel: 'CORSIA', name: 'CORSIA Aviation Offsets', origin: 'Caribbean · ICAO Verified', pricePerTonne: 29.70, changePercent: 3.1, changeDirection: 'up', status: 'active', isAcceptingOrders: true },
+    { standard: 'GOLD STD', badgeLabel: 'GOLD STD', name: 'Renewable Energy Credits', origin: 'St. Lucia · Solar & Wind', pricePerTonne: 22.40, changePercent: 0.6, changeDirection: 'up', status: 'active', isAcceptingOrders: true },
+  ];
+
+  let exchangeSeeded = false;
+
+  app.get('/api/exchange/listings', async (req, res) => {
+    try {
+      const standard = req.query.standard as string | undefined;
+      let listings = await storage.getExchangeListings(standard);
+      if (listings.length === 0 && !exchangeSeeded) {
+        exchangeSeeded = true;
+        await storage.seedExchangeListings(EXCHANGE_SEED_LISTINGS);
+        listings = await storage.getExchangeListings(standard);
+      }
+      res.json(listings);
+    } catch (error) {
+      console.error('Exchange listings error:', error);
+      res.status(500).json({ message: 'Failed to fetch listings' });
+    }
+  });
+
+  app.post('/api/exchange/account', async (req, res) => {
+    try {
+      const parsed = insertExchangeAccountSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
+      }
+      const account = await storage.createExchangeAccount(parsed.data);
+      sendExchangeEmail('Open Account Request', {
+        'Organization': parsed.data.orgName,
+        'Contact Name': parsed.data.contactName,
+        'Email': parsed.data.email,
+        'Role': parsed.data.role,
+      }).catch(err => console.error('Exchange email error:', err));
+      res.json({ success: true, id: account.id });
+    } catch (error) {
+      console.error('Exchange account error:', error);
+      res.status(500).json({ message: 'Failed to submit account request' });
+    }
+  });
+
+  app.post('/api/exchange/list-credits', async (req, res) => {
+    try {
+      const parsed = insertExchangeCreditListingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
+      }
+      const listing = await storage.createExchangeCreditListing(parsed.data);
+      sendExchangeEmail('List Credits Submission', {
+        'Organization': parsed.data.orgName,
+        'Contact Name': parsed.data.contactName,
+        'Email': parsed.data.email,
+        'Standard': parsed.data.standard,
+        'Credit Type': parsed.data.creditType,
+        'Volume (Tonnes)': parsed.data.volumeTonnes,
+        'Asking Price (EUR/tonne)': parsed.data.askingPricePerTonne,
+        'Project Origin': parsed.data.projectOrigin,
+        'Registry Serial': parsed.data.registrySerial || 'Not provided',
+      }).catch(err => console.error('Exchange email error:', err));
+      res.json({ success: true, id: listing.id });
+    } catch (error) {
+      console.error('Exchange list credits error:', error);
+      res.status(500).json({ message: 'Failed to submit credit listing' });
+    }
+  });
+
+  // ==================== END EXCHANGE ROUTES ====================
 
   // Use the HTTP server passed in from runApp
   const io = new SocketIOServer(httpServer, {
