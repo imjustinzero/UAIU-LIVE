@@ -23,6 +23,8 @@ import {
   type InsertExchangeListing,
   type ExchangeAccount,
   type InsertExchangeAccount,
+  type ExchangeRfq,
+  type InsertExchangeRfq,
   type ExchangeCreditListing,
   type InsertExchangeCreditListing,
   users,
@@ -37,6 +39,7 @@ import {
   liveMatchSessions,
   exchangeListings,
   exchangeAccounts,
+  exchangeRfqs,
   exchangeCreditListings,
 } from "@shared/schema";
 import { db } from "./db";
@@ -94,6 +97,7 @@ export interface IStorage {
   getExchangeListings(standard?: string): Promise<ExchangeListing[]>;
   seedExchangeListings(listings: InsertExchangeListing[]): Promise<void>;
   createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
+  createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq>;
   createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing>;
 }
 
@@ -521,6 +525,11 @@ export class DbStorage implements IStorage {
 
   async createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount> {
     const [result] = await db.insert(exchangeAccounts).values(account).returning();
+    return result;
+  }
+
+  async createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq> {
+    const [result] = await db.insert(exchangeRfqs).values(rfq).returning();
     return result;
   }
 

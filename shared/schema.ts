@@ -299,10 +299,31 @@ export const exchangeListings = pgTable("exchange_listings", {
 
 export const exchangeAccounts = pgTable("exchange_accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orgName: varchar("org_name").notNull(),
-  contactName: varchar("contact_name").notNull(),
+  orgName: varchar("org_name"),
+  contactName: varchar("contact_name"),
   email: varchar("email").notNull(),
-  role: varchar("role").notNull(),
+  role: varchar("role"),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  phone: varchar("phone"),
+  accountType: varchar("account_type"),
+  annualCo2Exposure: varchar("annual_co2_exposure"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const exchangeRfqs = pgTable("exchange_rfqs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  company: varchar("company").notNull(),
+  contact: varchar("contact").notNull(),
+  email: varchar("email").notNull(),
+  side: varchar("side").notNull(),
+  standard: varchar("standard").notNull(),
+  volumeTonnes: integer("volume_tonnes").notNull(),
+  targetPrice: real("target_price"),
+  preferredOrigin: varchar("preferred_origin"),
+  vintageYear: integer("vintage_year"),
+  deadline: varchar("deadline"),
+  notes: varchar("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -328,6 +349,10 @@ export const insertExchangeAccountSchema = createInsertSchema(exchangeAccounts).
   id: true,
   createdAt: true,
 });
+export const insertExchangeRfqSchema = createInsertSchema(exchangeRfqs).omit({
+  id: true,
+  createdAt: true,
+});
 export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
   id: true,
   createdAt: true,
@@ -337,6 +362,8 @@ export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
 export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
 export type InsertExchangeAccount = z.infer<typeof insertExchangeAccountSchema>;
+export type ExchangeRfq = typeof exchangeRfqs.$inferSelect;
+export type InsertExchangeRfq = z.infer<typeof insertExchangeRfqSchema>;
 export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
 export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
 

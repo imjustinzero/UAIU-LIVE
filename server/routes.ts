@@ -10,7 +10,7 @@ import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
-import { insertExchangeAccountSchema, insertExchangeCreditListingSchema } from "@shared/schema";
+import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1053,21 +1053,76 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   app.post('/api/exchange/account', async (req, res) => {
     try {
-      const parsed = insertExchangeAccountSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
+      const body = req.body;
+      if (!body.email) {
+        return res.status(400).json({ message: 'Email is required' });
       }
-      const account = await storage.createExchangeAccount(parsed.data);
+      const accountData: any = { email: body.email };
+      if (body.orgName) accountData.orgName = body.orgName;
+      if (body.contactName) accountData.contactName = body.contactName;
+      if (body.role) accountData.role = body.role;
+      if (body.firstName) accountData.firstName = body.firstName;
+      if (body.lastName) accountData.lastName = body.lastName;
+      if (body.phone) accountData.phone = body.phone;
+      if (body.accountType) accountData.accountType = body.accountType;
+      if (body.annualCo2Exposure) accountData.annualCo2Exposure = body.annualCo2Exposure;
+      const account = await storage.createExchangeAccount(accountData);
       sendExchangeEmail('Open Account Request', {
-        'Organization': parsed.data.orgName,
-        'Contact Name': parsed.data.contactName,
-        'Email': parsed.data.email,
-        'Role': parsed.data.role,
+        'Name': body.firstName ? `${body.firstName} ${body.lastName || ''}`.trim() : (body.contactName || 'N/A'),
+        'Organization': body.orgName || body.company || 'N/A',
+        'Email': body.email,
+        'Phone': body.phone || 'N/A',
+        'Account Type': body.accountType || body.role || 'N/A',
+        'Annual CO₂ Exposure': body.annualCo2Exposure || 'N/A',
       }).catch(err => console.error('Exchange email error:', err));
       res.json({ success: true, id: account.id });
     } catch (error) {
       console.error('Exchange account error:', error);
       res.status(500).json({ message: 'Failed to submit account request' });
+    }
+  });
+
+  app.post('/api/exchange/rfq', async (req, res) => {
+    try {
+      const body = req.body;
+      if (!body.company || !body.contact || !body.email || !body.side || !body.standard || !body.volumeTonnes) {
+        return res.status(400).json({ message: 'Missing required fields: company, contact, email, side, standard, volumeTonnes' });
+      }
+      const volume = parseInt(body.volumeTonnes);
+      if (isNaN(volume) || volume < 1000) {
+        return res.status(400).json({ message: 'Minimum RFQ volume is 1,000 tonnes' });
+      }
+      const rfqData: any = {
+        company: String(body.company),
+        contact: String(body.contact),
+        email: String(body.email),
+        side: String(body.side),
+        standard: String(body.standard),
+        volumeTonnes: volume,
+      };
+      if (body.targetPrice) rfqData.targetPrice = parseFloat(body.targetPrice);
+      if (body.preferredOrigin) rfqData.preferredOrigin = String(body.preferredOrigin);
+      if (body.vintageYear) rfqData.vintageYear = parseInt(body.vintageYear);
+      if (body.deadline) rfqData.deadline = String(body.deadline);
+      if (body.notes) rfqData.notes = String(body.notes);
+      const rfq = await storage.createExchangeRfq(rfqData);
+      sendExchangeEmail('RFQ Desk Submission', {
+        'Company': rfqData.company,
+        'Contact': rfqData.contact,
+        'Email': rfqData.email,
+        'Side': rfqData.side,
+        'Standard': rfqData.standard,
+        'Volume (tonnes)': rfqData.volumeTonnes.toLocaleString(),
+        'Target Price': rfqData.targetPrice ? `€${rfqData.targetPrice}/tonne` : 'Open',
+        'Preferred Origin': rfqData.preferredOrigin || 'Any',
+        'Vintage Year': rfqData.vintageYear?.toString() || 'Any',
+        'Compliance Deadline': rfqData.deadline || 'Not specified',
+        'Notes': rfqData.notes || 'None',
+      }).catch(err => console.error('Exchange email error:', err));
+      res.json({ success: true, id: rfq.id });
+    } catch (error) {
+      console.error('Exchange RFQ error:', error);
+      res.status(500).json({ message: 'Failed to submit RFQ' });
     }
   });
 
