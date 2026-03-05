@@ -53,9 +53,11 @@ export function TradeTicker({ newTrades = [] }: Props) {
       overflow: 'hidden',
       display: 'flex',
       alignItems: 'center',
-      position: 'sticky',
-      top: 0,
-      zIndex: 600,
+      position: 'fixed',
+      top: 68,
+      left: 0,
+      right: 0,
+      zIndex: 499,
     }}>
       <div style={{
         fontFamily: "'JetBrains Mono', monospace",

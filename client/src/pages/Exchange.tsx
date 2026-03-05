@@ -592,12 +592,11 @@ export default function Exchange() {
         .x-execute-sell { width:100%;padding:18px;background:linear-gradient(135deg,#991b1b,#ef4444);border:none;color:white;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s; }
         .x-execute-sell:hover { filter:brightness(1.1);transform:translateY(-1px); }
         @media(max-width:1024px){.x-listings-grid{grid-template-columns:1fr 1fr!important}.x-steps-layout{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr 1fr!important}.x-compliance-grid{grid-template-columns:1fr 1fr!important}.x-list-layout{grid-template-columns:1fr!important}.x-rfq-layout{grid-template-columns:1fr!important}.x-proof-grid{grid-template-columns:1fr!important}.x-section{padding:80px 24px!important}nav{padding:0 24px!important}.x-nav-center{display:none!important}}
-        @media(max-width:640px){.x-listings-grid{grid-template-columns:1fr!important}.x-footer-grid{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr!important}}
+        @media(max-width:640px){.x-listings-grid{grid-template-columns:1fr!important}.x-footer-grid{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr!important}nav{padding:0 12px!important}.x-markets-open{display:none!important}.x-nav-logo{font-size:16px!important}.x-btn-nav{display:none!important}}
         @media print{body{display:none!important}}
       ` }} />
 
       <input type="text" id="_hp_exchange" style={{ position: 'absolute', left: -9999, height: 0, width: 0, opacity: 0 }} tabIndex={-1} autoComplete="off" />
-      <TradeTicker newTrades={tickerTrades} />
 
       <div ref={cursorRef} style={{ position: 'fixed', width: 8, height: 8, background: C.gold, borderRadius: '50%', pointerEvents: 'none', zIndex: 99999, transform: 'translate(-50%,-50%)', mixBlendMode: 'difference' }} />
       <div ref={ringRef} style={{ position: 'fixed', width: 32, height: 32, border: '1px solid rgba(212,168,67,0.5)', borderRadius: '50%', pointerEvents: 'none', zIndex: 99998, transform: 'translate(-50%,-50%)', transition: 'width 0.2s,height 0.2s,border-color 0.2s' }} />
@@ -607,7 +606,7 @@ export default function Exchange() {
       <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.syne, color: C.cream, overflowX: 'hidden', cursor: 'none' }}>
 
         <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500, height: 68, display: 'flex', alignItems: 'center', padding: '0 52px', background: 'rgba(6,8,16,0.88)', backdropFilter: 'blur(24px)', borderBottom: `1px solid ${C.goldborder}` }}>
-          <div style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', color: C.cream, whiteSpace: 'nowrap' }}>
+          <div className="x-nav-logo" style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', color: C.cream, whiteSpace: 'nowrap' }}>
             UAIU<sup style={{ color: C.gold, fontSize: 11, verticalAlign: 'super', letterSpacing: '0.2em', fontFamily: F.mono, fontWeight: 400 }}>.LIVE/X</sup>
           </div>
           <div className="x-nav-center" style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 28 }}>
@@ -616,7 +615,7 @@ export default function Exchange() {
             ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="x-markets-open" style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="x-pulse" /> Markets Open
             </div>
             <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
@@ -633,17 +632,7 @@ export default function Exchange() {
           </div>
         </nav>
 
-        <div style={{ position: 'fixed', top: 68, left: 0, right: 0, zIndex: 499, height: 38, background: C.ink2, borderBottom: `1px solid ${C.goldborder}`, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-          <div className="x-ticker-scroll">
-            {[...TICKER_DATA, ...TICKER_DATA, ...TICKER_DATA, ...TICKER_DATA].map((t, i) => (
-              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '0 32px', borderRight: `1px solid ${C.goldborder}`, height: 38 }}>
-                <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', color: C.gold, textTransform: 'uppercase' }}>{t.n}</span>
-                <span style={{ fontFamily: F.mono, fontSize: 11, color: C.cream }}>{t.p}</span>
-                <span style={{ fontFamily: F.mono, fontSize: 10, color: t.up ? C.green : C.red }}>{t.up ? '▲' : '▼'} {t.c}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <TradeTicker newTrades={tickerTrades} />
 
         <section id="home" style={{ minHeight: '100vh', paddingTop: 106, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 100% 70% at 70% 30%,rgba(212,168,67,0.06) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 10% 90%,rgba(30,50,120,0.25) 0%,transparent 50%)` }} />

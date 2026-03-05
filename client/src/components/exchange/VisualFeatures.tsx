@@ -60,7 +60,7 @@ export function MobileNav({ links, onLinkClick }: { links: NavLink[]; onLinkClic
         <span style={{ width: 16, height: 1, background: C.gold, display: 'block', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translateY(-6px)' : 'none' }} />
       </button>
       {open && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,8,16,0.98)', zIndex: 800, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,8,16,0.98)', zIndex: 99996, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
           <button onClick={() => setOpen(false)} style={{ position: 'absolute', top: 20, right: 20, background: 'transparent', border: 'none', color: C.gold, fontSize: 22, cursor: 'pointer' }}>✕</button>
           {links.map(link => (
             <a
