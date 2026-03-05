@@ -1787,6 +1787,123 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     });
   });
 
+  // ─── AI Exchange Routes ───────────────────────────────────────────
+
+  app.post('/api/exchange/ai-rfq', async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) return res.status(400).json({ error: 'message required' });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.json({ parsed: { volume_tonnes: 50000, standard: 'EU ETS — European Allowances', side: 'BUY', notes: message }, summary: '[Demo] Parsed RFQ from your description.' });
+      }
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: `You are a carbon credit RFQ parsing assistant. Extract structured RFQ data from this message and return ONLY valid JSON with these fields (all optional): side (BUY or SELL), standard (one of: EU ETS — European Allowances, Verra VCS — Verified Carbon Standard, Gold Standard, CORSIA — Aviation Offsets, Blue Carbon — Seagrass / Coral, REDD++ — Forest Conservation, SwissX B100 — Caribbean Biofuel), volume_tonnes (integer), target_price_eur (number), deadline (YYYY-MM-DD), notes (string). Message: "${message}"`
+        }]
+      });
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return res.json({ error: 'Could not parse response', summary: text });
+      const parsed = JSON.parse(jsonMatch[0]);
+      res.json({ parsed, summary: `Parsed: ${parsed.side || 'BUY'} ${parsed.volume_tonnes?.toLocaleString() || '?'} tonnes of ${parsed.standard || 'carbon credits'}` });
+    } catch (err: any) {
+      console.error('AI RFQ error:', err?.message);
+      res.json({ parsed: null, error: 'AI service unavailable. Please fill the form manually.' });
+    }
+  });
+
+  app.post('/api/exchange/ai-intelligence', async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.json({ cards: [
+          { eyebrow: 'EU ETS Market', headline: 'European allowances hold above €63 amid power sector demand', summary: 'EUA futures remained resilient as utility buyers absorbed supply ahead of winter. Analysts cite tightening Phase IV caps as the primary price floor.' },
+          { eyebrow: 'Shipping Emissions', headline: 'IMO 2030 compliance accelerates Caribbean blue carbon demand', summary: 'Shipping companies facing CII ratings are moving early into verified Caribbean blue carbon credits. Inquiry volume up 3x vs prior year.' },
+          { eyebrow: 'Caribbean Carbon Supply', headline: 'Antigua and Roatan projects near listing — Q2 2025 expected', summary: 'Two flagship UAIU projects have cleared preliminary review and are expected to list on UAIU.LIVE/X in Q2. Supply addition may moderate prices.' },
+        ]});
+      }
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 900,
+        messages: [{
+          role: 'user',
+          content: `Generate a daily carbon market intelligence briefing with exactly 3 items. Return ONLY a JSON array of objects with fields: eyebrow (short category, max 4 words), headline (compelling title, max 12 words), summary (2 sentences, ~50 words). Topics: 1) EU ETS price/policy news, 2) shipping/aviation emissions news, 3) Caribbean/tropical carbon supply update. Use realistic current market context for ${new Date().toISOString().split('T')[0]}.`
+        }]
+      });
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('No JSON array found');
+      const cards = JSON.parse(jsonMatch[0]);
+      res.json({ cards });
+    } catch (err: any) {
+      console.error('AI intelligence error:', err?.message);
+      res.status(500).json({ error: 'AI service unavailable' });
+    }
+  });
+
+  app.post('/api/exchange/ai-vision', async (req, res) => {
+    try {
+      const { imageBase64, mimeType } = req.body;
+      if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.json({ report: '[Demo Mode] AI Vision Analysis:\nLocation Assessment: Tropical coastal region detected\nVegetation Analysis: Dense canopy cover ~85%\nCarbon Estimate: 12–18 tCO₂e/ha/year\nRecommended Standard: Verra VCS Blue Carbon' });
+      }
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: (mimeType || 'image/jpeg') as any, data: imageBase64 } },
+            { type: 'text', text: 'You are a carbon project verification assistant. Analyze this image and provide a preliminary project verification report with these sections: Location Assessment, Vegetation Analysis, Carbon Sequestration Estimate (tCO₂e/ha/year range), and Recommended Standard (VCS/Gold Standard/Blue Carbon). Be concise and technical. Max 150 words.' }
+          ]
+        }]
+      });
+      const report = response.content[0].type === 'text' ? response.content[0].text : 'Analysis complete.';
+      res.json({ report });
+    } catch (err: any) {
+      console.error('AI vision error:', err?.message);
+      res.json({ report: '[Demo Mode] AI Vision Analysis:\nLocation Assessment: Project area detected\nVegetation Analysis: Moderate to dense coverage\nCarbon Estimate: 8–15 tCO₂e/ha/year\nRecommended Standard: Verra VCS' });
+    }
+  });
+
+  app.post('/api/exchange/multisig-approval', async (req, res) => {
+    try {
+      const { tradeId, receiptHash, complianceEmail } = req.body;
+      if (!tradeId || !complianceEmail) return res.status(400).json({ error: 'tradeId and complianceEmail required' });
+      const token = 'APPR-' + Math.random().toString(36).slice(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
+      const approvalUrl = `https://uaiu.live/approve/${token}`;
+      // Send approval email via existing Zoho/Resend
+      try {
+        const { sendExchangeEmail } = await import('./email-service');
+        await sendExchangeEmail('Compliance Approval Required', {
+          'Trade ID': tradeId,
+          'Receipt Hash': receiptHash?.slice(0, 32) + '...',
+          'Approval Token': token,
+          'Approval URL': approvalUrl,
+          'Action Required': 'Click the approval URL to authorize final settlement of this trade.',
+        });
+      } catch (emailErr) {
+        console.warn('Approval email failed:', emailErr);
+      }
+      res.json({ token, approvalUrl, status: 'pending' });
+    } catch (err: any) {
+      console.error('MultiSig error:', err?.message);
+      res.status(500).json({ error: 'Failed to create approval request' });
+    }
+  });
+
   // Socket.IO is now attached to the HTTP server passed in from runApp
   // No need to return the server
 }

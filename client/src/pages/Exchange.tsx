@@ -3,6 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { dbInsert } from "@/lib/supabase";
 import { Globe, Waves, Leaf, Trees, Droplets, Building2, Shield, Zap, Link2, Scale, Star, MapPin, CheckCircle, Lock, FileText, Clock, Users } from "lucide-react";
+import { CarbonClock } from "../components/exchange/CarbonClock";
+import { TradeTicker, type TickerTrade } from "../components/exchange/TradeTicker";
+import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
+import { AIMarketIntelligence, ClaudeRFQAssistant } from "../components/exchange/AIFeatures";
+import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/SupplyFeatures";
+import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
+import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
 
 const C = {
   ink: '#060810',
@@ -200,6 +207,16 @@ export default function Exchange() {
 
   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: '' });
 
+  // New feature state
+  const { isDark, toggle: toggleDark } = useDarkMode();
+  const [tickerTrades, setTickerTrades] = useState<TickerTrade[]>([]);
+  const [showMultiSig, setShowMultiSig] = useState(false);
+  const [pendingTradeId, setPendingTradeId] = useState('');
+  const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
+  const [sessionAccount, setSessionAccount] = useState<any>(null);
+  const currentIndexPrice = 67.43;
+  const etsPrice = useETSPrice(currentIndexPrice);
+
   const { data: listings = [] } = useQuery<Listing[]>({ queryKey: ['/api/exchange/listings'] });
 
   function showToast(msg: string) {
@@ -296,7 +313,7 @@ export default function Exchange() {
 
     function animRing() {
       rx += (mx - rx) * 0.12; ry += (my - ry) * 0.12;
-      ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+      if (ring) { ring.style.left = rx + 'px'; ring.style.top = ry + 'px'; }
       raf = requestAnimationFrame(animRing);
     }
     animRing();
@@ -381,11 +398,16 @@ export default function Exchange() {
       status: 'filled',
     }).catch(() => {});
     setTimeout(() => {
-      setSessionTrades(prev => [trade, ...prev]);
+      setSessionTrades(prev => [{ ...trade, trade_id: tradeId, side: mode, volume_tonnes: tradeQty, price_eur_per_tonne: tradePrice, gross_eur: gross, receipt_hash: hash }, ...prev]);
       setTradeRefStr(tradeId);
       setTradeHashStr(hash);
       setTradeSuccess(true);
       setTradeProcessing(false);
+      // Push to trade ticker
+      setTickerTrades(prev => [{ id: tradeId, side: mode.toUpperCase(), standard, volume: tradeQty, price: tradePrice, ago: 'just now' }, ...prev].slice(0, 20));
+      // Trigger multi-sig
+      setPendingTradeId(tradeId);
+      setShowMultiSig(true);
       showToast(mode === 'buy' ? 'Order placed · Receipt hash generated' : 'Credits listed on marketplace');
     }, 1400);
   }
@@ -401,6 +423,7 @@ export default function Exchange() {
       const data = await res.json();
       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
       setAcctSuccess(true);
+      setSessionAccount({ company: acctCompany || `${acctFirstName} ${acctLastName}`, annualCo2: parseInt(acctCo2) || 10000 });
       showToast('Account created — KYC verification begins now');
       // Non-blocking Supabase save
       dbInsert('entities', {
@@ -574,6 +597,7 @@ export default function Exchange() {
       ` }} />
 
       <input type="text" id="_hp_exchange" style={{ position: 'absolute', left: -9999, height: 0, width: 0, opacity: 0 }} tabIndex={-1} autoComplete="off" />
+      <TradeTicker newTrades={tickerTrades} />
 
       <div ref={cursorRef} style={{ position: 'fixed', width: 8, height: 8, background: C.gold, borderRadius: '50%', pointerEvents: 'none', zIndex: 99999, transform: 'translate(-50%,-50%)', mixBlendMode: 'difference' }} />
       <div ref={ringRef} style={{ position: 'fixed', width: 32, height: 32, border: '1px solid rgba(212,168,67,0.5)', borderRadius: '50%', pointerEvents: 'none', zIndex: 99998, transform: 'translate(-50%,-50%)', transition: 'width 0.2s,height 0.2s,border-color 0.2s' }} />
@@ -586,15 +610,25 @@ export default function Exchange() {
           <div style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', color: C.cream, whiteSpace: 'nowrap' }}>
             UAIU<sup style={{ color: C.gold, fontSize: 11, verticalAlign: 'super', letterSpacing: '0.2em', fontFamily: F.mono, fontWeight: 400 }}>.LIVE/X</sup>
           </div>
-          <div className="x-nav-center" style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 36 }}>
-            {[['home','Home'],['marketplace','Marketplace'],['how','How It Works'],['citizens','Citizens Portal'],['rfq','RFQ Desk'],['trust','Verification'],['list','List Credits'],['compliance','Compliance']].map(([id,label]) => (
+          <div className="x-nav-center" style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 28 }}>
+            {[['home','Home'],['marketplace','Markets'],['intelligence','Intelligence'],['pipeline','Pipeline'],['calculator','Calculator'],['dashboard','Dashboard'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
               <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} data-testid={`link-nav-${id}`}>{label}</a>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="x-pulse" /> Markets Open
             </div>
+            <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
+            <MobileNav links={[
+              {label:'Markets', href:'#marketplace'},
+              {label:'Intelligence', href:'#intelligence'},
+              {label:'Calculator', href:'#calculator'},
+              {label:'Pipeline', href:'#pipeline'},
+              {label:'Dashboard', href:'#dashboard'},
+              {label:'RFQ Desk', href:'#rfq'},
+              {label:'Verify', href:'#trust'},
+            ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
             <button className="x-btn-nav" onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-open-account-header">Open Account</button>
           </div>
         </nav>
@@ -624,9 +658,15 @@ export default function Exchange() {
               <em style={{ fontStyle: 'italic', color: C.gold, display: 'block' }}>is the market.</em>
             </h1>
             <p style={{ fontSize: 15, lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a financial advantage — starting today.</p>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 80 }}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 48 }}>
               <button className="x-btn-primary" onClick={() => scrollTo('marketplace')} data-testid="button-browse-credits">Browse Credits →</button>
               <button className="x-btn-ghost" onClick={() => scrollTo('list')} data-testid="button-list-credits-hero">List Your Credits</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 48, flexWrap: 'wrap', marginBottom: 48 }}>
+              <Globe3D onPinClick={() => scrollTo('marketplace')} />
+              <div style={{ flex: 1 }}>
+                <CarbonClock />
+              </div>
             </div>
             <div className="x-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: `1px solid ${C.goldborder}`, background: 'rgba(13,18,32,0.8)', backdropFilter: 'blur(12px)' }}>
               {[
@@ -694,8 +734,13 @@ export default function Exchange() {
                 );
               })}
             </div>
+            <div style={{ marginTop: 40 }}>
+              <OrderBook />
+            </div>
           </div>
         </section>
+
+        <AIMarketIntelligence />
 
         <div style={s.goldRule} />
 
@@ -924,6 +969,7 @@ export default function Exchange() {
                     </div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Serial — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VCS-7821-2024-001" value={listSerial} onChange={e => setListSerial(e.target.value)} data-testid="input-list-serial" /></div>
+                    <VisionVerification onReport={(report) => setListSerial(prev => prev)} />
                     <button style={{ ...s.formSubmit as React.CSSProperties, opacity: listSubmitting ? 0.7 : 1 }} onClick={handleListSubmit} disabled={listSubmitting} data-testid="button-list-submit">{listSubmitting ? 'Submitting...' : 'Submit for Verification →'}</button>
                     <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>48-hour AI-assisted verification · Human reviewed · UAIU Holdings Corp. Wyoming</div>
                   </div>
@@ -1087,9 +1133,41 @@ export default function Exchange() {
                   </div>
                 ))}
               </div>
+              <div>
+                <ClaudeRFQAssistant onParsed={(parsed) => {
+                  if (parsed.volume_tonnes) setRfqVolume(String(parsed.volume_tonnes));
+                  if (parsed.standard) setRfqStandard(parsed.standard);
+                  if (parsed.deadline) setRfqDeadline(parsed.deadline);
+                }} />
+              </div>
             </div>
           </div>
         </section>
+
+        <section id="calculator" style={{ background: C.ink, borderTop: `1px solid ${C.goldborder}` }}>
+          <div className="x-section" style={s.sectionWrap}>
+            <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Carbon Accounting</div>
+            <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>Calculate your<br /><em style={{ fontStyle: 'italic', color: C.gold }}>farm footprint.</em></h2>
+            <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 48 }}>Input your agricultural operation details to estimate your annual carbon credit yield and compliance offset capacity.</p>
+            <FarmCarbonCalculator />
+          </div>
+        </section>
+
+        <section id="pipeline" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+          <div className="x-section" style={s.sectionWrap}>
+            <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Project Development</div>
+            <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>Project<br /><em style={{ fontStyle: 'italic', color: C.gold }}>pipeline.</em></h2>
+            <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 48 }}>Live view of carbon projects in verification, awaiting issuance, or recently listed on the exchange.</p>
+            <ProjectPipeline />
+          </div>
+        </section>
+
+        <PortfolioDashboard
+          trades={sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '' }))}
+          retirements={[]}
+          accountName={sessionAccount?.company || 'Exchange Account'}
+          annualTarget={sessionAccount?.annualCo2 || 10000}
+        />
 
         <div style={s.goldRule} />
 
@@ -1332,6 +1410,15 @@ export default function Exchange() {
             </div>
           </div>
         </div>
+      )}
+
+      {showMultiSig && pendingTradeId && (
+        <MultiSigApproval
+          tradeId={pendingTradeId}
+          receiptHash={sessionTrades[0]?.receipt_hash || sessionTrades[0]?.receiptHash || ''}
+          onApproved={() => { setShowMultiSig(false); showToast('Multi-sig approval complete — trade finalized'); }}
+          onSkip={() => setShowMultiSig(false)}
+        />
       )}
 
       {toast.show && (
