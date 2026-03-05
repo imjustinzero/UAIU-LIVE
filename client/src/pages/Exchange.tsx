@@ -4,6 +4,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { dbInsert } from "@/lib/supabase";
 import { Globe, Waves, Leaf, Trees, Droplets, Building2, Shield, Zap, Link2, Scale, Star, MapPin, CheckCircle, Lock, FileText, Clock, Users } from "lucide-react";
 import { CarbonClock } from "../components/exchange/CarbonClock";
+import { TerminalMode } from "../components/exchange/TerminalMode";
+import { VoiceRFQ } from "../components/exchange/VoiceRFQ";
+import { VideoTradeRoom, AITradeNegotiator } from "../components/exchange/TradeFeatures";
+import { ListingChat } from "../components/exchange/ListingChat";
 import { TradeTicker, type TickerTrade } from "../components/exchange/TradeTicker";
 import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
 import { AIMarketIntelligence, ClaudeRFQAssistant } from "../components/exchange/AIFeatures";
@@ -214,6 +218,8 @@ export default function Exchange() {
   const [pendingTradeId, setPendingTradeId] = useState('');
   const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
   const [sessionAccount, setSessionAccount] = useState<any>(null);
+  const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
+  const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const currentIndexPrice = 67.43;
   const etsPrice = useETSPrice(currentIndexPrice);
 
@@ -486,6 +492,7 @@ export default function Exchange() {
       const rfqIdGenerated = data.id || genTradeId('RFQ');
       setRfqId(rfqIdGenerated);
       setRfqSuccess(true);
+      setRfqSubmitted(true);
       showToast('RFQ submitted — quote within 4 business hours');
       // Non-blocking Supabase save
       dbInsert('rfqs', {
@@ -603,6 +610,8 @@ export default function Exchange() {
 
       <div style={{ position: 'fixed', inset: 0, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")`, pointerEvents: 'none', zIndex: 9999, opacity: 0.6 }} />
 
+      <TerminalMode listings={listings.map(l => ({ name: l.name, standard: l.standard, volume: 0, price: l.pricePerTonne, origin: l.origin, status: 'LIVE' }))} trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', side: t.side || 'BUY', standard: t.standard || 'VCS', volume: t.volume_tonnes || 0, price: t.price_eur_per_tonne || 0, time: new Date().toLocaleTimeString() }))} indexPrice={currentIndexPrice} etsPrice={typeof etsPrice === 'number' ? etsPrice : (etsPrice as any)?.price ?? currentIndexPrice * 1.07} />
+
       <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.syne, color: C.cream, overflowX: 'hidden', cursor: 'none' }}>
 
         <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500, height: 68, display: 'flex', alignItems: 'center', padding: '0 52px', background: 'rgba(6,8,16,0.88)', backdropFilter: 'blur(24px)', borderBottom: `1px solid ${C.goldborder}` }}>
@@ -718,6 +727,12 @@ export default function Exchange() {
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Buy Now</button>
                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
+                    </div>
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
+                      <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={l.pricePerTonne} isDark={isDark} />
+                    </div>
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                      <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
                     </div>
                   </div>
                 );
@@ -1122,7 +1137,15 @@ export default function Exchange() {
                   </div>
                 ))}
               </div>
-              <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <VoiceRFQ isDark={isDark} onParsed={(parsed) => {
+                  if (parsed.volume_tonnes) setRfqVolume(String(parsed.volume_tonnes));
+                  if (parsed.standard) setRfqStandard(parsed.standard);
+                  if (parsed.deadline) setRfqDeadline(parsed.deadline);
+                  if (parsed.side) setRfqSide(parsed.side);
+                  if (parsed.target_price_eur) setRfqPrice(String(parsed.target_price_eur));
+                  if (parsed.notes) setRfqNotes(parsed.notes);
+                }} />
                 <ClaudeRFQAssistant onParsed={(parsed) => {
                   if (parsed.volume_tonnes) setRfqVolume(String(parsed.volume_tonnes));
                   if (parsed.standard) setRfqStandard(parsed.standard);
@@ -1130,6 +1153,15 @@ export default function Exchange() {
                 }} />
               </div>
             </div>
+            {rfqSubmitted && (
+              <div style={{ marginTop: 48 }}>
+                <AITradeNegotiator
+                  rfqData={{ side: rfqSide, standard: rfqStandard, volume_tonnes: rfqVolume ? parseFloat(rfqVolume) : 0, target_price_eur: rfqPrice ? parseFloat(rfqPrice) : undefined, deadline: rfqDeadline }}
+                  currentIndexPrice={currentIndexPrice}
+                  isDark={isDark}
+                />
+              </div>
+            )}
           </div>
         </section>
 

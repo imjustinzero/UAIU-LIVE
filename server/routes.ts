@@ -1315,6 +1315,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     return getUserSockets(userId).length > 0;
   }
 
+  // ── Listing Chat In-Memory Store ─────────────────────────────────
+  const listingChatHistory = new Map<string, any[]>();
+  const listingOnlineUsers = new Map<string, Set<string>>();
+
   io.on('connection', (socket: Socket) => {
     console.log('=== SOCKET CONNECTION ===');
     console.log('Socket ID:', socket.id);
@@ -1745,6 +1749,38 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
     });
 
+    // ── Listing Chat Handlers ────────────────────────────────────────
+    socket.on('join-listing-chat', ({ room, listingId, listingName, userHandle }: any) => {
+      socket.join(room);
+      if (!listingOnlineUsers.has(room)) listingOnlineUsers.set(room, new Set());
+      listingOnlineUsers.get(room)!.add(socket.id);
+      const history = listingChatHistory.get(room) || [];
+      socket.emit('chat-history', history);
+      const count = listingOnlineUsers.get(room)!.size;
+      io.to(room).emit('listing-online-count', { listing_id: listingId, count });
+      const joinMsg = { id: Math.random().toString(36).slice(2), listing_id: listingId, sender: 'SYSTEM', sender_type: 'system', text: `${userHandle} joined`, timestamp: new Date().toISOString() };
+      if (!listingChatHistory.has(room)) listingChatHistory.set(room, []);
+      listingChatHistory.get(room)!.push(joinMsg);
+      socket.to(room).emit('chat-message', joinMsg);
+    });
+
+    socket.on('listing-chat-message', ({ room, message }: any) => {
+      if (!listingChatHistory.has(room)) listingChatHistory.set(room, []);
+      const history = listingChatHistory.get(room)!;
+      history.push(message);
+      if (history.length > 100) history.splice(0, history.length - 100);
+      socket.to(room).emit('chat-message', message);
+    });
+
+    socket.on('leave-listing-chat', ({ room, listingId }: any) => {
+      socket.leave(room);
+      const users = listingOnlineUsers.get(room);
+      if (users) {
+        users.delete(socket.id);
+        io.to(room).emit('listing-online-count', { listing_id: listingId, count: users.size });
+      }
+    });
+
     socket.on('disconnect', async () => {
       const userId = (socket as any).userId;
       console.log(`Client disconnected: ${socket.id} (user: ${userId})`);
@@ -1783,6 +1819,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         }
       }
       
+      // Listing chat cleanup
+      Array.from(listingOnlineUsers.entries()).forEach(([room, users]) => {
+        if (users.has(socket.id)) {
+          users.delete(socket.id);
+          const listingId = room.replace('listing-chat-', '');
+          io.to(room).emit('listing-online-count', { listing_id: listingId, count: users.size });
+        }
+      });
+
       // GameManager handles game cleanup automatically
     });
   });
@@ -1901,6 +1946,77 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (err: any) {
       console.error('MultiSig error:', err?.message);
       res.status(500).json({ error: 'Failed to create approval request' });
+    }
+  });
+
+  // ─── AI Trade Negotiator Route ────────────────────────────────────
+  app.post('/api/ai/negotiate', async (req, res) => {
+    try {
+      const { rfq, market } = req.body;
+      if (!rfq) return res.status(400).json({ error: 'rfq required' });
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.json({
+          recommendation: {
+            action: 'ACCEPT',
+            counter_price: market?.indexPrice ? (market.indexPrice * 0.97).toFixed(2) : '62.50',
+            counter_volume: rfq.volume_tonnes || 5000,
+            rationale: '[Demo Mode] Based on current Caribbean carbon credit market conditions and your RFQ parameters, we recommend accepting near the index price with a slight discount for bulk volume. Standard settlement terms apply.',
+            risk_assessment: 'LOW',
+            settlement_days: 5,
+            confidence: 87,
+          }
+        });
+      }
+
+      const prompt = `You are a carbon credit trade negotiator for UAIU.LIVE/X Caribbean Carbon Exchange.
+
+Analyze this RFQ and provide a trade recommendation:
+
+RFQ Details:
+- Side: ${rfq.side || 'BUY'}
+- Standard: ${rfq.standard || 'VCS'}
+- Volume: ${rfq.volume_tonnes || 0} tonnes CO2e
+- Target Price: €${rfq.target_price_eur || 'market'}/tonne
+- Deadline: ${rfq.deadline || 'flexible'}
+- Notes: ${rfq.notes || 'none'}
+
+Market Context:
+- Index Price: €${market?.indexPrice || 67.43}/tonne
+- EU ETS Price: €${market?.etsPrice || 72.10}/tonne
+- Market Trend: ${market?.trend || 'stable'}
+
+Respond with a JSON object (no markdown) with these exact fields:
+{
+  "action": "ACCEPT" | "COUNTER" | "REJECT",
+  "counter_price": number (EUR/tonne),
+  "counter_volume": number (tonnes),
+  "rationale": "string (2-3 sentences explaining recommendation)",
+  "risk_assessment": "LOW" | "MEDIUM" | "HIGH",
+  "settlement_days": number,
+  "confidence": number (0-100)
+}`;
+
+      const { default: Anthropic } = await import('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey });
+      const msg = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const text = (msg.content[0] as any).text?.trim() || '{}';
+      let recommendation: any;
+      try {
+        recommendation = JSON.parse(text);
+      } catch {
+        recommendation = { action: 'ACCEPT', counter_price: (market?.indexPrice || 67.43) * 0.97, counter_volume: rfq.volume_tonnes, rationale: text, risk_assessment: 'LOW', settlement_days: 5, confidence: 75 };
+      }
+      res.json({ recommendation });
+    } catch (err: any) {
+      console.error('Negotiate error:', err?.message);
+      res.status(500).json({ error: 'Negotiation engine error' });
     }
   });
 
