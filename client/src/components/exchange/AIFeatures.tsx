@@ -18,11 +18,11 @@ interface ParsedRFQ {
   notes?: string;
 }
 
-interface ClaudeRFQProps {
+interface AIRFQProps {
   onParsed: (data: ParsedRFQ) => void;
 }
 
-export function ClaudeRFQAssistant({ onParsed }: ClaudeRFQProps) {
+export function AIRFQAssistant({ onParsed }: AIRFQProps) {
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -179,7 +179,7 @@ export function AIMarketIntelligence({ refreshIntervalMs = 4 * 60 * 60 * 1000 }:
             </h2>
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, letterSpacing: '0.12em' }}>
-            Updated {lastUpdated.toLocaleTimeString()} · Powered by Claude
+            Updated {lastUpdated.toLocaleTimeString()} · Powered by AI
           </div>
         </div>
 

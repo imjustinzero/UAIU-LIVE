@@ -15,7 +15,7 @@ import { AIPricePrediction, DueDiligenceReport } from "../components/exchange/AI
 import { EscrowSettlement } from "../components/exchange/EscrowUI";
 import { TradeTicker, type TickerTrade } from "../components/exchange/TradeTicker";
 import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
-import { AIMarketIntelligence, ClaudeRFQAssistant } from "../components/exchange/AIFeatures";
+import { AIMarketIntelligence, AIRFQAssistant } from "../components/exchange/AIFeatures";
 import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/SupplyFeatures";
 import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
 import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
@@ -1095,7 +1095,7 @@ export default function Exchange() {
                 <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 40 }}>Caribbean-origin credits command an 8–14% premium on global markets due to the regulatory focus on maritime and aviation emissions in the Caribbean corridor.</p>
                 {[
                   { Icon: Users, title: 'Institutional Buyer Network', text: 'Access to pre-qualified institutional buyers including cruise operators, cargo shipping groups, and aviation firms seeking Caribbean-origin compliance credits.', detail: 'Average time to first offer: 72 hours' },
-                  { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. Claude AI reviews and approves within 48 hours.', detail: 'AI-assisted · Human reviewed' },
+                  { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves within 48 hours.', detail: 'AI-assisted · Human reviewed' },
                   { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of Antigua & Barbuda, Tonga, Zambia, Kenya, and St. Kitts & Nevis.', detail: '5 sovereign nations · Carbon Union' },
                 ].map(({ Icon, title, text, detail }, i) => (
                   <div key={i} className="x-benefit-item">
@@ -1259,7 +1259,7 @@ export default function Exchange() {
                   if (parsed.target_price_eur) setRfqPrice(String(parsed.target_price_eur));
                   if (parsed.notes) setRfqNotes(parsed.notes);
                 }} />
-                <ClaudeRFQAssistant onParsed={(parsed) => {
+                <AIRFQAssistant onParsed={(parsed) => {
                   if (parsed.volume_tonnes) setRfqVolume(String(parsed.volume_tonnes));
                   if (parsed.standard) setRfqStandard(parsed.standard);
                   if (parsed.deadline) setRfqDeadline(parsed.deadline);
@@ -1313,7 +1313,7 @@ export default function Exchange() {
               {[
                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
                 { Icon: Clock, title: 'T+1 Settlement', text: 'Credits transfer to your registry account within one business day of trade execution. Full settlement confirmation with audit trail.' },
-                { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. Claude AI reviews and approves.' },
+                { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves.' },
                 { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of 5 Carbon Union nations.' },
               ].map(({ Icon, title, text }, i) => (
                 <div key={i} className="x-trust-card">

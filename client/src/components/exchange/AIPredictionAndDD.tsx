@@ -290,7 +290,7 @@ export function AIPricePrediction({ currentPrice = 64.20, isDark = true }: Price
           <p style={{ margin:'0 0 14px', fontSize:'12px', fontWeight:700,
             letterSpacing:'0.08em', textTransform:'uppercase',
             color:'rgba(212,168,67,0.7)' }}>
-            KEY PRICE DRIVERS — Claude Analysis
+            KEY PRICE DRIVERS — AI Analysis
           </p>
           <p style={{ margin:'0 0 14px', fontSize:'13px', lineHeight:1.7,
             color: isDark?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.7)' }}>
@@ -309,7 +309,7 @@ export function AIPricePrediction({ currentPrice = 64.20, isDark = true }: Price
           </div>
           <p style={{ margin:'14px 0 0', fontSize:'10px', fontFamily:'JetBrains Mono,monospace',
             color:'rgba(255,255,255,0.2)' }}>
-            AI PRICE PREDICTION — NOT FINANCIAL ADVICE — CLAUDE SONNET · UAIU.LIVE/X
+            AI PRICE PREDICTION — NOT FINANCIAL ADVICE — UAIU AI · UAIU.LIVE/X
           </p>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 
 // ── AI COMPLIANCE CO-PILOT ────────────────────────────────
 // Floating persistent AI assistant on every page
-// Powered by Claude Sonnet
+// Powered by UAIU AI
 // Knows the user's portfolio, current listings, market prices
 
 interface Message {
@@ -81,7 +81,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
       setMessages([{
         id: '0',
         role: 'assistant',
-        content: `Hello! I'm your Carbon Compliance Co-Pilot powered by Claude.\n\nI can help you with EU ETS obligations, CORSIA requirements, IMO compliance, credit calculations, and anything on UAIU.LIVE/X.\n\nWhat do you need help with today?`,
+        content: `Hello! I'm your Carbon Compliance Co-Pilot.\n\nI can help you with EU ETS obligations, CORSIA requirements, IMO compliance, credit calculations, and anything on UAIU.LIVE/X.\n\nWhat do you need help with today?`,
         timestamp: new Date()
       }]);
     }
@@ -266,7 +266,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '10px',
                   color: 'rgba(212,168,67,0.5)', letterSpacing: '0.06em' }}>
-                  POWERED BY CLAUDE SONNET
+                  POWERED BY UAIU AI
                 </p>
               </div>
               <div style={{

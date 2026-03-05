@@ -147,7 +147,7 @@ export function VideoTradeRoom({
 }
 
 // ── AI TRADE NEGOTIATOR ───────────────────────────────────
-// After RFQ submitted → Claude generates counteroffer recommendation
+// After RFQ submitted → AI generates counteroffer recommendation
 
 interface NegotiatorProps {
   rfqData: {
@@ -268,7 +268,7 @@ export function AITradeNegotiator({
           <span style={{
             fontFamily: 'JetBrains Mono, monospace',
             fontSize: '11px', color: 'rgba(212,168,67,0.4)'
-          }}>Claude Sonnet</span>
+          }}>UAIU AI</span>
         </div>
         <div style={{
           marginTop: '12px', height: '3px', borderRadius: '2px',
@@ -318,7 +318,7 @@ export function AITradeNegotiator({
             fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
             background: 'rgba(212,168,67,0.1)', color: 'rgba(212,168,67,0.6)',
             fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em'
-          }}>CLAUDE SONNET</span>
+          }}>UAIU AI</span>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{

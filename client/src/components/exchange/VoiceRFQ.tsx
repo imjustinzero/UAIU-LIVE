@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 // ── VOICE RFQ ─────────────────────────────────────────────
-// Press mic button → speak order → Claude parses → form fills
+// Press mic button → speak order → AI parses → form fills
 // Uses Web Speech API (Chrome/Edge/Safari) with fallback
 
 interface VoiceRFQProps {
@@ -88,7 +88,7 @@ export function VoiceRFQ({ onParsed, isDark = true }: VoiceRFQProps) {
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       setVolume(0);
       if (transcript || recognitionRef.current?._finalTranscript) {
-        parseWithClaude(recognitionRef.current?._finalTranscript || transcript);
+        parseWithAI(recognitionRef.current?._finalTranscript || transcript);
       } else {
         setState('idle');
       }
@@ -123,7 +123,7 @@ export function VoiceRFQ({ onParsed, isDark = true }: VoiceRFQProps) {
     recognitionRef.current?.stop();
   };
 
-  const parseWithClaude = async (text: string) => {
+  const parseWithAI = async (text: string) => {
     if (!text?.trim()) { setState('idle'); return; }
     setState('processing');
 
@@ -270,7 +270,7 @@ export function VoiceRFQ({ onParsed, isDark = true }: VoiceRFQProps) {
           {state === 'processing' && (
             <div>
               <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: GOLD }}>
-                Claude is parsing your order...
+                AI is parsing your order...
               </p>
               <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.5)',
                 fontFamily: 'JetBrains Mono, monospace' }}>
