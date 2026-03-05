@@ -8,6 +8,11 @@ import { TerminalMode } from "../components/exchange/TerminalMode";
 import { VoiceRFQ } from "../components/exchange/VoiceRFQ";
 import { VideoTradeRoom, AITradeNegotiator } from "../components/exchange/TradeFeatures";
 import { ListingChat } from "../components/exchange/ListingChat";
+import { CarbonBudgetTracker } from "../components/exchange/CarbonBudgetTracker";
+import { RegulatoryCalendar } from "../components/exchange/RegulatoryCalendar";
+import { AIComplianceCoPilot } from "../components/exchange/ComplianceCoPilot";
+import { AIPricePrediction, DueDiligenceReport } from "../components/exchange/AIPredictionAndDD";
+import { EscrowSettlement } from "../components/exchange/EscrowUI";
 import { TradeTicker, type TickerTrade } from "../components/exchange/TradeTicker";
 import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
 import { AIMarketIntelligence, ClaudeRFQAssistant } from "../components/exchange/AIFeatures";
@@ -220,6 +225,7 @@ export default function Exchange() {
   const [sessionAccount, setSessionAccount] = useState<any>(null);
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
+  const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
   const currentIndexPrice = 67.43;
   const etsPrice = useETSPrice(currentIndexPrice);
 
@@ -409,6 +415,7 @@ export default function Exchange() {
       setTradeHashStr(hash);
       setTradeSuccess(true);
       setTradeProcessing(false);
+      if (gross >= 10000) setEscrowTrade({ tradeId, amountEur: gross, volumeTonnes: tradeQty, standard });
       // Push to trade ticker
       setTickerTrades(prev => [{ id: tradeId, side: mode.toUpperCase(), standard, volume: tradeQty, price: tradePrice, ago: 'just now' }, ...prev].slice(0, 20));
       // Trigger multi-sig
@@ -612,6 +619,12 @@ export default function Exchange() {
 
       <TerminalMode listings={listings.map(l => ({ name: l.name, standard: l.standard, volume: 0, price: l.pricePerTonne, origin: l.origin, status: 'LIVE' }))} trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', side: t.side || 'BUY', standard: t.standard || 'VCS', volume: t.volume_tonnes || 0, price: t.price_eur_per_tonne || 0, time: new Date().toLocaleTimeString() }))} indexPrice={currentIndexPrice} etsPrice={typeof etsPrice === 'number' ? etsPrice : (etsPrice as any)?.price ?? currentIndexPrice * 1.07} />
 
+      <AIComplianceCoPilot isDark={isDark} context={{ currentIndexPrice, etsPrice: typeof etsPrice === 'number' ? etsPrice : currentIndexPrice * 1.07, portfolioTonnes: sessionTrades.reduce((s, t) => s + (t.volume_tonnes || 0), 0), portfolioSpend: sessionTrades.reduce((s, t) => s + (t.gross_eur || 0), 0), accountType: sessionAccount?.accountType, listings: listings.map(l => ({ name: l.name, standard: l.standard, price: l.pricePerTonne, tonnes: 0 })) }} />
+
+      {escrowTrade && (
+        <EscrowSettlement tradeId={escrowTrade.tradeId} amountEur={escrowTrade.amountEur} volumeTonnes={escrowTrade.volumeTonnes} standard={escrowTrade.standard} buyerEmail={sessionAccount?.email || ''} isDark={isDark} onSettled={() => setEscrowTrade(null)} onCancel={() => setEscrowTrade(null)} />
+      )}
+
       <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.syne, color: C.cream, overflowX: 'hidden', cursor: 'none' }}>
 
         <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500, height: 68, display: 'flex', alignItems: 'center', padding: '0 52px', background: 'rgba(6,8,16,0.88)', backdropFilter: 'blur(24px)', borderBottom: `1px solid ${C.goldborder}` }}>
@@ -635,6 +648,9 @@ export default function Exchange() {
               {label:'Pipeline', href:'#pipeline'},
               {label:'Dashboard', href:'#dashboard'},
               {label:'RFQ Desk', href:'#rfq'},
+              {label:'Forecast', href:'#prediction'},
+              {label:'Budget', href:'#budget'},
+              {label:'Calendar', href:'#calendar'},
               {label:'Verify', href:'#trust'},
             ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
             <button className="x-btn-nav" onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-open-account-header">Open Account</button>
@@ -733,6 +749,9 @@ export default function Exchange() {
                     </div>
                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
                       <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
+                    </div>
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                      <DueDiligenceReport listing={{ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, volume_tonnes: 0, origin: l.origin }} currentIndexPrice={currentIndexPrice} isDark={isDark} />
                     </div>
                   </div>
                 );
@@ -1293,6 +1312,18 @@ export default function Exchange() {
             </div>
           </div>
         </div>
+
+        <section id="prediction" style={{ borderTop: `1px solid ${C.goldborder}` }}>
+          <AIPricePrediction currentPrice={currentIndexPrice} isDark={isDark} />
+        </section>
+
+        <section id="budget" style={{ borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+          <CarbonBudgetTracker trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', date: new Date().toISOString().split('T')[0], tonnes: t.volume_tonnes || 0, price_eur: t.gross_eur || 0, standard: t.standard || 'Carbon Credit' }))} listings={listings.map(l => ({ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, available_tonnes: 10000 }))} isDark={isDark} onBuyListing={() => scrollTo('marketplace')} />
+        </section>
+
+        <section id="calendar" style={{ borderTop: `1px solid ${C.goldborder}` }}>
+          <RegulatoryCalendar isDark={isDark} />
+        </section>
 
         <footer style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, padding: '60px 52px 40px' }}>
           <div className="x-footer-grid" style={{ maxWidth: 1440, margin: '0 auto', display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 1fr', gap: 60, marginBottom: 52 }}>

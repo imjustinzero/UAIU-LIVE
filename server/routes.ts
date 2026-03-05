@@ -2020,6 +2020,200 @@ Respond with a JSON object (no markdown) with these exact fields:
     }
   });
 
+  // ─── Wave 3: Stripe Escrow Routes ────────────────────────────────
+
+  app.post('/api/escrow/create', async (req, res) => {
+    try {
+      const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard } = req.body;
+      if (!trade_id || !amount_eur || amount_eur < 100) {
+        return res.status(400).json({ error: 'Invalid escrow parameters' });
+      }
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount_eur * 100),
+        currency: 'eur',
+        capture_method: 'manual',
+        receipt_email: buyer_email,
+        metadata: { trade_id, listing_id: listing_id || '', volume_tonnes: String(volume_tonnes), standard: standard || '', escrow_type: 'carbon_credit_t1', platform: 'uaiu_exchange', created_at: new Date().toISOString() },
+        description: `UAIU Carbon Credit Escrow — Trade ${trade_id} — ${volume_tonnes?.toLocaleString()}t ${standard}`,
+        statement_descriptor: 'UAIU EXCH',
+      });
+      await (req.app.locals.supabase as any)?.from('escrow_settlements').insert({ trade_id, payment_intent_id: paymentIntent.id, amount_eur, status: 'held', buyer_email, volume_tonnes, standard, created_at: new Date().toISOString() });
+      res.json({ client_secret: paymentIntent.client_secret, payment_intent_id: paymentIntent.id, escrow_status: 'held', message: 'Funds held in escrow. Release triggered at T+1 settlement confirmation.' });
+    } catch (e: any) {
+      console.error('Escrow create error:', e);
+      res.status(500).json({ error: e.message || 'Escrow creation failed' });
+    }
+  });
+
+  app.post('/api/escrow/verify', async (req, res) => {
+    try {
+      const { trade_id, payment_intent_id, receipt_hash } = req.body;
+      if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+      if (pi.status !== 'requires_capture') {
+        return res.status(400).json({ error: `Cannot verify — payment intent status is ${pi.status}. Expected requires_capture.` });
+      }
+      await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'verified', verified_at: new Date().toISOString(), receipt_hash }).eq('payment_intent_id', payment_intent_id);
+      res.json({ success: true, status: 'verified', message: 'Credits verified. T+1 settlement will release funds automatically.', next_step: 'Call /api/escrow/release within 24 hours to complete settlement.' });
+    } catch (e: any) {
+      console.error('Escrow verify error:', e);
+      res.status(500).json({ error: e.message || 'Verification failed' });
+    }
+  });
+
+  app.post('/api/escrow/release', async (req, res) => {
+    try {
+      const { payment_intent_id, trade_id } = req.body;
+      if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      const captured = await stripe.paymentIntents.capture(payment_intent_id);
+      const gross = captured.amount / 100;
+      const uaiu_fee = gross * 0.0075;
+      const seller_net = gross - uaiu_fee;
+      await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
+      try {
+        const { sendExchangeEmail } = await import('./email-service');
+        await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Stripe Charge': captured.latest_charge as string });
+      } catch (emailError) { console.error('Settlement email error:', emailError); }
+      res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
+    } catch (e: any) {
+      console.error('Escrow release error:', e);
+      res.status(500).json({ error: e.message || 'Settlement release failed' });
+    }
+  });
+
+  app.post('/api/escrow/cancel', async (req, res) => {
+    try {
+      const { payment_intent_id, trade_id, reason } = req.body;
+      if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      await stripe.paymentIntents.cancel(payment_intent_id, { cancellation_reason: 'abandoned' });
+      await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: reason || 'trade_cancelled' }).eq('payment_intent_id', payment_intent_id);
+      res.json({ success: true, status: 'cancelled', message: 'Escrow cancelled. Funds will be released back to buyer within 5-10 business days.' });
+    } catch (e: any) {
+      console.error('Escrow cancel error:', e);
+      res.status(500).json({ error: e.message || 'Cancellation failed' });
+    }
+  });
+
+  app.get('/api/escrow/status/:trade_id', async (req, res) => {
+    try {
+      const { data } = await (req.app.locals.supabase as any)?.from('escrow_settlements').select('*').eq('trade_id', req.params.trade_id).single() || {};
+      if (!data) return res.status(404).json({ error: 'Escrow record not found' });
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: 'Status check failed' });
+    }
+  });
+
+  // ─── Wave 3: AI + Calendar Routes ────────────────────────────────
+
+  app.post('/api/ai/copilot', async (req, res) => {
+    try {
+      const { messages, system } = req.body;
+      if (!messages?.length) return res.status(400).json({ error: 'No messages' });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.json({ reply: '[Demo Mode] I\'m the UAIU Carbon Compliance Co-Pilot. To activate AI responses, configure the ANTHROPIC_API_KEY secret.' });
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const msg = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        system: system || 'You are a carbon market compliance expert for UAIU.LIVE/X Caribbean Carbon Exchange.',
+        messages: messages.slice(-10),
+      });
+      const reply = (msg.content.find((b: any) => b.type === 'text') as any)?.text || '';
+      res.json({ reply });
+    } catch (e: any) {
+      console.error('Copilot error:', e);
+      res.status(500).json({ error: 'AI response failed' });
+    }
+  });
+
+  let predictionCache: { data: any; ts: number } | null = null;
+
+  app.post('/api/ai/price-prediction', async (req, res) => {
+    try {
+      if (predictionCache && Date.now() - predictionCache.ts < 6 * 60 * 60 * 1000) {
+        return res.json({ prediction: predictionCache.data, cached: true });
+      }
+      const { current_price } = req.body;
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        const mockPrediction = { forecast_7d: (current_price || 67.43) * 1.02, forecast_30d: (current_price || 67.43) * 1.05, direction: 'bullish', confidence: 72, rationale: '[Demo Mode] Caribbean premium carbon credits showing bullish momentum driven by EU ETS compliance demand and CORSIA Phase 1 requirements.', range_7d: { low: (current_price || 67.43) * 0.98, high: (current_price || 67.43) * 1.04 }, range_30d: { low: (current_price || 67.43) * 0.95, high: (current_price || 67.43) * 1.08 }, key_drivers: ['EU ETS surrender deadline Q3 2026', 'CORSIA Phase 1 aviation demand', 'Caribbean sovereign wealth fund floor', 'IMO GHG maritime compliance', 'USD/EUR exchange rate stability'] };
+        return res.json({ prediction: mockPrediction });
+      }
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const msg = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: `You are a carbon market price analyst. Current UAIU Caribbean Premium Index: €${current_price}/tonne. Date: ${new Date().toDateString()}. Analyze and forecast. Respond ONLY with JSON no markdown: {"forecast_7d":number,"forecast_30d":number,"direction":"bullish"|"bearish"|"neutral","confidence":number,"rationale":"2-3 sentences","range_7d":{"low":number,"high":number},"range_30d":{"low":number,"high":number},"key_drivers":["5 specific market factors"]}` }],
+      });
+      const text = (msg.content.find((b: any) => b.type === 'text') as any)?.text || '{}';
+      const prediction = JSON.parse(text.replace(/```json|```/g, '').trim());
+      predictionCache = { data: prediction, ts: Date.now() };
+      res.json({ prediction });
+    } catch (e: any) {
+      console.error('Prediction error:', e);
+      res.status(500).json({ error: 'Prediction failed' });
+    }
+  });
+
+  app.post('/api/ai/due-diligence', async (req, res) => {
+    try {
+      const { listing, market_price } = req.body;
+      if (!listing) return res.status(400).json({ error: 'No listing provided' });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        const mockReport = { summary: `[Demo Mode] ${listing.name} is a verified Caribbean carbon credit listing with strong compliance credentials. Registry verification pending final confirmation.`, registry_status: 'Verified — VCS v4 Registry', standard_analysis: 'Meets CORSIA and EU ETS eligibility requirements.', risk_score: 28, risk_factors: ['Currency risk (EUR/USD)', 'Registry verification timeline', 'Vintage year alignment', 'Buyer compliance deadline proximity'], comparable_trades: [], recommended_price_range: { low: (market_price || 64) * 0.95, high: (market_price || 64) * 1.05 }, recommendation: 'buy', recommendation_rationale: 'Strong registry credentials and favorable pricing relative to EU ETS spot.', sections: [{ title: 'Project Overview', content: `${listing.name} is a Caribbean-origin carbon credit project meeting international verification standards.` }, { title: 'Recommendation', content: 'Recommended for institutional buyers seeking CORSIA-eligible Caribbean premium credits.' }] };
+        return res.json({ report: mockReport });
+      }
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey });
+      const msg = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: `Generate a due diligence report for this carbon credit listing. Listing: ${JSON.stringify(listing)} Market Index Price: €${market_price}/tonne. Respond ONLY with JSON no markdown: {"summary":"string","registry_status":"string","standard_analysis":"string","risk_score":number,"risk_factors":["strings"],"comparable_trades":[{"date":"YYYY-MM-DD","price":number,"volume":number,"standard":"string"}],"recommended_price_range":{"low":number,"high":number},"recommendation":"strong_buy"|"buy"|"hold"|"pass","recommendation_rationale":"string","sections":[{"title":"string","content":"string"}]}` }],
+      });
+      const text = (msg.content.find((b: any) => b.type === 'text') as any)?.text || '{}';
+      const report = JSON.parse(text.replace(/```json|```/g, '').trim());
+      res.json({ report });
+    } catch (e: any) {
+      console.error('Due diligence error:', e);
+      res.status(500).json({ error: 'Due diligence generation failed' });
+    }
+  });
+
+  app.post('/api/exchange/calendar-subscribe', async (req, res) => {
+    try {
+      const { email, deadline_ids } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email required' });
+      await (req.app.locals.supabase as any)?.from('calendar_subscriptions').upsert({ email, deadline_ids, created_at: new Date().toISOString(), active: true }, { onConflict: 'email' });
+      try {
+        const { sendExchangeEmail } = await import('./email-service');
+        await sendExchangeEmail('Compliance Calendar Reminders Set', { 'Email': email, 'Deadlines Selected': deadline_ids?.length || 0, 'Reminder Schedule': '90, 60, 30, and 7 days before each deadline', 'Manage at': 'uaiu.live/x#calendar' });
+      } catch (emailError) { console.error('Calendar subscription email error:', emailError); }
+      res.json({ success: true, count: deadline_ids?.length || 0 });
+    } catch (e: any) {
+      res.status(500).json({ error: 'Subscription failed' });
+    }
+  });
+
   // Socket.IO is now attached to the HTTP server passed in from runApp
   // No need to return the server
 }

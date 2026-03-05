@@ -141,3 +141,35 @@ CREATE POLICY "anon_select_listings" ON listings FOR SELECT TO anon USING (true)
 --   ('Blue Carbon Seagrass Fields', 'Antigua & Barbuda · 28M Acres', 'VCS', 'blue', 15000, 45.60, -0.8, 'active'),
 --   ('CORSIA Aviation Offsets', 'Caribbean · ICAO Verified', 'CORSIA', 'eu', 25000, 29.70, 3.1, 'active'),
 --   ('Renewable Energy Credits', 'St. Lucia · Solar & Wind', 'Gold Std', 'vcs', 10000, 22.40, 0.6, 'active');
+
+-- ════════════════════════════════════════
+-- WAVE 3 TABLES
+-- ════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS escrow_settlements (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  trade_id TEXT NOT NULL UNIQUE,
+  payment_intent_id TEXT NOT NULL,
+  amount_eur DECIMAL(12,2) NOT NULL,
+  uaiu_fee_eur DECIMAL(12,2),
+  seller_net_eur DECIMAL(12,2),
+  status TEXT NOT NULL DEFAULT 'held',
+  buyer_email TEXT,
+  volume_tonnes INTEGER,
+  standard TEXT,
+  receipt_hash TEXT,
+  stripe_charge_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  verified_at TIMESTAMPTZ,
+  settled_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  cancellation_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS calendar_subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT NOT NULL,
+  deadline_ids TEXT[] NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  active BOOLEAN DEFAULT true
+);
