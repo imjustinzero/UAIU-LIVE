@@ -8,8 +8,15 @@ const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif" };
 
 // ─── Dark Mode Hook ───────────────────────────────────────────────
 export function useDarkMode() {
-  const [isDark, setIsDark] = useState(true);
-  function toggle() { setIsDark(d => !d); }
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('x-dark-mode') : null;
+  const [isDark, setIsDark] = useState(stored !== null ? stored === 'true' : true);
+  function toggle() {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('x-dark-mode', String(next));
+      return next;
+    });
+  }
   return { isDark, toggle };
 }
 
@@ -22,20 +29,22 @@ export function DarkModeToggle({ isDark, onToggle }: { isDark: boolean; onToggle
       style={{
         background: 'transparent',
         border: `1px solid ${C.goldborder}`,
-        color: isDark ? C.gold : '#1c2840',
+        color: C.gold,
         width: 36,
         height: 36,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        fontSize: 15,
+        fontSize: 13,
+        fontFamily: "'JetBrains Mono', monospace",
         flexShrink: 0,
         transition: 'all 0.2s',
+        letterSpacing: 0,
       }}
       data-testid="button-dark-mode-toggle"
     >
-      {isDark ? '☀' : '🌙'}
+      {isDark ? 'DAY' : 'NGT'}
     </button>
   );
 }

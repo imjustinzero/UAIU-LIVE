@@ -20,7 +20,7 @@ import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/Su
 import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
 import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
 
-const C = {
+const C_DARK = {
   ink: '#060810',
   ink2: '#0d1220',
   ink3: '#141e30',
@@ -37,6 +37,25 @@ const C = {
   green: '#22c55e',
   greenfaint: 'rgba(34,197,94,0.12)',
   red: '#ef4444',
+};
+
+const C_LIGHT = {
+  ink: '#f5ede0',
+  ink2: '#ede3d3',
+  ink3: '#e0d4c0',
+  ink4: '#d4c5ac',
+  gold: '#b8922e',
+  gold2: '#9e7a20',
+  gold3: '#7a5c10',
+  goldfaint: 'rgba(184,146,46,0.15)',
+  goldborder: 'rgba(184,146,46,0.32)',
+  cream: '#0d0a06',
+  cream2: 'rgba(13,10,6,0.7)',
+  cream3: 'rgba(13,10,6,0.45)',
+  cream4: 'rgba(13,10,6,0.18)',
+  green: '#15803d',
+  greenfaint: 'rgba(21,128,61,0.12)',
+  red: '#b91c1c',
 };
 
 const F = {
@@ -127,7 +146,7 @@ interface Listing {
   isAcceptingOrders: boolean;
 }
 
-function getBadgeStyle(standard: string) {
+function getBadgeStyle(standard: string, C: typeof C_DARK) {
   if (standard === 'EU ETS' || standard === 'CORSIA') return { color: '#a855f7', borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)' };
   if (standard === 'VCS' || standard === 'GOLD STD') return { color: C.green, borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)' };
   return { color: C.gold, borderColor: C.goldborder, background: C.goldfaint };
@@ -218,6 +237,7 @@ export default function Exchange() {
 
   // New feature state
   const { isDark, toggle: toggleDark } = useDarkMode();
+  const C = isDark ? C_DARK : C_LIGHT;
   const [tickerTrades, setTickerTrades] = useState<TickerTrade[]>([]);
   const [showMultiSig, setShowMultiSig] = useState(false);
   const [pendingTradeId, setPendingTradeId] = useState('');
@@ -788,7 +808,7 @@ export default function Exchange() {
             </div>
             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: C.goldborder }}>
               {filteredListings.map(l => {
-                const bs = getBadgeStyle(l.standard);
+                const bs = getBadgeStyle(l.standard, C);
                 const up = l.changeDirection !== 'down';
                 return (
                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
