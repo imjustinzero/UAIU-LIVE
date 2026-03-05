@@ -1082,6 +1082,36 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  app.get('/api/exchange/account/lookup', async (req, res) => {
+    try {
+      const email = req.query.email;
+      if (!email || typeof email !== 'string' || !email.trim()) {
+        return res.status(400).json({ message: 'Email query parameter is required' });
+      }
+      const trimmed = email.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmed)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      const account = await storage.getExchangeAccountByEmail(trimmed);
+      if (!account) {
+        return res.status(404).json({ message: 'No account found' });
+      }
+      return res.json({
+        id: account.id,
+        email: account.email,
+        firstName: (account as any).firstName || '',
+        lastName: (account as any).lastName || '',
+        company: (account as any).company || (account as any).orgName || '',
+        accountType: (account as any).accountType || (account as any).role || '',
+        annualCo2: (account as any).annualCo2Exposure || 0,
+      });
+    } catch (error) {
+      console.error('Account lookup error:', error);
+      return res.status(500).json({ message: 'Server error during lookup' });
+    }
+  });
+
   app.post('/api/exchange/rfq', async (req, res) => {
     try {
       const body = req.body;

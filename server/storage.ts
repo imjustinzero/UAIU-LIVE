@@ -97,6 +97,7 @@ export interface IStorage {
   getExchangeListings(standard?: string): Promise<ExchangeListing[]>;
   seedExchangeListings(listings: InsertExchangeListing[]): Promise<void>;
   createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
+  getExchangeAccountByEmail(email: string): Promise<ExchangeAccount | null>;
   createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq>;
   createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing>;
 }
@@ -526,6 +527,15 @@ export class DbStorage implements IStorage {
   async createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount> {
     const [result] = await db.insert(exchangeAccounts).values(account).returning();
     return result;
+  }
+
+  async getExchangeAccountByEmail(email: string): Promise<ExchangeAccount | null> {
+    const [result] = await db
+      .select()
+      .from(exchangeAccounts)
+      .where(eq(exchangeAccounts.email, email.toLowerCase().trim()))
+      .limit(1);
+    return result ?? null;
   }
 
   async createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq> {

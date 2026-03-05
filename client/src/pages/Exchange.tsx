@@ -223,6 +223,10 @@ export default function Exchange() {
   const [pendingTradeId, setPendingTradeId] = useState('');
   const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
   const [sessionAccount, setSessionAccount] = useState<any>(null);
+  const [acctModalTab, setAcctModalTab] = useState<'open' | 'signin'>('open');
+  const [signinEmail, setSigninEmail] = useState('');
+  const [signinLoading, setSigninLoading] = useState(false);
+  const [signinError, setSigninError] = useState('');
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
@@ -249,6 +253,21 @@ export default function Exchange() {
     const hp = document.getElementById('_hp_exchange') as HTMLInputElement | null;
     return !!(hp && hp.value.length > 0);
   }
+
+  // Restore exchange account session from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('x-exchange-account');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.email) {
+          setSessionAccount(parsed);
+        }
+      }
+    } catch {
+      localStorage.removeItem('x-exchange-account');
+    }
+  }, []);
 
   useEffect(() => {
     // Session ID (crypto-grade random)
@@ -436,7 +455,17 @@ export default function Exchange() {
       const data = await res.json();
       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
       setAcctSuccess(true);
-      setSessionAccount({ company: acctCompany || `${acctFirstName} ${acctLastName}`, annualCo2: parseInt(acctCo2) || 10000 });
+      const newSession = {
+        id: data.id,
+        email: acctEmail,
+        firstName: acctFirstName,
+        lastName: acctLastName,
+        company: acctCompany || `${acctFirstName} ${acctLastName}`.trim(),
+        accountType: acctType,
+        annualCo2: parseInt(acctCo2) || 10000,
+      };
+      setSessionAccount(newSession);
+      localStorage.setItem('x-exchange-account', JSON.stringify(newSession));
       showToast('Account created — KYC verification begins now');
       // Non-blocking Supabase save
       dbInsert('entities', {
@@ -522,6 +551,47 @@ export default function Exchange() {
     } finally {
       setRfqSubmitting(false);
     }
+  }
+
+  async function handleSignIn() {
+    if (!signinEmail.trim()) return;
+    setSigninLoading(true);
+    setSigninError('');
+    try {
+      const res = await fetch(`/api/exchange/account/lookup?email=${encodeURIComponent(signinEmail.trim().toLowerCase())}`);
+      if (res.ok) {
+        const account = await res.json();
+        const sessionData = {
+          id: account.id,
+          email: account.email,
+          firstName: account.firstName || '',
+          lastName: account.lastName || '',
+          company: account.company || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+          accountType: account.accountType || '',
+          annualCo2: account.annualCo2 || 0,
+        };
+        setSessionAccount(sessionData);
+        localStorage.setItem('x-exchange-account', JSON.stringify(sessionData));
+        setShowAccountModal(false);
+        setSigninEmail('');
+        setSigninError('');
+        showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
+      } else {
+        setSigninError('No account found for that email. Please open a new account.');
+      }
+    } catch {
+      setSigninError('Connection error. Please try again.');
+    } finally {
+      setSigninLoading(false);
+    }
+  }
+
+  function handleSignOut() {
+    setSessionAccount(null);
+    localStorage.removeItem('x-exchange-account');
+    setShowAccountModal(false);
+    setAcctModalTab('open');
+    showToast('Signed out.');
   }
 
   function lookupTrade() {
@@ -654,7 +724,7 @@ export default function Exchange() {
               {label:'Calendar', href:'#calendar'},
               {label:'Verify', href:'#trust'},
             ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
-            <button className="x-btn-nav" onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-open-account-header">Open Account</button>
+            <button className="x-btn-nav" onClick={() => { setAcctSuccess(false); setAcctModalTab(sessionAccount ? 'signin' : 'open'); setShowAccountModal(true); }} data-testid="button-open-account-header" style={sessionAccount ? { borderColor: C.green, color: C.green } : undefined}>{sessionAccount ? (sessionAccount.company || `${sessionAccount.firstName || ''} ${sessionAccount.lastName || ''}`.trim() || 'My Account') : 'Open Account'}</button>
           </div>
         </nav>
 
@@ -1436,34 +1506,100 @@ export default function Exchange() {
         <div className="x-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowAccountModal(false); }}>
           <div className="x-modal">
             <div style={{ padding: '32px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700 }}>Open Account</div>
+              <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700 }}>{sessionAccount ? 'My Account' : acctModalTab === 'signin' ? 'Sign In' : 'Open Account'}</div>
               <button style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }} onClick={() => setShowAccountModal(false)} data-testid="button-close-account">&#10005;</button>
             </div>
-            <div style={{ padding: '32px 36px' }}>
-              {acctSuccess ? (
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
-                  <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Account Created</div>
-                  <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Welcome to UAIU.LIVE/X. Our onboarding team will contact you within 2 business hours to complete KYC verification. You&apos;ll be live and trading today.</div>
-                  <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream4, marginTop: 16 }}>Account ID: {acctId}</div>
+
+            {sessionAccount ? (
+              /* ── SIGNED-IN PANEL ── */
+              <div style={{ padding: '32px 36px', textAlign: 'center' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.greenfaint, border: `2px solid ${C.green}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 16px' }}>✓</div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.cream3, marginBottom: 6 }}>SIGNED IN</div>
+                <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{sessionAccount.company || `${sessionAccount.firstName || ''} ${sessionAccount.lastName || ''}`.trim() || 'Account'}</div>
+                <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, marginBottom: 4 }}>{sessionAccount.email}</div>
+                <div style={{ display: 'inline-block', fontFamily: F.mono, fontSize: 9, fontWeight: 700, padding: '4px 12px', border: `1px solid ${C.goldborder}`, color: C.gold, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 24 }}>{sessionAccount.accountType || 'Exchange Member'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24, background: C.ink, border: `1px solid ${C.goldborder}`, padding: 20 }}>
+                  {[
+                    { label: 'Annual CO₂ Target', value: sessionAccount.annualCo2 ? `${Number(sessionAccount.annualCo2).toLocaleString()} t` : '—' },
+                    { label: 'Account Type', value: sessionAccount.accountType || '—' },
+                    { label: 'Account ID', value: sessionAccount.id ? String(sessionAccount.id).slice(0, 8) + '…' : '—' },
+                    { label: 'Session', value: 'Active ●' },
+                  ].map((stat, i) => (
+                    <div key={i} style={{ textAlign: 'center' }}>
+                      <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>{stat.label}</div>
+                      <div style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 700, color: i === 3 ? C.green : C.cream }}>{stat.value}</div>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Free to open · KYC in 2 hours · Live same day</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>First Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="First" value={acctFirstName} onChange={e => setAcctFirstName(e.target.value)} data-testid="input-acct-firstname" /></div>
-                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Last Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Last" value={acctLastName} onChange={e => setAcctLastName(e.target.value)} data-testid="input-acct-lastname" /></div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button style={{ flex: 1, background: C.gold, color: C.ink, padding: '13px 0', fontFamily: F.syne, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAccountModal(false); scrollTo('dashboard'); }}>View Dashboard →</button>
+                  <button style={{ padding: '13px 20px', background: 'transparent', color: C.red, border: `1px solid rgba(239,68,68,0.3)`, fontFamily: F.mono, fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em' }} onClick={handleSignOut}>Sign Out</button>
+                </div>
+              </div>
+            ) : (
+              /* ── TABS: OPEN ACCOUNT / SIGN IN ── */
+              <>
+                <div style={{ display: 'flex', borderBottom: `1px solid ${C.goldborder}`, padding: '0 36px' }}>
+                  {([['open', 'Open Account'], ['signin', 'Sign In']] as const).map(([key, label]) => (
+                    <button key={key} onClick={() => { setAcctModalTab(key); setSigninError(''); }} style={{ padding: '14px 20px', background: 'transparent', border: 'none', borderBottom: acctModalTab === key ? `2px solid ${C.gold}` : '2px solid transparent', marginBottom: -1, cursor: 'pointer', fontFamily: F.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: acctModalTab === key ? C.gold : C.cream3, transition: 'all 0.15s' }}>{label}</button>
+                  ))}
+                </div>
+
+                {acctModalTab === 'open' && (
+                  <div style={{ padding: '32px 36px' }}>
+                    {acctSuccess ? (
+                      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
+                        <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Account Created</div>
+                        <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Welcome to UAIU.LIVE/X. Our onboarding team will contact you within 2 business hours to complete KYC verification. You&apos;ll be live and trading today.</div>
+                        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream4, marginTop: 16 }}>Account ID: {acctId}</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Free to open · KYC in 2 hours · Live same day</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                          <div style={s.fg}><label style={s.fl as React.CSSProperties}>First Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="First" value={acctFirstName} onChange={e => setAcctFirstName(e.target.value)} data-testid="input-acct-firstname" /></div>
+                          <div style={s.fg}><label style={s.fl as React.CSSProperties}>Last Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Last" value={acctLastName} onChange={e => setAcctLastName(e.target.value)} data-testid="input-acct-lastname" /></div>
+                        </div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Company / Organization</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={acctCompany} onChange={e => setAcctCompany(e.target.value)} data-testid="input-acct-company" /></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={acctEmail} onChange={e => setAcctEmail(e.target.value)} data-testid="input-acct-email" /></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                        <button style={{ ...s.formSubmit as React.CSSProperties, opacity: acctSubmitting ? 0.7 : 1 }} onClick={handleAccountSubmit} disabled={acctSubmitting} data-testid="button-submit-account">{acctSubmitting ? 'Creating Account...' : 'Create Account →'}</button>
+                        <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6, letterSpacing: '0.05em' }}>By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
+                      </>
+                    )}
                   </div>
-                  <div style={s.fg}><label style={s.fl as React.CSSProperties}>Company / Organization</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={acctCompany} onChange={e => setAcctCompany(e.target.value)} data-testid="input-acct-company" /></div>
-                  <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={acctEmail} onChange={e => setAcctEmail(e.target.value)} data-testid="input-acct-email" /></div>
-                  <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
-                  <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                  <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                  <button style={{ ...s.formSubmit as React.CSSProperties, opacity: acctSubmitting ? 0.7 : 1 }} onClick={handleAccountSubmit} disabled={acctSubmitting} data-testid="button-submit-account">{acctSubmitting ? 'Creating Account...' : 'Create Account →'}</button>
-                  <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6, letterSpacing: '0.05em' }}>By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
-                </>
-              )}
-            </div>
+                )}
+
+                {acctModalTab === 'signin' && (
+                  <div style={{ padding: '32px 36px' }}>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Enter the business email you used when opening your account.</div>
+                    <div style={s.fg}>
+                      <label style={s.fl as React.CSSProperties}>Business Email</label>
+                      <input
+                        className="x-fi"
+                        style={{ ...s.fi, borderColor: signinError ? 'rgba(239,68,68,0.5)' : undefined }}
+                        type="email"
+                        placeholder="compliance@yourcompany.com"
+                        value={signinEmail}
+                        onChange={e => { setSigninEmail(e.target.value); setSigninError(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSignIn(); }}
+                        autoFocus
+                        data-testid="input-signin-email"
+                      />
+                    </div>
+                    {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
+                    <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading || !signinEmail.trim() ? 0.6 : 1 }} onClick={handleSignIn} disabled={signinLoading || !signinEmail.trim()} data-testid="button-signin-submit">{signinLoading ? 'Looking up account...' : 'Access Account →'}</button>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 16, textAlign: 'center', letterSpacing: '0.05em' }}>
+                      No account?{' '}
+                      <button onClick={() => setAcctModalTab('open')} style={{ background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, textDecoration: 'underline', padding: 0, letterSpacing: '0.05em' }}>Open one free →</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
