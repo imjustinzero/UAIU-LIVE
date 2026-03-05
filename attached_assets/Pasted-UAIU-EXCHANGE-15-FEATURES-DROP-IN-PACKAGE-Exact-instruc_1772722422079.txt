@@ -1,0 +1,241 @@
+UAIU EXCHANGE — 15 FEATURES DROP-IN PACKAGE
+## Exact instructions for Replit
+
+---
+
+## STEP 1 — Install missing packages
+Run in Replit Shell:
+```
+npm install @anthropic-ai/sdk three @types/three jspdf
+```
+
+---
+
+## STEP 2 — Add Replit Secret
+In Replit → Secrets tab, add:
+```
+ANTHROPIC_API_KEY = your_key_here
+```
+
+---
+
+## STEP 3 — Drop in component files
+Copy ALL files from `client/src/components/exchange/` into your Replit at:
+```
+client/src/components/exchange/
+```
+
+Files to copy:
+- CarbonClock.tsx
+- TradeTicker.tsx
+- OrderBook.tsx
+- AIFeatures.tsx
+- SupplyFeatures.tsx
+- InstitutionalFeatures.tsx
+- VisualFeatures.tsx
+- mobile.css
+
+---
+
+## STEP 4 — Add server routes
+Open `server/routes.ts` and paste the contents of `ADD-TO-ROUTES.ts`
+INSIDE your existing `registerRoutes()` function, at the bottom before the closing brace.
+
+Also add this import at the top of routes.ts:
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+```
+
+---
+
+## STEP 5 — Update Exchange.tsx imports
+Add these imports at the top of Exchange.tsx:
+```typescript
+import { CarbonClock } from "../components/exchange/CarbonClock";
+import { TradeTicker } from "../components/exchange/TradeTicker";
+import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
+import { AIMarketIntelligence, ClaudeRFQAssistant } from "../components/exchange/AIFeatures";
+import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/SupplyFeatures";
+import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
+import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
+import "./components/exchange/mobile.css";
+```
+
+---
+
+## STEP 6 — Add to Exchange.tsx component
+
+### 6a — Add state at top of component function:
+```typescript
+const { isDark, toggle: toggleDark } = useDarkMode();
+const [tickerTrades, setTickerTrades] = useState<any[]>([]);
+const [showMultiSig, setShowMultiSig] = useState(false);
+const [pendingTradeId, setPendingTradeId] = useState('');
+const etsPrice = useETSPrice(currentIndexPrice); // currentIndexPrice = your existing index price var
+```
+
+### 6b — Add TICKER at very top of JSX (before nav):
+```tsx
+<TradeTicker newTrades={tickerTrades} isDark={isDark} />
+```
+
+### 6c — Add DARK MODE TOGGLE + MOBILE NAV to your existing nav:
+```tsx
+<DarkModeToggle isDark={isDark} onToggle={toggleDark} />
+<MobileNav links={[
+  {label:'Markets', href:'#marketplace'},
+  {label:'Intelligence', href:'#intelligence'},
+  {label:'Calculator', href:'#calculator'},
+  {label:'Pipeline', href:'#pipeline'},
+  {label:'Dashboard', href:'#dashboard'},
+  {label:'RFQ Desk', href:'#rfq'},
+  {label:'Verify', href:'#trust'},
+]} isDark={isDark} />
+```
+
+### 6d — Add EU ETS PRICE to your existing index strip:
+```tsx
+<div className="index-card">
+  <span>EU ETS SPOT</span>
+  <span>€{etsPrice.price.toFixed(2)}</span>
+  <span style={{color: etsPrice.change >= 0 ? '#4ade80' : '#f87171'}}>
+    {etsPrice.change >= 0 ? '▲' : '▼'} {Math.abs(etsPrice.changePct).toFixed(2)}%
+  </span>
+</div>
+<div className="index-card" style={{color:'#4ade80'}}>
+  CARIB PREMIUM +€{etsPrice.spread.toFixed(2)}
+</div>
+```
+
+### 6e — Add CARBON CLOCK inside hero section at bottom:
+```tsx
+<CarbonClock />
+```
+
+### 6f — Add GLOBE to hero section (alongside existing content):
+```tsx
+<Globe3D isDark={isDark} onPinClick={(pin) => {
+  document.querySelector('#marketplace')?.scrollIntoView({behavior:'smooth'});
+}} />
+```
+
+### 6g — Add ORDER BOOK inside #marketplace section:
+```tsx
+<OrderBook midPrice={currentIndexPrice} isDark={isDark} />
+```
+
+### 6h — Add AI INTELLIGENCE section (new section after #home):
+```tsx
+<AIMarketIntelligence isDark={isDark} />
+```
+
+### 6i — Add CLAUDE RFQ ASSISTANT above your existing RFQ form:
+```tsx
+<ClaudeRFQAssistant isDark={isDark} onParsed={(data) => {
+  // pre-fill your existing RFQ state fields:
+  if (data.side) setRfqSide(data.side);
+  if (data.standard) setRfqStandard(data.standard);
+  if (data.volume_tonnes) setRfqVolume(String(data.volume_tonnes));
+  if (data.target_price_eur) setRfqPrice(String(data.target_price_eur));
+  if (data.deadline) setRfqDeadline(data.deadline);
+  if (data.notes) setRfqNotes(data.notes);
+}} />
+```
+
+### 6j — Add VISION VERIFICATION inside your listing form:
+```tsx
+<VisionVerification isDark={isDark} onReport={(report) => {
+  setListingNotes(prev => prev + '\n\nAI VERIFICATION:\n' + report);
+}} />
+```
+
+### 6k — Add MULTI-SIG after trade execution in handleExecuteTrade():
+```typescript
+// After existing trade logic, add:
+setPendingTradeId(tradeId);
+setShowMultiSig(true);
+// Also push to ticker:
+setTickerTrades(prev => [{
+  id: tradeId, side: side, standard: standard,
+  volume: qty, price: price, ago: 'just now'
+}, ...prev].slice(0,20));
+```
+
+```tsx
+{showMultiSig && (
+  <MultiSigApproval
+    tradeId={pendingTradeId}
+    receiptHash={sessionTrades.find(t=>t.trade_id===pendingTradeId)?.receipt_hash || ''}
+    isDark={isDark}
+    onApproved={(token) => {
+      setShowMultiSig(false);
+      console.log('Trade approved with token:', token);
+    }}
+    onSkip={() => setShowMultiSig(false)}
+  />
+)}
+```
+
+### 6l — Add FARM CALCULATOR section (before #cta):
+```tsx
+<FarmCarbonCalculator
+  currentIndexPrice={currentIndexPrice}
+  isDark={isDark}
+  onSubmitFarm={(data) => {
+    // Pre-fill listing form and scroll to it
+    setListingOrg(data.org_name || '');
+    setListingVolume(String(data.volume_tonnes));
+    document.querySelector('#list')?.scrollIntoView({behavior:'smooth'});
+  }}
+/>
+```
+
+### 6m — Add PIPELINE section (after #marketplace):
+```tsx
+<ProjectPipeline isDark={isDark} />
+```
+
+### 6n — Add PORTFOLIO DASHBOARD section (after #citizens):
+```tsx
+<PortfolioDashboard
+  trades={sessionTrades}
+  retirements={sessionRetirements}
+  accountName={sessionAccount?.company || 'Your Account'}
+  annualTarget={sessionAccount?.annualCo2 || 10000}
+  isDark={isDark}
+/>
+```
+
+---
+
+## STEP 7 — Add nav links
+Add these to your existing nav links array:
+```
+Intelligence → #intelligence
+Calculator → #calculator
+Pipeline → #pipeline
+Dashboard → #dashboard
+```
+
+---
+
+## FEATURES SUMMARY
+| # | Feature | Component | Status |
+|---|---------|-----------|--------|
+| 1 | Claude AI RFQ Assistant | AIFeatures.tsx | Drop-in |
+| 2 | AI Market Intelligence | AIFeatures.tsx | Drop-in |
+| 3 | Vision Project Verification | VisualFeatures.tsx | Drop-in |
+| 4 | Live EU ETS Price Feed | OrderBook.tsx | Drop-in |
+| 5 | Live Order Book | OrderBook.tsx | Drop-in |
+| 6 | Historical Trade Ticker | TradeTicker.tsx | Drop-in |
+| 7 | Multi-Sig Trade Approval | InstitutionalFeatures.tsx | Drop-in |
+| 8 | Portfolio Dashboard | InstitutionalFeatures.tsx | Drop-in |
+| 9 | PDF Compliance Report | InstitutionalFeatures.tsx | Drop-in |
+| 10 | Farm Carbon Calculator | SupplyFeatures.tsx | Drop-in |
+| 11 | Project Pipeline Tracker | SupplyFeatures.tsx | Drop-in |
+| 12 | Three.js 3D Globe | VisualFeatures.tsx | Drop-in |
+| 13 | Live Carbon Clock | CarbonClock.tsx | Drop-in |
+| 14 | Dark/Light Mode | VisualFeatures.tsx | Drop-in |
+| 15 | Mobile Optimization | mobile.css + MobileNav | Drop-in |
+
+All features fall back gracefully to demo mode when API keys are absent.
