@@ -76,7 +76,7 @@ export function FarmCarbonCalculator({ currentIndexPrice = 67.43, onSubmitFarm }
           </h2>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'clamp(24px, 5vw, 48px)', alignItems: 'start' }}>
           <div>
             <div style={{ marginBottom: 20 }}><label style={fl}>Farm Name *</label><input style={fi} type="text" placeholder="Your Farm Name" value={farmName} onChange={e => setFarmName(e.target.value)} data-testid="input-farm-name" /></div>
             <div style={{ marginBottom: 20 }}>
@@ -179,7 +179,7 @@ export function ProjectPipeline() {
           </h2>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
           {PIPELINE_PROJECTS.map((p, i) => (
             <div key={i} style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '28px 24px', position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>

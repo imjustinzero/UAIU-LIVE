@@ -1,0 +1,48 @@
+You are a senior front-end engineer. My site UI (screenshots attached) looks misaligned on mobile: cards/columns don’t line up, spacing is inconsistent, and elements overlap (notably the floating “Carbon Compliance Co-Pilot” widget and some grid sections). I need a clean, mobile-first responsive layout that scales correctly for iPhone, iPad, and desktop.
+
+Goal: Fix alignment and responsiveness across breakpoints without changing the visual design (colors, typography, gold borders, dark theme), only layout/CSS and minimal HTML structure changes if needed.
+
+Requirements / Rules
+	1.	Mobile-first CSS: default styles for ≤480px, then progressively enhance for 768px (iPad) and 1024px+ (desktop).
+	2.	No fixed pixel widths for layout containers/cards/columns (except hairline borders). Replace with fluid sizing: %, minmax(), clamp(), rem, vw.
+	3.	Use CSS Grid/Flex correctly:
+	•	Any multi-column sections must become single column on mobile, 2 columns on tablet, 3 columns on desktop where appropriate.
+	•	Card components must have consistent padding, border alignment, equal spacing.
+	4.	Prevent overflow: no horizontal scroll on mobile. Use box-sizing: border-box;, max-width: 100%, safe padding, and clamp font sizes.
+	5.	Fix overlapping floating widget (“Carbon Compliance Co-Pilot”):
+	•	It must not cover CTA buttons/inputs or content.
+	•	On small screens, it should dock to bottom with safe margins OR collapse to an icon only.
+	•	Respect iOS safe areas (env(safe-area-inset-bottom)).
+	6.	Typography scaling:
+	•	Large headings (e.g., “Projects in queue.”, “Waste becomes wealth.”, “Estimate your farm’s carbon value.”) should scale using clamp() so they don’t push layout off-screen.
+	7.	Navigation/header must stay aligned and not compress awkwardly on mobile:
+	•	Logo + menu controls align on one row.
+	•	Live trades ticker wraps or becomes horizontally scrollable (no layout break).
+
+What to do (Step-by-step)
+
+A) Inspect the layout and identify which components/sections are using fixed widths, absolute positioning, or grid settings that break on mobile.
+B) Refactor the main layout sections into a consistent responsive system:
+	•	Add a .container with max-width and fluid padding
+	•	Standardize section spacing (gap, padding-block)
+C) Convert problematic multi-column layouts into responsive grids like:
+	•	grid-template-columns: 1fr on mobile
+	•	grid-template-columns: repeat(2, minmax(0, 1fr)) on tablet
+	•	grid-template-columns: repeat(3, minmax(0, 1fr)) on desktop
+D) Ensure all cards use a shared .card style: consistent padding, border, min-height only if necessary, and internal elements aligned.
+E) Fix the floating widget so it never overlaps primary content on mobile (use a responsive dock/collapse behavior).
+F) Add a quick “responsive debug” mode (optional): a temporary outline style you can toggle to see box boundaries.
+
+Deliverables
+	1.	Show me the exact files changed (CSS/SCSS + any HTML/React components).
+	2.	Provide the final CSS for breakpoints: ≤480, 481–767, 768–1023, ≥1024.
+	3.	Confirm these acceptance tests:
+	•	iPhone viewport 390x844: no overlap, no horizontal scroll, single-column sections, consistent card alignment.
+	•	iPad 768 wide: two-column grids where intended.
+	•	Desktop 1440 wide: three-column grids where intended.
+
+Start by locating the layout components used on the pages shown in screenshots:
+	•	“Projects in queue” card grid
+	•	“How it works / Waste becomes wealth” split section
+	•	“Farm carbon calculator” form section
+Then implement the responsive refactor.

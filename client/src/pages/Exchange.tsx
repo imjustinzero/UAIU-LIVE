@@ -20,6 +20,25 @@ import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/Su
 import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
 import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
 
+// ── RESPONSIVE UTILS ──────────────────────────────────────
+const CONTAINER_STYLE: React.CSSProperties = {
+  maxWidth: '1440px',
+  margin: '0 auto',
+  padding: '0 clamp(16px, 5vw, 60px)',
+  width: '100%',
+  boxSizing: 'border-box'
+};
+
+const GRID_REFLOW: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
+  gap: 'clamp(20px, 4vw, 40px)'
+};
+
+const SECTION_SPACING: React.CSSProperties = {
+  paddingBlock: 'clamp(40px, 10vh, 120px)'
+};
+
 const C_DARK = {
   ink: '#060810',
   ink2: '#0d1220',
@@ -718,70 +737,89 @@ export default function Exchange() {
 
       <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.syne, color: C.cream, overflowX: 'hidden', cursor: 'none' }}>
 
-        <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500, height: 68, display: 'flex', alignItems: 'center', padding: '0 52px', background: 'rgba(6,8,16,0.88)', backdropFilter: 'blur(24px)', borderBottom: `1px solid ${C.goldborder}` }}>
-          <div className="x-nav-logo" style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', color: C.cream, whiteSpace: 'nowrap' }}>
-            UAIU<sup style={{ color: C.gold, fontSize: 11, verticalAlign: 'super', letterSpacing: '0.2em', fontFamily: F.mono, fontWeight: 400 }}>.LIVE/X</sup>
-          </div>
-          <div className="x-nav-center" style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 28 }}>
-            {[['home','Home'],['marketplace','Markets'],['intelligence','Intelligence'],['pipeline','Pipeline'],['calculator','Calculator'],['dashboard','Dashboard'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
-              <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} data-testid={`link-nav-${id}`}>{label}</a>
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="x-markets-open" style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="x-pulse" /> Markets Open
+        <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, height: 'clamp(64px, 8vh, 80px)', background: 'rgba(6,8,16,0.92)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${C.goldborder}` }}>
+          <div style={{ ...CONTAINER_STYLE, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(12px, 3vw, 40px)' }}>
+              <div className="x-nav-logo" style={{ fontFamily: F.playfair, fontSize: 'clamp(18px, 2.5vw, 22px)', fontWeight: 700, letterSpacing: '0.05em', color: C.cream, whiteSpace: 'nowrap' }}>
+                UAIU<sup style={{ color: C.gold, fontSize: 10, verticalAlign: 'super', letterSpacing: '0.2em', fontFamily: F.mono, fontWeight: 400 }}>.LIVE/X</sup>
+              </div>
+              <div style={{ height: 20, width: 1, background: C.goldborder }} className="x-hide-mobile" />
+              <div className="x-markets-open" style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="x-pulse" /> <span className="x-hide-tablet">Markets Open</span>
+              </div>
             </div>
-            <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
-            <MobileNav links={[
-              {label:'Markets', href:'#marketplace'},
-              {label:'Intelligence', href:'#intelligence'},
-              {label:'Calculator', href:'#calculator'},
-              {label:'Pipeline', href:'#pipeline'},
-              {label:'Dashboard', href:'#dashboard'},
-              {label:'RFQ Desk', href:'#rfq'},
-              {label:'Forecast', href:'#prediction'},
-              {label:'Budget', href:'#budget'},
-              {label:'Calendar', href:'#calendar'},
-              {label:'Verify', href:'#trust'},
-            ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
-            <button className="x-btn-nav" onClick={() => { setAcctSuccess(false); setAcctModalTab(sessionAccount ? 'signin' : 'open'); setShowAccountModal(true); }} data-testid="button-open-account-header" style={sessionAccount ? { borderColor: C.green, color: C.green } : undefined}>{sessionAccount ? (sessionAccount.company || `${sessionAccount.firstName || ''} ${sessionAccount.lastName || ''}`.trim() || 'My Account') : 'Open Account'}</button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
+              <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
+                {[['marketplace','Markets'],['intelligence','Intel'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
+                  <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
+                ))}
+              </div>
+              <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
+              <button 
+                className="x-btn-nav" 
+                onClick={() => { setAcctSuccess(false); setAcctModalTab(sessionAccount ? 'signin' : 'open'); setShowAccountModal(true); }} 
+                data-testid="button-open-account-header" 
+                style={{
+                  ... (sessionAccount ? { borderColor: C.green, color: C.green } : {}),
+                  fontSize: 'clamp(9px, 1.5vw, 11px)',
+                  padding: 'clamp(6px, 1.2vw, 10px) clamp(12px, 2vw, 22px)'
+                }}
+              >
+                {sessionAccount ? (sessionAccount.company || 'Account') : 'Open Account'}
+              </button>
+              <MobileNav links={[
+                {label:'Markets', href:'#marketplace'},
+                {label:'Intelligence', href:'#intelligence'},
+                {label:'Pipeline', href:'#pipeline'},
+                {label:'Calculator', href:'#calculator'},
+                {label:'Dashboard', href:'#dashboard'},
+                {label:'RFQ Desk', href:'#rfq'},
+                {label:'Forecast', href:'#prediction'},
+                {label:'Budget', href:'#budget'},
+                {label:'Calendar', href:'#calendar'},
+                {label:'Verify', href:'#trust'},
+              ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
+            </div>
           </div>
         </nav>
 
         <TradeTicker newTrades={tickerTrades} />
 
-        <section id="home" style={{ minHeight: '100vh', paddingTop: 106, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <section id="home" style={{ minHeight: '100vh', paddingTop: 'clamp(80px, 12vh, 120px)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 100% 70% at 70% 30%,rgba(212,168,67,0.06) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 10% 90%,rgba(30,50,120,0.25) 0%,transparent 50%)` }} />
           <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(212,168,67,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(212,168,67,0.035) 1px,transparent 1px)`, backgroundSize: '80px 80px', maskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%,black,transparent)' }} />
-          <div style={{ position: 'relative', zIndex: 2, maxWidth: 1440, margin: '0 auto', padding: '80px 52px 60px', width: '100%' }}>
+          <div style={{ position: 'relative', zIndex: 2, ...CONTAINER_STYLE, paddingBlock: 'clamp(40px, 8vh, 80px)' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '8px 18px', marginBottom: 36 }}>
               <span className="x-pulse" />
-              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Exchange · Est. 2025 · Wyoming Registered</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Exchange · Est. 2025</span>
             </div>
-            <h1 style={{ fontFamily: F.playfair, fontSize: 'clamp(58px,7vw,110px)', fontWeight: 900, lineHeight: 0.92, letterSpacing: '-0.03em', marginBottom: 40, maxWidth: 900, userSelect: 'none' }}>
+            <h1 style={{ fontFamily: F.playfair, fontSize: 'clamp(42px, 8vw, 110px)', fontWeight: 900, lineHeight: 0.95, letterSpacing: '-0.03em', marginBottom: 40, maxWidth: 900 }}>
               <span style={{ fontWeight: 400, color: C.cream2 }}>Carbon compliance</span><br />
               <em style={{ fontStyle: 'italic', color: C.gold, display: 'block' }}>is the market.</em>
             </h1>
-            <p style={{ fontSize: 15, lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a financial advantage — starting today.</p>
+            <p style={{ fontSize: 'clamp(14px, 1.8vw, 16px)', lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a advantage.</p>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 48 }}>
-              <button className="x-btn-primary" onClick={() => scrollTo('marketplace')} data-testid="button-browse-credits">Browse Credits →</button>
-              <button className="x-btn-ghost" onClick={() => scrollTo('list')} data-testid="button-list-credits-hero">List Your Credits</button>
+              <button className="x-btn-primary" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('marketplace')}>Browse Credits →</button>
+              <button className="x-btn-ghost" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('list')}>List Your Credits</button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 48, flexWrap: 'wrap', marginBottom: 48 }}>
-              <Globe3D onPinClick={() => scrollTo('marketplace')} />
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(24px, 5vw, 48px)', flexWrap: 'wrap', marginBottom: 48 }}>
+              <div style={{ flexShrink: 0, margin: '0 auto' }}>
+                <Globe3D onPinClick={() => scrollTo('marketplace')} />
+              </div>
+              <div style={{ flex: '1 1 400px' }}>
                 <CarbonClock />
               </div>
             </div>
-            <div className="x-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: `1px solid ${C.goldborder}`, background: 'rgba(13,18,32,0.8)', backdropFilter: 'blur(12px)' }}>
+            <div className="x-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: `1px solid ${C.goldborder}`, background: 'rgba(13,18,32,0.8)', backdropFilter: 'blur(12px)', gap: 1 }}>
               {[
                 { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate' },
                 { val: '€100', label: 'EU Fine Per Tonne', sub: 'Cost of non-compliance' },
                 { val: '2027', label: '100% EU ETS Mandate', sub: 'Maritime full coverage deadline' },
                 { val: '5', label: 'Sovereign Nations', sub: 'Carbon Union · Registry backed' },
               ].map((m, i) => (
-                <div key={i} style={{ padding: '28px 32px', borderRight: i < 3 ? `1px solid ${C.goldborder}` : 'none' }}>
-                  <div style={{ fontFamily: F.playfair, fontSize: 42, fontWeight: 700, color: C.gold, lineHeight: 1, marginBottom: 6, userSelect: 'none' }}>{m.val}</div>
+                <div key={i} style={{ padding: '28px 32px', background: C.ink2 }}>
+                  <div style={{ fontFamily: F.playfair, fontSize: 'clamp(32px, 4vw, 42px)', fontWeight: 700, color: C.gold, lineHeight: 1, marginBottom: 6 }}>{m.val}</div>
                   <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.cream3 }}>{m.label}</div>
                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginTop: 4 }}>{m.sub}</div>
                 </div>
@@ -806,7 +844,7 @@ export default function Exchange() {
                 <input className="x-fi" style={{ ...s.fi, flex: 1, maxWidth: 280, fontFamily: F.mono, fontSize: 11 }} placeholder="Search credits..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-credits" />
               </div>
             </div>
-            <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: C.goldborder }}>
+            <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder }}>
               {filteredListings.map(l => {
                 const bs = getBadgeStyle(l.standard, C);
                 const up = l.changeDirection !== 'down';
@@ -928,7 +966,7 @@ export default function Exchange() {
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Citizens <em style={{ fontStyle: 'italic', color: C.gold }}>Portal.</em></h2>
             <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>Five sovereign nations participate in the Carbon Union, generating verified credits from environmental programs that trade on global markets.</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 64 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 64 }}>
               {[
                 { code: 'AG', name: 'Antigua & Barbuda', role: 'Registry HQ' },
                 { code: 'TO', name: 'Tonga', role: 'Pacific Blue Carbon' },
@@ -947,7 +985,7 @@ export default function Exchange() {
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start', marginBottom: 80 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'clamp(32px, 5vw, 80px)', alignItems: 'start', marginBottom: 80 }}>
               <div>
                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />How It Works</div>
                 <h3 style={{ fontFamily: F.playfair, fontSize: 'clamp(28px,3vw,44px)', fontWeight: 700, lineHeight: 1.1, marginBottom: 20 }}>Waste becomes <em style={{ color: C.gold, fontStyle: 'italic' }}>wealth.</em></h3>
@@ -1014,7 +1052,7 @@ export default function Exchange() {
             </div>
 
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />What Generates Credits</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginTop: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginTop: 20 }}>
               {[
                 { Icon: Waves, title: 'Sargassum Seaweed', text: 'Harvested from Caribbean beaches, converted into SwissX B100 biofuel. 93% lower emissions than diesel.', detail: '1 credit per 90 gallons produced' },
                 { Icon: Leaf, title: 'Agricultural Waste', text: 'Crop residues, manure, and organic waste converted to biogas and regenerative soil products across Kenya and Zambia.', detail: 'Measured per tonne CO₂ averted' },
@@ -1309,7 +1347,7 @@ export default function Exchange() {
           <div className="x-section" style={s.sectionWrap}>
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Trust &amp; Verification</div>
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 56 }}>Every trade.<br /><em style={{ fontStyle: 'italic', color: C.gold }}>On the record.</em></h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
               {[
                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
                 { Icon: Clock, title: 'T+1 Settlement', text: 'Credits transfer to your registry account within one business day of trade execution. Full settlement confirmation with audit trail.' },
@@ -1325,7 +1363,7 @@ export default function Exchange() {
             </div>
 
             <div style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '40px 48px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'clamp(32px, 5vw, 60px)', alignItems: 'center' }}>
                 <div>
                   <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Sample Receipt</div>
                   <h3 style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, lineHeight: 1.2, marginBottom: 16 }}>What your auditors <em style={{ color: C.gold }}>actually see.</em></h3>
@@ -1419,8 +1457,8 @@ export default function Exchange() {
           <RegulatoryCalendar isDark={isDark} />
         </section>
 
-        <footer style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, padding: '60px 52px 40px' }}>
-          <div className="x-footer-grid" style={{ maxWidth: 1440, margin: '0 auto', display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 1fr', gap: 60, marginBottom: 52 }}>
+        <footer style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, padding: 'clamp(40px, 5vw, 60px) clamp(16px, 4vw, 52px) 40px' }}>
+          <div className="x-footer-grid" style={{ maxWidth: 1440, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(32px, 5vw, 60px)', marginBottom: 52 }}>
             <div>
               <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700, marginBottom: 16 }}>UAIU<sup style={{ color: C.gold, fontSize: 12, fontFamily: F.mono, fontWeight: 400, letterSpacing: '0.15em' }}>.LIVE/X</sup></div>
               <div style={{ fontSize: 13, lineHeight: 1.7, color: C.cream3, maxWidth: 300 }}>The Caribbean Carbon Credit Marketplace. Connecting compliant credit supply with mandatory institutional demand since 2025. UAIU Holdings Corp, Wyoming.</div>

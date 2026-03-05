@@ -54,7 +54,7 @@ export function TradeTicker({ newTrades = [] }: Props) {
       display: 'flex',
       alignItems: 'center',
       position: 'fixed',
-      top: 68,
+      top: 'clamp(64px, 8vh, 80px)',
       left: 0,
       right: 0,
       zIndex: 499,

@@ -199,15 +199,17 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
       <div style={{
         position: 'fixed', bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))', right: '24px',
         zIndex: 9998, display: 'flex', flexDirection: 'column',
-        alignItems: 'flex-end', gap: '8px'
+        alignItems: 'flex-end', gap: '8px',
+        pointerEvents: 'none'
       }}>
         {!open && (
-          <div style={{
+          <div className="copilot-label" style={{
             background: 'rgba(13,27,62,0.9)',
             border: '1px solid rgba(212,168,67,0.3)',
             borderRadius: '8px', padding: '8px 14px',
             fontSize: '12px', color: 'rgba(212,168,67,0.8)',
-            fontWeight: 600, whiteSpace: 'nowrap'
+            fontWeight: 600, whiteSpace: 'nowrap',
+            pointerEvents: 'auto'
           }}>
             Carbon Compliance Co-Pilot ✦
           </div>
@@ -223,7 +225,8 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
             cursor: 'pointer', fontSize: '22px',
             boxShadow: `0 4px 20px rgba(212,168,67,0.3)`,
             position: 'relative',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            pointerEvents: 'auto'
           }}
         >
           {open ? '✕' : '✦'}
@@ -237,14 +240,21 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
             }}>{unread}</span>
           )}
         </button>
+
+        <style>{`
+          @media (max-width: 480px) {
+            .copilot-label { display: none !important; }
+          }
+        `}</style>
       </div>
 
       {/* CHAT PANEL */}
       {open && (
         <div style={{
-          position: 'fixed', bottom: '96px', right: '24px',
-          width: 'clamp(300px, 90vw, 420px)',
-          height: 'clamp(400px, 70vh, 580px)',
+          position: 'fixed', bottom: 'clamp(80px, 12vh, 96px)', right: 'clamp(12px, 4vw, 24px)',
+          width: 'clamp(280px, calc(100vw - 48px), 420px)',
+          height: 'clamp(350px, 60vh, 580px)',
+          maxHeight: 'calc(100vh - 120px)',
           background: isDark ? '#0d1b2e' : '#ffffff',
           border: `1px solid ${GOLD}44`,
           borderRadius: '16px', zIndex: 9997,
