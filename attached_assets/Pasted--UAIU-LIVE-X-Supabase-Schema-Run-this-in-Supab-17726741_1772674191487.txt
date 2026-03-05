@@ -1,0 +1,151 @@
+– ══════════════════════════════════════════════
+– UAIU.LIVE/X — Supabase Schema
+– Run this in Supabase SQL Editor
+– ══════════════════════════════════════════════
+
+– 1. ENTITIES (buyers, sellers, orgs)
+create table if not exists entities (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+name text not null,
+contact_name text,
+email text,
+phone text,
+entity_type text default ‘BUYER’,
+annual_co2_exposure text,
+status text default ‘pending_kyc’,
+metadata jsonb
+);
+
+– 2. LISTINGS (instruments / credit lots)
+create table if not exists listings (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+project_name text not null,
+standard text not null,
+credit_type text,
+origin text,
+vintage_year int,
+registry_ref text,
+quantity_tonnes float,
+ask_eur_per_tonne float,
+price_change_pct float default 0,
+seller_id uuid references entities(id),
+status text default ‘active’
+);
+
+– 3. LISTING SUBMISSIONS (pending verification)
+create table if not exists listing_submissions (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+org_name text,
+contact_name text,
+email text,
+standard text,
+credit_type text,
+volume_tonnes float,
+ask_eur_per_tonne float,
+origin text,
+registry_ref text,
+status text default ‘pending_verification’
+);
+
+– 4. RFQS (institutional requests)
+create table if not exists rfqs (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+rfq_id text unique not null,
+company text not null,
+contact_name text,
+email text,
+side text not null,
+standard text,
+volume_tonnes float,
+target_price_eur float,
+origin text,
+vintage_year int,
+deadline text,
+notes text,
+receipt_hash text,
+status text default ‘new’
+);
+
+– 5. TRADES (executed orders)
+create table if not exists trades (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+trade_id text unique not null,
+side text not null,
+standard text,
+price_eur_per_tonne float,
+volume_tonnes float,
+gross_eur float,
+fee_eur float,
+net_eur float,
+settlement text default ‘T+1’,
+receipt_hash text,
+prev_receipt_hash text,
+verify_url text,
+status text default ‘filled’
+);
+
+– 6. RETIREMENTS (permanent cancellations)
+create table if not exists retirements (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+cert_id text unique not null,
+trade_id text,
+retired_tonnes float,
+beneficiary text,
+compliance_period text,
+notes text,
+receipt_hash text,
+status text default ‘permanently_retired’
+);
+
+– 7. INDEX POINTS (UAIU_CARIB_PREMIUM history)
+create table if not exists index_points (
+id uuid default gen_random_uuid() primary key,
+created_at timestamptz default now(),
+symbol text not null,
+value float not null,
+method text,
+source text
+);
+
+– ── SEED: SwissX flagship listings ─────────────
+insert into listings (project_name, standard, credit_type, origin, vintage_year, quantity_tonnes, ask_eur_per_tonne, status) values
+(‘SwissX B100 Caribbean Biofuel’, ‘VCS’, ‘SWISSX_B100’, ‘Antigua, Caribbean’, 2024, 500000, 71.80, ‘active’),
+(‘Coral Restoration — Tonga Blue Carbon’, ‘VCS’, ‘BLUE_CARBON’, ‘Tonga, Pacific’, 2024, 2800000, 45.60, ‘active’),
+(‘REDD++ Honduras Forest Conservation’, ‘GOLD_STD’, ‘REDDPP’, ‘Honduras, Central America’, 2024, 150000, 58.20, ‘active’),
+(‘East Delta Dena Regenerative Zone’, ‘VCS’, ‘BIOCHAR’, ‘Altadena, California’, 2025, 25000, 62.00, ‘active’),
+(‘Tuskegee Regenerative City’, ‘GOLD_STD’, ‘BIOCHAR’, ‘Tuskegee, Alabama’, 2025, 40000, 64.50, ‘active’),
+(‘Roatan Reef Restoration — Honduras’, ‘VCS’, ‘BLUE_CARBON’, ‘Roatan, Honduras’, 2024, 180000, 48.90, ‘active’);
+
+– ── ROW LEVEL SECURITY ──────────────────────────
+– Enable RLS (read public, write authenticated)
+alter table listings enable row level security;
+alter table trades enable row level security;
+alter table retirements enable row level security;
+alter table rfqs enable row level security;
+
+– Public read for listings, index, trades (verification)
+create policy “Public read listings” on listings for select using (true);
+create policy “Public read trades” on trades for select using (true);
+create policy “Public read retirements” on retirements for select using (true);
+create policy “Public read index” on index_points for select using (true);
+
+– Anon insert for forms (rate limited by app layer)
+create policy “Anon insert rfqs” on rfqs for insert with check (true);
+create policy “Anon insert entities” on entities for insert with check (true);
+create policy “Anon insert submissions” on listing_submissions for insert with check (true);
+create policy “Anon insert trades” on trades for insert with check (true);
+create policy “Anon insert retirements” on retirements for insert with check (true);
+create policy “Anon insert index” on index_points for insert with check (true);
+
+– ══════════════════════════════════════════════
+– DONE. All 7 core objects live in Supabase.
+– Entities, Instruments, Orders (rfqs), Trades,
+– Retirements, Evidence (listing_submissions),
+– Receipts (receipt_hash on trades/retirements)
+– ══════════════════════════════════════════════

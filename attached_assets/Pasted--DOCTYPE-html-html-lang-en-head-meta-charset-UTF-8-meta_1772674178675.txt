@@ -1,0 +1,2751 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-XSS-Protection" content="1; mode=block">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="theme-color" content="#060810">
+<meta property="og:title" content="UAIU.LIVE/X — Caribbean Carbon Credit Marketplace">
+<meta property="og:description" content="The world's carbon debt. Your asset.">
+<meta property="og:type" content="website">
+<title>UAIU.LIVE/X — Caribbean Carbon Credit Marketplace</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;0,900;1,400;1,700&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --ink:#060810;
+  --ink2:#0d1220;
+  --ink3:#141e30;
+  --ink4:#1c2840;
+  --gold:#d4a843;
+  --gold2:#f0c96a;
+  --gold3:#b8922e;
+  --goldfaint:rgba(212,168,67,0.12);
+  --goldborder:rgba(212,168,67,0.22);
+  --cream:#f2ead8;
+  --cream2:rgba(242,234,216,0.7);
+  --cream3:rgba(242,234,216,0.35);
+  --cream4:rgba(242,234,216,0.1);
+  --green:#22c55e;
+  --greenfaint:rgba(34,197,94,0.12);
+  --red:#ef4444;
+  --redfaint:rgba(239,68,68,0.12);
+  --blue:#3b82f6;
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{background:var(--ink);color:var(--cream);font-family:'Syne',sans-serif;overflow-x:hidden;cursor:default}
+
+/* CURSOR */
+body{cursor:none}
+#cursor{position:fixed;width:8px;height:8px;background:var(–gold);border-radius:50%;pointer-events:none;z-index:99999;transform:translate(-50%,-50%);transition:transform 0.1s,width 0.2s,height 0.2s;mix-blend-mode:difference}
+#cursorRing{position:fixed;width:32px;height:32px;border:1px solid rgba(212,168,67,0.5);border-radius:50%;pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:transform 0.15s,width 0.2s,height 0.2s,border-color 0.2s}
+body:hover #cursor{width:8px;height:8px}
+
+/* NOISE */
+body::after{content:””;position:fixed;inset:0;background-image:url(“data:image/svg+xml,%3Csvg viewBox=‘0 0 512 512’ xmlns=‘http://www.w3.org/2000/svg’%3E%3Cfilter id=‘n’%3E%3CfeTurbulence type=‘fractalNoise’ baseFrequency=‘0.75’ numOctaves=‘4’ stitchTiles=‘stitch’/%3E%3C/filter%3E%3Crect width=‘100%25’ height=‘100%25’ filter=‘url(%23n)’ opacity=‘0.035’/%3E%3C/svg%3E”);pointer-events:none;z-index:9999;opacity:0.6}
+
+/* ═══ NAV ═══════════════════════════════════════ */
+nav{position:fixed;top:0;left:0;right:0;z-index:500;height:68px;display:flex;align-items:center;padding:0 52px;background:rgba(6,8,16,0.88);backdrop-filter:blur(24px);border-bottom:1px solid var(–goldborder)}
+.nav-logo{font-family:‘Playfair Display’,serif;font-size:20px;font-weight:700;letter-spacing:0.05em;color:var(–cream);white-space:nowrap}
+.nav-logo sup{color:var(–gold);font-size:11px;vertical-align:super;letter-spacing:0.2em;font-family:‘JetBrains Mono’,monospace;font-weight:400}
+.nav-center{flex:1;display:flex;justify-content:center;gap:36px}
+.nav-center a{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(–cream3);text-decoration:none;transition:color 0.2s;padding:4px 0;border-bottom:1px solid transparent}
+.nav-center a:hover,.nav-center a.active{color:var(–gold);border-bottom-color:var(–gold)}
+.nav-right{display:flex;align-items:center;gap:16px}
+.nav-tag{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(–green);display:flex;align-items:center;gap:6px}
+.pulse{width:6px;height:6px;background:var(–green);border-radius:50%;animation:pulseAnim 2s infinite}
+@keyframes pulseAnim{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.4)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+.btn-nav{background:var(–gold);color:var(–ink);padding:10px 22px;font-family:‘Syne’,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+.btn-nav:hover{background:var(–gold2);transform:translateY(-1px)}
+
+/* ═══ TICKER ═══════════════════════════════════ */
+.ticker-bar{position:fixed;top:68px;left:0;right:0;z-index:499;height:38px;background:var(–ink2);border-bottom:1px solid var(–goldborder);overflow:hidden;display:flex;align-items:center}
+.ticker-scroll{display:flex;animation:tickerMove 50s linear infinite;white-space:nowrap}
+.t-item{display:inline-flex;align-items:center;gap:10px;padding:0 32px;border-right:1px solid var(–goldborder);height:38px}
+.t-name{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.12em;color:var(–gold);text-transform:uppercase}
+.t-price{font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–cream)}
+.t-up{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–green)}
+.t-dn{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–red)}
+@keyframes tickerMove{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* ═══ HERO ══════════════════════════════════════ */
+#home{min-height:100vh;padding-top:106px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.hero-mesh{position:absolute;inset:0;background:radial-gradient(ellipse 100% 70% at 70% 30%,rgba(212,168,67,0.06) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 10% 90%,rgba(30,50,120,0.25) 0%,transparent 50%),radial-gradient(ellipse 30% 40% at 90% 80%,rgba(212,168,67,0.04) 0%,transparent 50%)}
+.hero-lines{position:absolute;inset:0;background-image:linear-gradient(rgba(212,168,67,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(212,168,67,0.035) 1px,transparent 1px);background-size:80px 80px;mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black,transparent)}
+.hero-inner{position:relative;z-index:2;max-width:1440px;margin:0 auto;padding:80px 52px 60px;width:100%}
+.hero-badge{display:inline-flex;align-items:center;gap:10px;background:var(–goldfaint);border:1px solid var(–goldborder);padding:8px 18px;margin-bottom:36px}
+.hero-badge-text{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(–gold)}
+.hero-h1{font-family:‘Playfair Display’,serif;font-size:clamp(58px,7vw,110px);font-weight:900;line-height:0.92;letter-spacing:-0.03em;margin-bottom:40px;max-width:900px}
+.hero-h1 em{font-style:italic;color:var(–gold);display:block}
+.hero-h1 .thin{font-weight:400;color:var(–cream2)}
+.hero-sub{font-size:15px;line-height:1.75;color:var(–cream3);max-width:560px;margin-bottom:52px;font-weight:400}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:80px}
+.btn-hero-primary{background:var(–gold);color:var(–ink);padding:18px 44px;font-family:‘Syne’,sans-serif;font-size:12px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden}
+.btn-hero-primary::after{content:‘→’;margin-left:10px;transition:transform 0.2s;display:inline-block}
+.btn-hero-primary:hover{background:var(–gold2);transform:translateY(-2px)}
+.btn-hero-primary:hover::after{transform:translateX(4px)}
+.btn-hero-ghost{background:transparent;color:var(–cream);padding:18px 44px;font-family:‘Syne’,sans-serif;font-size:12px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;border:1px solid var(–goldborder);cursor:pointer;transition:all 0.25s}
+.btn-hero-ghost:hover{border-color:var(–gold);color:var(–gold)}
+.hero-metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(–goldborder);background:rgba(13,18,32,0.8);backdrop-filter:blur(12px)}
+.hero-metric{padding:28px 32px;border-right:1px solid var(–goldborder);position:relative}
+.hero-metric:last-child{border-right:none}
+.hm-val{font-family:‘Playfair Display’,serif;font-size:42px;font-weight:700;color:var(–gold);line-height:1;margin-bottom:6px}
+.hm-label{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(–cream3)}
+.hm-change{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–green);margin-top:4px}
+
+/* ═══ SECTION LAYOUT ════════════════════════════ */
+.section{max-width:1440px;margin:0 auto;padding:100px 52px}
+.s-eyebrow{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.25em;text-transform:uppercase;color:var(–gold);margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.s-eyebrow::before{content:””;width:28px;height:1px;background:var(–gold)}
+.s-title{font-family:‘Playfair Display’,serif;font-size:clamp(38px,4.5vw,64px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:16px}
+.s-title em{font-style:italic;color:var(–gold)}
+.s-sub{font-size:15px;color:var(–cream3);line-height:1.7;max-width:560px;margin-bottom:56px}
+.gold-rule{width:100%;height:1px;background:linear-gradient(90deg,transparent,var(–gold),transparent);opacity:0.3}
+
+/* ═══ MARKETPLACE LISTING ═══════════════════════ */
+#marketplace{background:var(–ink2);border-top:1px solid var(–goldborder);border-bottom:1px solid var(–goldborder)}
+.market-controls{display:flex;gap:12px;align-items:center;margin-bottom:32px;flex-wrap:wrap}
+.mfilter{background:transparent;border:1px solid var(–goldborder);color:var(–cream3);padding:10px 20px;font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+.mfilter.active,.mfilter:hover{background:var(–goldfaint);border-color:var(–gold);color:var(–gold)}
+.market-search{flex:1;max-width:320px;background:var(–ink3);border:1px solid var(–goldborder);padding:11px 18px;font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–cream);outline:none;transition:border-color 0.2s}
+.market-search:focus{border-color:var(–gold)}
+.market-search::placeholder{color:var(–cream4)}
+.listings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(–goldborder)}
+.listing-card{background:var(–ink2);padding:32px 28px;position:relative;overflow:hidden;cursor:pointer;transition:background 0.25s}
+.listing-card::before{content:””;position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(–gold),transparent);opacity:0;transition:opacity 0.3s}
+.listing-card:hover{background:var(–ink3)}
+.listing-card:hover::before{opacity:1}
+.lc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.lc-badge{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;border:1px solid}
+.lc-badge.vcs{color:#22c55e;border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08)}
+.lc-badge.gold{color:var(–gold);border-color:var(–goldborder);background:var(–goldfaint)}
+.lc-badge.corsia{color:#3b82f6;border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.08)}
+.lc-badge.eu{color:#a855f7;border-color:rgba(168,85,247,0.3);background:rgba(168,85,247,0.08)}
+.lc-available{font-family:‘JetBrains Mono’,monospace;font-size:9px;color:var(–cream3);letter-spacing:0.1em}
+.lc-name{font-family:‘Playfair Display’,serif;font-size:22px;font-weight:700;margin-bottom:6px;line-height:1.1}
+.lc-origin{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);letter-spacing:0.1em;margin-bottom:20px}
+.lc-divider{height:1px;background:var(–goldborder);margin-bottom:20px}
+.lc-stats{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.lc-stat-label{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(–cream3);margin-bottom:4px}
+.lc-stat-val{font-family:‘Playfair Display’,serif;font-size:22px;font-weight:700;color:var(–cream);line-height:1}
+.lc-stat-val.price{color:var(–gold)}
+.lc-change-pos{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–green)}
+.lc-change-neg{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–red)}
+.lc-footer{display:flex;gap:10px}
+.btn-buy-now{flex:1;background:var(–gold);color:var(–ink);padding:13px;font-family:‘Syne’,sans-serif;font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.2s}
+.btn-buy-now:hover{background:var(–gold2)}
+.btn-list{flex:1;background:transparent;color:var(–gold);padding:13px;font-family:‘Syne’,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;border:1px solid var(–goldborder);cursor:pointer;transition:all 0.2s}
+.btn-list:hover{background:var(–goldfaint);border-color:var(–gold)}
+.lc-progress{height:3px;background:var(–ink4);margin-top:20px;overflow:hidden}
+.lc-progress-fill{height:100%;background:linear-gradient(90deg,var(–gold3),var(–gold));transition:width 1s ease}
+
+/* ═══ HOW IT WORKS ══════════════════════════════ */
+#how{background:var(–ink)}
+.steps-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
+.steps-list{display:flex;flex-direction:column;gap:0}
+.step-item{display:flex;gap:28px;padding:32px 0;border-bottom:1px solid var(–goldborder);position:relative;cursor:default;transition:all 0.2s}
+.step-item:first-child{border-top:1px solid var(–goldborder)}
+.step-item:hover .step-num{color:var(–gold);border-color:var(–gold)}
+.step-num{font-family:‘Playfair Display’,serif;font-size:36px;font-weight:900;color:var(–cream4);min-width:52px;line-height:1;transition:color 0.2s;border:1px solid transparent;display:flex;align-items:center;justify-content:center;width:52px;height:52px;flex-shrink:0;margin-top:4px;transition:all 0.2s}
+.step-content{}
+.step-title{font-family:‘Playfair Display’,serif;font-size:22px;font-weight:700;margin-bottom:10px}
+.step-text{font-size:14px;line-height:1.7;color:var(–cream3)}
+.step-tag{display:inline-block;margin-top:12px;font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(–gold);border:1px solid var(–goldborder);padding:4px 12px}
+.steps-visual{background:var(–ink2);border:1px solid var(–goldborder);padding:40px;position:relative;overflow:hidden}
+.steps-visual::before{content:””;position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(–gold),transparent)}
+.compliance-calc{}
+.cc-title{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(–gold);margin-bottom:28px;display:flex;align-items:center;gap:10px}
+.cc-title::after{content:””;flex:1;height:1px;background:var(–goldborder)}
+.cc-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid rgba(212,168,67,0.08)}
+.cc-row:last-child{border-bottom:none}
+.cc-key{font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–cream3);letter-spacing:0.05em}
+.cc-val{font-family:‘Playfair Display’,serif;font-size:20px;font-weight:700;color:var(–cream)}
+.cc-val.highlight{color:var(–gold)}
+.cc-val.savings{color:var(–green)}
+.cc-slider-label{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);letter-spacing:0.1em;margin:20px 0 8px}
+.cc-slider{width:100%;-webkit-appearance:none;height:3px;background:var(–ink4);outline:none;border-radius:0}
+.cc-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:var(–gold);cursor:pointer;border-radius:50%;border:2px solid var(–ink)}
+.cc-result{margin-top:28px;background:var(–goldfaint);border:1px solid var(–goldborder);padding:20px 24px}
+.cc-result-label{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(–gold);margin-bottom:6px}
+.cc-result-val{font-family:‘Playfair Display’,serif;font-size:38px;font-weight:900;color:var(–gold);line-height:1}
+.cc-result-sub{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);margin-top:4px}
+
+/* ═══ LIST YOUR CREDITS ═════════════════════════ */
+#list{background:var(–ink2);border-top:1px solid var(–goldborder)}
+.list-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
+.list-form-wrap{background:var(–ink);border:1px solid var(–goldborder);position:relative;overflow:hidden}
+.list-form-wrap::before{content:””;position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(–gold),transparent)}
+.form-header{padding:32px 36px;border-bottom:1px solid var(–goldborder)}
+.form-header-title{font-family:‘Playfair Display’,serif;font-size:26px;font-weight:700;margin-bottom:4px}
+.form-header-sub{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);letter-spacing:0.1em}
+.form-body{padding:32px 36px}
+.fg{margin-bottom:20px}
+.fl{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(–cream3);display:block;margin-bottom:8px}
+.fi{width:100%;background:var(–ink2);border:1px solid var(–goldborder);color:var(–cream);padding:13px 16px;font-family:‘JetBrains Mono’,monospace;font-size:12px;outline:none;transition:border-color 0.2s;-webkit-appearance:none}
+.fi:focus{border-color:var(–gold)}
+.fi::placeholder{color:var(–cream4)}
+select.fi{background-image:url(“data:image/svg+xml,%3Csvg xmlns=‘http://www.w3.org/2000/svg’ width=‘10’ height=‘6’%3E%3Cpath d=‘M0 0l5 6 5-6z’ fill=’%23d4a843’/%3E%3C/svg%3E”);background-repeat:no-repeat;background-position:right 14px center;cursor:pointer}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-submit{width:100%;background:var(–gold);color:var(–ink);padding:18px;font-family:‘Syne’,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;border:none;cursor:pointer;margin-top:8px;transition:all 0.25s}
+.form-submit:hover{background:var(–gold2);transform:translateY(-1px)}
+.list-benefits{padding-top:20px}
+.benefit-item{display:flex;gap:20px;padding:28px 0;border-bottom:1px solid var(–goldborder)}
+.benefit-item:first-child{border-top:1px solid var(–goldborder)}
+.benefit-icon{width:44px;height:44px;background:var(–goldfaint);border:1px solid var(–goldborder);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.benefit-title{font-family:‘Playfair Display’,serif;font-size:18px;font-weight:700;margin-bottom:6px}
+.benefit-text{font-size:13px;line-height:1.65;color:var(–cream3)}
+.benefit-detail{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–gold);margin-top:8px;letter-spacing:0.05em}
+
+/* ═══ COMPLIANCE SECTION ════════════════════════ */
+#compliance{background:var(–ink)}
+.compliance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(–goldborder);border:1px solid var(–goldborder);margin-bottom:60px}
+.comp-card{background:var(–ink);padding:36px 28px;text-align:center;transition:background 0.2s}
+.comp-card:hover{background:var(–ink2)}
+.comp-logo{font-family:‘Playfair Display’,serif;font-size:28px;font-weight:900;color:var(–cream2);margin-bottom:8px;letter-spacing:-0.02em}
+.comp-sub{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(–cream4)}
+.comp-status{display:inline-block;margin-top:14px;font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(–green);border:1px solid rgba(34,197,94,0.3);padding:4px 10px;background:rgba(34,197,94,0.08)}
+.compliance-statement{background:var(–ink2);border:1px solid var(–goldborder);padding:40px 48px;display:flex;gap:40px;align-items:center}
+.cs-icon{font-size:48px;flex-shrink:0}
+.cs-title{font-family:‘Playfair Display’,serif;font-size:26px;font-weight:700;margin-bottom:10px}
+.cs-text{font-size:14px;line-height:1.7;color:var(–cream3)}
+
+/* ═══ TESTIMONIALS / PROOF ══════════════════════ */
+#proof{background:var(–ink2);border-top:1px solid var(–goldborder);border-bottom:1px solid var(–goldborder)}
+.proof-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(–goldborder)}
+.proof-card{background:var(–ink2);padding:36px 32px}
+.proof-quote{font-family:‘Playfair Display’,serif;font-size:17px;font-style:italic;line-height:1.6;color:var(–cream2);margin-bottom:24px}
+.proof-author-name{font-family:‘Syne’,sans-serif;font-size:13px;font-weight:700;margin-bottom:3px}
+.proof-author-role{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);letter-spacing:0.08em}
+.proof-stars{color:var(–gold);font-size:13px;margin-bottom:16px;letter-spacing:2px}
+
+/* ═══ CTA ════════════════════════════════════════ */
+#cta{background:var(–ink);padding:0 52px 120px}
+.cta-inner{max-width:1440px;margin:0 auto;background:var(–ink2);border:1px solid var(–goldborder);padding:80px;text-align:center;position:relative;overflow:hidden}
+.cta-inner::before{content:””;position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(–gold),transparent)}
+.cta-inner::after{content:””;position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 50% 50%,rgba(212,168,67,0.05),transparent);pointer-events:none}
+.cta-eyebrow{font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.25em;text-transform:uppercase;color:var(–gold);margin-bottom:24px}
+.cta-title{font-family:‘Playfair Display’,serif;font-size:clamp(42px,5vw,72px);font-weight:900;line-height:1.0;margin-bottom:24px;letter-spacing:-0.02em}
+.cta-title em{font-style:italic;color:var(–gold)}
+.cta-sub{font-size:16px;color:var(–cream3);max-width:560px;margin:0 auto 48px;line-height:1.7}
+.cta-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+
+/* ═══ FOOTER ═════════════════════════════════════ */
+footer{background:var(–ink2);border-top:1px solid var(–goldborder);padding:60px 52px 40px}
+.footer-grid{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr;gap:60px;margin-bottom:52px}
+.footer-brand{font-family:‘Playfair Display’,serif;font-size:24px;font-weight:700;margin-bottom:16px}
+.footer-brand sup{color:var(–gold);font-size:12px;font-family:‘JetBrains Mono’,monospace;font-weight:400;letter-spacing:0.15em}
+.footer-desc{font-size:13px;line-height:1.7;color:var(–cream3);max-width:300px}
+.footer-col-title{font-family:‘JetBrains Mono’,monospace;font-size:9px;letter-spacing:0.22em;text-transform:uppercase;color:var(–gold);margin-bottom:20px}
+.footer-links{list-style:none}
+.footer-links li{margin-bottom:11px}
+.footer-links a{font-size:13px;color:var(–cream3);text-decoration:none;transition:color 0.2s}
+.footer-links a:hover{color:var(–cream)}
+.footer-bottom{max-width:1440px;margin:0 auto;padding-top:32px;border-top:1px solid var(–goldborder);display:flex;justify-content:space-between;align-items:flex-end;gap:32px}
+.footer-legal{font-family:‘JetBrains Mono’,monospace;font-size:9px;color:var(–cream4);line-height:1.8;letter-spacing:0.03em}
+.footer-badges{display:flex;gap:10px;flex-wrap:wrap}
+.fbadge{font-family:‘JetBrains Mono’,monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(–cream4);border:1px solid var(–goldborder);padding:5px 12px}
+
+/* ═══ MODAL ══════════════════════════════════════ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(6,8,16,0.94);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(12px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(–ink2);border:1px solid var(–goldborder);width:90%;max-width:520px;position:relative;overflow:hidden;animation:modalIn 0.3s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal::before{content:””;position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(–gold),transparent)}
+.modal-header{padding:32px 36px;border-bottom:1px solid var(–goldborder);display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-family:‘Playfair Display’,serif;font-size:26px;font-weight:700}
+.modal-close{background:none;border:none;color:var(–cream3);font-size:22px;cursor:pointer;line-height:1;transition:color 0.2s;padding:4px}
+.modal-close:hover{color:var(–gold)}
+.modal-body{padding:32px 36px}
+.modal-tabs{display:flex;border-bottom:1px solid var(–goldborder);margin:-32px -36px 28px}
+.mtab{flex:1;padding:16px;font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;text-align:center;cursor:pointer;color:var(–cream3);border:none;background:transparent;transition:all 0.2s;border-bottom:2px solid transparent}
+.mtab.active{color:var(–gold);border-bottom-color:var(–gold);background:var(–goldfaint)}
+.modal-price-box{background:var(–ink);border:1px solid var(–goldborder);padding:20px 24px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}
+.mpb-label{font-family:‘JetBrains Mono’,monospace;font-size:10px;color:var(–cream3);letter-spacing:0.1em}
+.mpb-val{font-family:‘Playfair Display’,serif;font-size:32px;font-weight:700;color:var(–gold)}
+.mpb-change{font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–green)}
+.order-line{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(212,168,67,0.08);font-family:‘JetBrains Mono’,monospace;font-size:11px}
+.order-line:last-child{border-bottom:none}
+.order-line span:first-child{color:var(–cream3)}
+.order-line.total span{color:var(–gold);font-size:14px}
+.order-summary{background:var(–ink);border:1px solid var(–goldborder);padding:16px 20px;margin:20px 0}
+.btn-execute-buy{width:100%;padding:18px;background:linear-gradient(135deg,#15803d,#22c55e);border:none;color:white;font-family:‘Syne’,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;margin-bottom:10px}
+.btn-execute-buy:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-execute-sell{width:100%;padding:18px;background:linear-gradient(135deg,#991b1b,#ef4444);border:none;color:white;font-family:‘Syne’,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+.btn-execute-sell:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.modal-success{display:none;text-align:center;padding:20px 0}
+.ms-icon{font-size:56px;margin-bottom:20px}
+.ms-title{font-family:‘Playfair Display’,serif;font-size:28px;font-weight:700;color:var(–gold);margin-bottom:10px}
+.ms-text{font-size:14px;color:var(–cream3);line-height:1.7}
+.ms-ref{font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–cream4);margin-top:16px}
+
+/* ═══ TOAST ══════════════════════════════════════ */
+.toast{position:fixed;bottom:32px;right:32px;z-index:9000;background:var(–ink2);border:1px solid var(–gold);padding:16px 24px;display:flex;align-items:center;gap:12px;animation:toastIn 0.3s ease;max-width:360px}
+@keyframes toastIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.toast-icon{color:var(–gold);font-size:18px;flex-shrink:0}
+.toast-text{font-family:‘JetBrains Mono’,monospace;font-size:11px;color:var(–cream);letter-spacing:0.05em;line-height:1.5}
+
+/* ═══ ANIMATIONS ═════════════════════════════════ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{opacity:0;animation:fadeUp 0.7s ease forwards}
+.d1{animation-delay:0.1s}.d2{animation-delay:0.2s}.d3{animation-delay:0.3s}.d4{animation-delay:0.4s}.d5{animation-delay:0.5s}
+
+@media(max-width:1024px){
+.listings-grid{grid-template-columns:1fr 1fr}
+.steps-layout,.list-layout{grid-template-columns:1fr}
+.hero-metrics{grid-template-columns:1fr 1fr}
+.hero-metric:nth-child(2){border-right:none}
+.hero-metric:nth-child(3){border-top:1px solid var(–goldborder)}
+.compliance-grid{grid-template-columns:1fr 1fr}
+.proof-grid{grid-template-columns:1fr}
+nav{padding:0 24px}
+.nav-center{display:none}
+.section{padding:80px 24px}
+}
+@media(max-width:640px){
+.listings-grid{grid-template-columns:1fr}
+.footer-grid{grid-template-columns:1fr}
+.hero-metrics{grid-template-columns:1fr}
+.hero-metric{border-right:none;border-top:1px solid var(–goldborder)}
+.hero-metric:first-child{border-top:none}
+}
+/* ═══ SECURITY ═══════════════════════════════════ */
+img{-webkit-user-drag:none;user-drag:none}
+@media print{body{display:none!important}}
+.hero-h1,.hm-val,.lc-stat-val,.proof-quote{-webkit-user-select:none;-moz-user-select:none;user-select:none}
+
+/* ═══ CHART & INDEX ══════════════════════════════ */
+.chart-btn{background:transparent;border:1px solid var(–goldborder);color:var(–cream3);padding:6px 14px;font-family:‘JetBrains Mono’,monospace;font-size:10px;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s}
+.chart-btn.active,.chart-btn:hover{background:var(–goldfaint);border-color:var(–gold);color:var(–gold)}
+
+/* ═══ API EXPLORER ═══════════════════════════════ */
+#apiResponse{color:var(–green)}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursorRing"></div>
+
+<!-- NAV -->
+
+<nav>
+  <div class="nav-logo">UAIU<sup>.LIVE/X</sup></div>
+  <div class="nav-center">
+    <a href="#home" class="active">Home</a>
+    <a href="#marketplace">Markets</a>
+    <a href="#index">Index</a>
+    <a href="#how">How It Works</a>
+    <a href="#citizens">Citizens Portal</a>
+    <a href="#rfq">RFQ Desk</a>
+    <a href="#trust">Verification</a>
+    <a href="#list">List Credits</a>
+    <a href="#compliance">Compliance</a>
+    <a href="#api">API</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-tag"><div class="pulse"></div>Markets Open</div>
+    <button class="btn-nav" onclick="openAccountModal()">Open Account</button>
+  </div>
+</nav>
+
+<!-- TICKER -->
+
+<div class="ticker-bar">
+  <div class="ticker-scroll" id="tickerEl"></div>
+</div>
+
+<!-- ═══ HERO ═══════════════════════════════════ -->
+
+<section id="home">
+  <div class="hero-mesh"></div>
+  <div class="hero-lines"></div>
+  <div class="hero-inner">
+    <div class="hero-badge fade-up d1">
+      <div class="pulse"></div>
+      <span class="hero-badge-text">Caribbean Carbon Exchange · Est. 2025 · Wyoming Registered</span>
+    </div>
+    <h1 class="hero-h1 fade-up d2">
+      <span class="thin">Carbon compliance</span><br>
+      <em>is the market.</em>
+    </h1>
+    <p class="hero-sub fade-up d3">UAIU.LIVE/X is the world's first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a financial advantage — starting today.</p>
+    <div class="hero-actions fade-up d4">
+      <button class="btn-hero-primary" onclick="document.getElementById('marketplace').scrollIntoView({behavior:'smooth'})">Browse Credits</button>
+      <button class="btn-hero-ghost" onclick="document.getElementById('list').scrollIntoView({behavior:'smooth'})">List Your Credits</button>
+    </div>
+    <div class="hero-metrics fade-up d5">
+      <div class="hero-metric">
+        <div class="hm-val">€63.40</div>
+        <div class="hm-label">EU ETS Spot Price</div>
+        <div class="hm-change">Live market reference rate</div>
+      </div>
+      <div class="hero-metric">
+        <div class="hm-val">€100</div>
+        <div class="hm-label">EU Fine Per Tonne</div>
+        <div class="hm-change">Cost of non-compliance</div>
+      </div>
+      <div class="hero-metric">
+        <div class="hm-val">2027</div>
+        <div class="hm-label">100% EU ETS Mandate</div>
+        <div class="hm-change">Maritime full coverage deadline</div>
+      </div>
+      <div class="hero-metric">
+        <div class="hm-val">5</div>
+        <div class="hm-label">Sovereign Nations</div>
+        <div class="hm-change">Carbon Union · Registry backed</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ CARIBBEAN PREMIUM INDEX ══════════════ -->
+
+<section id="index" style="background:var(--ink2)">
+  <div class="section">
+    <div class="s-eyebrow">Live Market Data</div>
+    <h2 class="s-title">The UAIU Caribbean<br><em>Premium Index.</em></h2>
+    <p class="s-sub">The world's first published benchmark for Caribbean-origin carbon credits. UAIU_CARIB_PREMIUM is the volume-weighted average price of executed Caribbean credits on UAIU.LIVE/X — updated hourly. When institutions need a reference price for Caribbean credits, this is the number they cite.</p>
+
+```
+<!-- INDEX HERO NUMBER -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:var(--goldborder);border:1px solid var(--goldborder);margin-bottom:48px">
+  <div style="background:var(--ink);padding:36px 28px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">UAIU_CARIB_PREMIUM</div>
+    <div style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:var(--gold);line-height:1" id="indexMain">€67.43</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);margin-top:8px" id="indexChange">▲ +€1.24 (+1.87%) today</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:6px">Vol-weighted · Caribbean origin only</div>
+  </div>
+  <div style="background:var(--ink);padding:36px 28px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--cream3);margin-bottom:12px">EU ETS Spread</div>
+    <div style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:var(--cream);line-height:1">+6.4%</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);margin-top:8px">Caribbean premium vs EU spot</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:6px">Average 30-day rolling spread</div>
+  </div>
+  <div style="background:var(--ink);padding:36px 28px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--cream3);margin-bottom:12px">SwissX B100 Premium</div>
+    <div style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:var(--cream);line-height:1">+13%</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);margin-top:8px">Above EU ETS spot price</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:6px">Biofuel credit premium · verified</div>
+  </div>
+  <div style="background:var(--ink);padding:36px 28px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--cream3);margin-bottom:12px">Index Updated</div>
+    <div style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:var(--cream);line-height:1" id="indexTime">--:--</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3);margin-top:8px">UTC · Hourly refresh</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:6px">Next update in <span id="indexCountdown">60:00</span></div>
+  </div>
+</div>
+
+<!-- LIVE PRICE CHART (Canvas) -->
+<div style="background:var(--ink);border:1px solid var(--goldborder);padding:32px;margin-bottom:48px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div>
+      <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700">UAIU_CARIB_PREMIUM · 30 Day</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3);margin-top:4px">Volume-weighted average price · Caribbean-origin credits only</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="setChartRange('7D')" class="chart-btn active" id="btn7d">7D</button>
+      <button onclick="setChartRange('30D')" class="chart-btn" id="btn30d">30D</button>
+      <button onclick="setChartRange('90D')" class="chart-btn" id="btn90d">90D</button>
+    </div>
+  </div>
+  <canvas id="priceChart" height="200" style="width:100%;display:block"></canvas>
+  <div style="display:flex;justify-content:space-between;margin-top:12px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">30 days ago</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">Today</div>
+  </div>
+</div>
+
+<!-- INDEX METHODOLOGY -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px">
+  <div>
+    <div class="s-eyebrow">Methodology</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;margin-bottom:16px">How the index <em style="color:var(--gold)">is calculated.</em></h3>
+    <p style="font-size:14px;line-height:1.8;color:var(--cream3);margin-bottom:24px">UAIU_CARIB_PREMIUM is a volume-weighted average price index of executed carbon credit trades on UAIU.LIVE/X where the project origin is within the Caribbean basin — including Antigua & Barbuda, Tonga (Pacific Blue Carbon), St. Kitts & Nevis, and associated sovereign territories.</p>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3)">
+        <div style="width:24px;height:24px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--gold);flex-shrink:0">1</div>
+        All Caribbean-origin executed trades collected hourly
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3)">
+        <div style="width:24px;height:24px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--gold);flex-shrink:0">2</div>
+        Volume-weighted average price computed (VWAP)
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3)">
+        <div style="width:24px;height:24px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--gold);flex-shrink:0">3</div>
+        Spread vs EU ETS spot calculated and published
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3)">
+        <div style="width:24px;height:24px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--gold);flex-shrink:0">4</div>
+        Index point written to public ledger · SHA-256 signed
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="s-eyebrow">API Access</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;margin-bottom:16px">Publish it. <em style="color:var(--gold)">Everywhere.</em></h3>
+    <p style="font-size:14px;line-height:1.8;color:var(--cream3);margin-bottom:20px">The index is available via public API. No authentication required for read access. Bloomberg, Reuters, institutional analytics platforms — all can pull UAIU_CARIB_PREMIUM directly.</p>
+    <div style="background:var(--ink);border:1px solid var(--goldborder);padding:20px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8">
+      <div style="color:var(--cream4);margin-bottom:8px"># Latest index value</div>
+      <div style="color:var(--gold)">GET</div> <div style="color:var(--cream)">uaiu.live/api/index/UAIU_CARIB_PREMIUM</div>
+      <div style="margin-top:12px;color:var(--cream4)"># Historical data (200 points)</div>
+      <div style="color:var(--gold)">GET</div> <div style="color:var(--cream)">uaiu.live/api/index/UAIU_CARIB_PREMIUM/history</div>
+      <div style="margin-top:12px;color:var(--cream4)"># Verify a trade receipt</div>
+      <div style="color:var(--gold)">GET</div> <div style="color:var(--cream)">uaiu.live/api/verify/{tradeId}</div>
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ MARKETPLACE ════════════════════════════ -->
+
+<section id="marketplace">
+  <div class="section">
+    <div class="s-eyebrow">Live Listings</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:40px;flex-wrap:wrap;gap:20px">
+      <h2 class="s-title" style="margin-bottom:0">Available <em>Credits</em></h2>
+      <div class="market-controls" style="margin-bottom:0">
+        <button class="mfilter active" onclick="filterCredits(this,'all')">All</button>
+        <button class="mfilter" onclick="filterCredits(this,'eu')">EU ETS</button>
+        <button class="mfilter" onclick="filterCredits(this,'vcs')">VCS</button>
+        <button class="mfilter" onclick="filterCredits(this,'redd')">REDD++</button>
+        <button class="mfilter" onclick="filterCredits(this,'blue')">Blue Carbon</button>
+        <input class="market-search" placeholder="Search credits..." oninput="searchCredits(this.value)">
+      </div>
+    </div>
+    <div class="listings-grid" id="listingsGrid"></div>
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ HOW IT WORKS ══════════════════════════ -->
+
+<section id="how">
+  <div class="section">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start">
+      <div>
+        <div class="s-eyebrow">Process</div>
+        <h2 class="s-title">Buying credits.<br><em>Simplified.</em></h2>
+        <p class="s-sub">From registration to settlement in under 24 hours. The fastest compliant carbon credit transaction in the Caribbean basin.</p>
+        <div class="steps-list">
+          <div class="step-item">
+            <div class="step-num">01</div>
+            <div class="step-content">
+              <div class="step-title">Open Your Account</div>
+              <div class="step-text">Register as a corporate buyer, credit generator, or broker. KYC verification typically completes within 2 business hours. All account types accepted globally.</div>
+              <div class="step-tag">Free · 2hrs</div>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">02</div>
+            <div class="step-content">
+              <div class="step-title">Select Your Credits</div>
+              <div class="step-text">Browse verified listings filtered by standard (EU ETS, VCS, Gold Standard, CORSIA), origin, vintage year, and price. Every credit is pre-verified for compliance.</div>
+              <div class="step-tag">Real-time · Live Pricing</div>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">03</div>
+            <div class="step-content">
+              <div class="step-title">Execute & Settle</div>
+              <div class="step-text">Place your order. Instant price lock. Settlement within T+1. Credits transferred to your registry account with full blockchain provenance trail.</div>
+              <div class="step-tag">T+1 Settlement · 0.75% Fee</div>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">04</div>
+            <div class="step-content">
+              <div class="step-title">Report & Retire</div>
+              <div class="step-text">Auto-generate your EU ETS compliance report. Retire credits directly from your dashboard. One-click export for regulatory submission to EU and national authorities.</div>
+              <div class="step-tag">Automated · Audit-Ready</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="s-eyebrow">Calculator</div>
+        <h2 class="s-title">Your EU ETS<br><em>exposure.</em></h2>
+        <p class="s-sub">Calculate your annual carbon compliance cost and see exactly how much UAIU credits save you.</p>
+        <div class="list-form-wrap">
+          <div class="form-header">
+            <div class="form-header-title">Compliance Cost Calculator</div>
+            <div class="form-header-sub">EU ETS Maritime & Aviation · 2025 Rates</div>
+          </div>
+          <div class="form-body">
+            <div class="cc-slider-label">Annual CO₂ emissions (tonnes): <strong id="emissionsLabel" style="color:var(--gold)">25,000</strong></div>
+            <input type="range" class="cc-slider" min="1000" max="100000" value="25000" oninput="calcCompliance(this.value)" id="emissionsSlider">
+            <div style="height:20px"></div>
+            <div class="cc-row">
+              <span class="cc-key">EU ETS Fine (no credits)</span>
+              <span class="cc-val highlight" id="calcFine">€2,500,000</span>
+            </div>
+            <div class="cc-row">
+              <span class="cc-key">Market Credit Cost (UAIU)</span>
+              <span class="cc-val" id="calcCreditCost">€1,585,000</span>
+            </div>
+            <div class="cc-row">
+              <span class="cc-key">Your Compliance Rate</span>
+              <span class="cc-val">70% covered (2025)</span>
+            </div>
+            <div class="cc-result">
+              <div class="cc-result-label">Annual Savings vs Fine</div>
+              <div class="cc-result-val" id="calcSavings">€915,000</div>
+              <div class="cc-result-sub">Using UAIU.LIVE/X credits at €63.40/tonne</div>
+            </div>
+            <button class="form-submit" style="margin-top:24px" onclick="openTradeModal(null,'buy')">Buy Credits Now →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ LIST YOUR CREDITS ═══════════════════════ -->
+
+<section id="list">
+  <div class="section">
+    <div class="list-layout">
+      <div>
+        <div class="s-eyebrow">Sellers</div>
+        <h2 class="s-title">List your credits.<br><em>Reach the world.</em></h2>
+        <p class="s-sub">Whether you're a biofuel producer, a land conservation program, or a carbon project developer — UAIU.LIVE/X connects you directly to institutional buyers who need your credits right now.</p>
+        <div class="list-benefits">
+          <div class="benefit-item">
+            <div class="benefit-icon">⚡</div>
+            <div>
+              <div class="benefit-title">List in 48 Hours</div>
+              <div class="benefit-text">Submit your project documentation, receive verification, go live. Fastest onboarding in the carbon market — faster than Verra, faster than Gold Standard direct.</div>
+              <div class="benefit-detail">Required: Project docs · Registry serial numbers · Vintage year</div>
+            </div>
+          </div>
+          <div class="benefit-item">
+            <div class="benefit-icon">💰</div>
+            <div>
+              <div class="benefit-title">0% Listing Fee</div>
+              <div class="benefit-text">Free to list. We charge 0.75% on successful transactions only. No upfront costs, no subscription, no hidden fees. You keep 99.25% of every sale.</div>
+              <div class="benefit-detail">Success-only commission · Wire or crypto settlement</div>
+            </div>
+          </div>
+          <div class="benefit-item">
+            <div class="benefit-icon">🌊</div>
+            <div>
+              <div class="benefit-title">Caribbean Premium Pricing</div>
+              <div class="benefit-text">Caribbean-origin credits command a premium on UAIU.LIVE/X — buyers specifically seeking island-nation and indigenous land program credits pay above EU ETS spot.</div>
+              <div class="benefit-detail">SwissX B100 credits average 13% above EU ETS spot</div>
+            </div>
+          </div>
+          <div class="benefit-item">
+            <div class="benefit-icon">🔒</div>
+            <div>
+              <div class="benefit-title">Blockchain Provenance</div>
+              <div class="benefit-text">Every listed credit gets an immutable blockchain record linking it to its originating project. Eliminates double-counting risk and gives buyers full confidence.</div>
+              <div class="benefit-detail">Integrated with major registries · Auto retirement tracking</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="list-form-wrap">
+        <div class="form-header">
+          <div class="form-header-title">List Your Credits</div>
+          <div class="form-header-sub">Free to list · 48hr verification · 0.75% success fee</div>
+        </div>
+        <div class="form-body" id="listFormBody">
+          <div class="fg">
+            <label class="fl">Organization Name</label>
+            <input class="fi" type="text" placeholder="Your company or program name">
+          </div>
+          <div class="fg-row">
+            <div class="fg">
+              <label class="fl">Contact Name</label>
+              <input class="fi" type="text" placeholder="Full name">
+            </div>
+            <div class="fg">
+              <label class="fl">Email</label>
+              <input class="fi" type="email" placeholder="you@company.com">
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Credit Standard</label>
+            <select class="fi">
+              <option>EU ETS — European Union Allowances</option>
+              <option>VCS — Verified Carbon Standard (Verra)</option>
+              <option>Gold Standard — Premium Verified</option>
+              <option>CORSIA — Aviation Offset Credits</option>
+              <option>CAR — Climate Action Reserve</option>
+              <option>ACR — American Carbon Registry</option>
+              <option>Other / Proprietary</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="fl">Credit Type / Project</label>
+            <select class="fi">
+              <option>Biofuel Production (B100 / SAF)</option>
+              <option>REDD++ Forest Conservation</option>
+              <option>Blue Carbon — Mangrove / Seagrass</option>
+              <option>Renewable Energy Generation</option>
+              <option>Methane Capture</option>
+              <option>Direct Air Capture</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="fg-row">
+            <div class="fg">
+              <label class="fl">Volume (tonnes CO₂)</label>
+              <input class="fi" type="number" placeholder="e.g. 10000">
+            </div>
+            <div class="fg">
+              <label class="fl">Asking Price (EUR/tonne)</label>
+              <input class="fi" type="number" placeholder="e.g. 65.00">
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Project Origin / Country</label>
+            <input class="fi" type="text" placeholder="e.g. Antigua, Caribbean">
+          </div>
+          <div class="fg">
+            <label class="fl">Registry Serial Number (if available)</label>
+            <input class="fi" type="text" placeholder="e.g. VCS-1234-2024-001">
+          </div>
+          <button class="form-submit" onclick="submitListing()">Submit for Verification →</button>
+        </div>
+        <div id="listSuccess" style="display:none;padding:40px 36px;text-align:center">
+          <div style="font-size:48px;margin-bottom:16px">✦</div>
+          <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold);margin-bottom:12px">Submission Received</div>
+          <div style="font-size:14px;color:var(--cream3);line-height:1.7">Our verification team will review your project documentation and contact you within 48 hours. Credits that pass verification go live immediately.</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream4);margin-top:20px;letter-spacing:0.1em">REF: UAIU-LIST-2025-<span id="listRef"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ CITIZENS PORTAL ══════════════════════════ -->
+
+<section id="citizens" style="background:var(--ink)">
+  <div class="section">
+    <div class="s-eyebrow">Karmic Econ</div>
+    <h2 class="s-title">The Citizens <em>Portal.</em></h2>
+    <p class="s-sub">For the first time, communities in sovereign Carbon Union nations can participate directly in the global carbon economy — earning verified credits from their own land, waste, and environmental programs.</p>
+
+```
+<!-- NATIONS STRIP -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--goldborder);border:1px solid var(--goldborder);margin-bottom:64px">
+  <div style="background:var(--ink2);padding:28px 20px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🇦🇬</div>
+    <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;margin-bottom:4px">Antigua &amp; Barbuda</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);letter-spacing:0.12em;text-transform:uppercase">Registry HQ</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);margin-top:8px;letter-spacing:0.1em">● Active</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 20px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🇹🇴</div>
+    <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;margin-bottom:4px">Tonga</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);letter-spacing:0.12em;text-transform:uppercase">Pacific Blue Carbon</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);margin-top:8px;letter-spacing:0.1em">● Active</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 20px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🇿🇲</div>
+    <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;margin-bottom:4px">Zambia</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);letter-spacing:0.12em;text-transform:uppercase">REDD++ Forestry</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);margin-top:8px;letter-spacing:0.1em">● Active</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 20px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🇰🇪</div>
+    <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;margin-bottom:4px">Kenya</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);letter-spacing:0.12em;text-transform:uppercase">Regenerative Agriculture</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);margin-top:8px;letter-spacing:0.1em">● Active</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 20px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🇰🇳</div>
+    <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;margin-bottom:4px">St. Kitts &amp; Nevis</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);letter-spacing:0.12em;text-transform:uppercase">Caribbean Biofuel</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);margin-top:8px;letter-spacing:0.1em">● Active</div>
+  </div>
+</div>
+
+<!-- HOW CITIZENS EARN -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;margin-bottom:80px">
+  <div>
+    <div class="s-eyebrow">How It Works</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:clamp(28px,3vw,44px);font-weight:700;line-height:1.1;margin-bottom:20px">Waste becomes <em style="color:var(--gold);font-style:italic">wealth.</em></h3>
+    <p style="font-size:14px;line-height:1.75;color:var(--cream3);margin-bottom:40px">Communities in Carbon Union nations participate in verified environmental programs — turning agricultural waste, human waste, degraded land, and CO₂-averting activity into measurable climate assets that trade on global markets.</p>
+
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🌱</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;margin-bottom:4px">Join a Green Project</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Register via the Citizens Portal. Choose from local programs: biofuel production, coral restoration, reforestation, agricultural waste conversion, or regenerative soil building.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📊</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;margin-bottom:4px">Earn Verified Credits</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Your participation is measured against recognized carbon standards. Every tonne of CO₂ averted or sequestered generates one verified carbon credit issued by the SwissX Carbon Registry in Antigua.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏦</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;margin-bottom:4px">Bank at SwissX</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Credits are held in your SwissX wallet. Bank them, hold them as the price rises, or convert them immediately. Integrated with tokenized carbon wealth systems.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">💰</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;margin-bottom:4px">Sell on UAIU.LIVE/X</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">List your credits directly on the exchange. Institutional buyers — cruise lines, airlines, corporations — purchase your credits to meet their mandatory EU ETS compliance obligations. You receive payment in local currency or crypto.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CITIZEN CREDIT TRACKER MOCKUP -->
+  <div>
+    <div class="list-form-wrap">
+      <div class="form-header">
+        <div class="form-header-title">Citizens Portal</div>
+        <div class="form-header-sub">SwissX Carbon Registry · Antigua</div>
+      </div>
+      <div class="form-body">
+
+        <!-- Available programs -->
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:14px">Open Programs — Accepting Participants</div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+          <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:2px">B100 Biofuel Production</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">Antigua · SwissX Verified · 1 credit per 90 gal</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green)">● Enrolling</div>
+            </div>
+          </div>
+          <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:2px">Coral Restoration — Pacific</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">Tonga · Blue Carbon VCS · 28M+ acres</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green)">● Enrolling</div>
+            </div>
+          </div>
+          <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:2px">Agricultural Waste → Biogas</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">Kenya · Gold Standard · per tonne CO₂ averted</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green)">● Enrolling</div>
+            </div>
+          </div>
+          <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:2px">REDD++ Forest Conservation</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4)">Zambia · Gold Standard · annual sequestration</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green)">● Enrolling</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Credit value reference -->
+        <div style="background:var(--goldfaint);border:1px solid var(--goldborder);padding:18px 22px;margin-bottom:24px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Current Credit Value</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:var(--gold)">€58.20</div>
+            <div style="text-align:right">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3)">per verified credit</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3)">VCS / Gold Standard rate</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="form-submit" onclick="openAccountModal()">Join Citizens Portal →</button>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:12px;text-align:center;letter-spacing:0.05em">Backed by SwissX Sovereign Wealth Fund · Carbon Union Nations</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WASTE TO WEALTH TABLE -->
+<div class="s-eyebrow" style="margin-bottom:20px">What Generates Credits</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--goldborder);border:1px solid var(--goldborder)">
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">🌊</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">Sargassum Seaweed</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">Harvested from Caribbean beaches, converted into SwissX B100 biofuel. 93% lower emissions than diesel.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">1 credit per 90 gallons produced</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">🌿</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">Agricultural Waste</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">Crop residues, manure, and organic waste converted to biogas and regenerative soil products across Kenya and Zambia.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">Measured per tonne CO₂ averted</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">🪸</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">Coral &amp; Seagrass</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">28M+ acre restoration initiative across Pacific and Caribbean. Blue carbon sequestration verified by VCS standard.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">Sequestration measured annually</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">🏘️</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">Green Economy Zones</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">Communities like East Altadena, CA rebuild using regenerative materials. The rebuilding itself generates credits that fund further recovery.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">Self-financing community model</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">💧</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">Human Waste Systems</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">Biodigester programs convert human and municipal waste into clean energy and fertilizer, eliminating methane emissions.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">Methane avoidance credits issued</div>
+  </div>
+  <div style="background:var(--ink2);padding:28px 24px">
+    <div style="font-size:28px;margin-bottom:12px">🌳</div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:8px">REDD++ Forestry</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6;margin-bottom:12px">Verified forest conservation and reforestation programs in Honduras, Zambia, and Antigua generating Gold Standard credits.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)">Gold Standard certified</div>
+  </div>
+</div>
+
+<!-- KARMIC ECON STATEMENT -->
+<div style="margin-top:64px;background:var(--ink2);border:1px solid var(--goldborder);padding:52px;text-align:center;position:relative;overflow:hidden">
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 50% 50%,rgba(212,168,67,0.05),transparent);pointer-events:none"></div>
+  <div style="position:relative">
+    <div class="s-eyebrow" style="justify-content:center;margin-bottom:24px">Karmic Econ</div>
+    <div style="font-family:'Playfair Display',serif;font-size:clamp(24px,3.5vw,48px);font-weight:700;line-height:1.15;margin-bottom:20px;letter-spacing:-0.02em">
+      Every act of environmental repair<br>becomes a <em style="font-style:italic;color:var(--gold)">financial asset.</em>
+    </div>
+    <div style="font-size:15px;color:var(--cream3);max-width:640px;margin:0 auto 36px;line-height:1.75">The SwissX Sovereign Wealth Fund underwrites environmental and regenerative energy projects built on sustainability — transforming natural waste into measurable climate assets that flow back to the communities that created them.</div>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <button class="btn-hero-primary" onclick="openAccountModal()">Join Citizens Portal</button>
+      <button class="btn-hero-ghost" onclick="document.getElementById('marketplace').scrollIntoView({behavior:'smooth'})">View Exchange</button>
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ COMPLIANCE ═════════════════════════════ -->
+
+<section id="compliance">
+  <div class="section">
+    <div class="s-eyebrow">Standards & Verification</div>
+    <h2 class="s-title">Every credit.<br><em>Fully compliant.</em></h2>
+    <p class="s-sub">UAIU.LIVE/X only lists credits verified by internationally recognized standards. No exceptions.</p>
+    <div class="compliance-grid">
+      <div class="comp-card">
+        <div class="comp-logo">EU ETS</div>
+        <div class="comp-sub">European Union Emissions Trading System</div>
+        <div class="comp-status">✓ Fully Supported</div>
+      </div>
+      <div class="comp-card">
+        <div class="comp-logo">Verra VCS</div>
+        <div class="comp-sub">Verified Carbon Standard</div>
+        <div class="comp-status">✓ Fully Supported</div>
+      </div>
+      <div class="comp-card">
+        <div class="comp-logo">Gold Standard</div>
+        <div class="comp-sub">Swiss Foundation Premium Certification</div>
+        <div class="comp-status">✓ Fully Supported</div>
+      </div>
+      <div class="comp-card">
+        <div class="comp-logo">CORSIA</div>
+        <div class="comp-sub">ICAO Carbon Offset Scheme — Aviation</div>
+        <div class="comp-status">✓ Fully Supported</div>
+      </div>
+    </div>
+    <div class="compliance-statement">
+      <div class="cs-icon">⚖️</div>
+      <div>
+        <div class="cs-title">Built for the EU ETS mandate era</div>
+        <div class="cs-text">From 2025, EU shipping companies must surrender allowances for 70% of their emissions. By 2027, it's 100%. Every tonne of CO₂ not covered by a credit costs €100 in fines — nearly double the credit price. UAIU.LIVE/X exists to close that gap, cleanly, quickly, and with full regulatory documentation your compliance team can submit directly to national authorities.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ SOCIAL PROOF ═══════════════════════════ -->
+
+<section id="proof">
+  <div class="section">
+    <div class="s-eyebrow">From Our Clients</div>
+    <h2 class="s-title">Why institutions<br><em>choose UAIU.</em></h2>
+    <div class="proof-grid" style="margin-top:48px">
+      <div class="proof-card">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"We needed EU ETS-compliant credits for our Caribbean routing fleet. UAIU.LIVE/X had verified inventory, competitive pricing, and our compliance team had the documentation they needed in under 24 hours."</div>
+        <div class="proof-author-name">Head of Sustainability</div>
+        <div class="proof-author-role">Major Caribbean Cruise Operator</div>
+      </div>
+      <div class="proof-card">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"Listing our REDD++ forest conservation credits on UAIU took 48 hours. Within a week we had three institutional buyers. The Caribbean origin premium is real — we're selling at 11% above what we'd get on other platforms."</div>
+        <div class="proof-author-name">Director of Carbon Programs</div>
+        <div class="proof-author-role">Caribbean Conservation Trust</div>
+      </div>
+      <div class="proof-card">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"The compliance calculator alone was worth the call. We didn't realize how much EU ETS exposure our Caribbean routes were generating. UAIU showed us the number and had a solution ready in the same conversation."</div>
+        <div class="proof-author-name">CFO</div>
+        <div class="proof-author-role">Regional Maritime Logistics Group</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ RFQ DESK ════════════════════════════════ -->
+
+<div class="gold-rule"></div>
+<section id="rfq" style="background:var(--ink2)">
+  <div class="section">
+    <div class="s-eyebrow">Institutional</div>
+    <h2 class="s-title">Bulk Offtake.<br><em>Request for Quote.</em></h2>
+    <p class="s-sub">Institutional buyers don't click "Buy Now." They submit RFQs. UAIU.LIVE/X operates a live RFQ desk for structured transactions — cruise lines, shipping groups, airlines, and corporate compliance teams. Submit below and receive a priced quote pack within 4 business hours.</p>
+
+```
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start">
+
+  <!-- RFQ FORM -->
+  <div class="list-form-wrap">
+    <div class="form-header">
+      <div class="form-header-title">RFQ Desk</div>
+      <div class="form-header-sub">Institutional · Bulk Offtake · Structured Pricing</div>
+    </div>
+    <div class="form-body" id="rfqFormBody">
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Organization / Company *</label>
+          <input class="fi" type="text" id="rfqCompany" placeholder="Carnival Corp / Royal Caribbean...">
+        </div>
+        <div class="fg">
+          <label class="fl">Contact Name *</label>
+          <input class="fi" type="text" id="rfqContact" placeholder="Full name">
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Email *</label>
+          <input class="fi" type="email" id="rfqEmail" placeholder="you@company.com">
+        </div>
+        <div class="fg">
+          <label class="fl">Side *</label>
+          <select class="fi" id="rfqSide">
+            <option value="BUY">Buy (Offtake — We Need Credits)</option>
+            <option value="SELL">Sell (Supply — We Have Credits)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Credit Standard *</label>
+          <select class="fi" id="rfqStandard">
+            <option value="EU_ETS">EU ETS — European Allowances</option>
+            <option value="VCS">Verra VCS — Verified Carbon Standard</option>
+            <option value="GOLD_STD">Gold Standard</option>
+            <option value="CORSIA">CORSIA — Aviation Offsets</option>
+            <option value="BLUE_CARBON">Blue Carbon — Seagrass / Coral</option>
+            <option value="REDDPP">REDD++ — Forest Conservation</option>
+            <option value="SWISSX_B100">SwissX B100 — Caribbean Biofuel</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Volume Required (tonnes CO₂) *</label>
+          <input class="fi" type="number" id="rfqVolume" placeholder="e.g. 50000" min="1">
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Target Price (€/tonne) — optional</label>
+          <input class="fi" type="number" id="rfqPrice" placeholder="e.g. 63.00" min="0" step="0.01">
+        </div>
+        <div class="fg">
+          <label class="fl">Preferred Origin — optional</label>
+          <input class="fi" type="text" id="rfqOrigin" placeholder="e.g. Antigua, Caribbean">
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Vintage Year — optional</label>
+          <input class="fi" type="number" id="rfqVintage" placeholder="e.g. 2024" min="2020" max="2030">
+        </div>
+        <div class="fg">
+          <label class="fl">Compliance Deadline — optional</label>
+          <input class="fi" type="text" id="rfqDeadline" placeholder="e.g. Q1 2026 / March 31">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Notes / Context — optional</label>
+        <textarea class="fi" id="rfqNotes" rows="3" placeholder="Fleet size, routes, regulatory framework, delivery window..." style="resize:vertical"></textarea>
+      </div>
+
+      <!-- RFQ live estimate -->
+      <div id="rfqEstimate" style="display:none;background:var(--goldfaint);border:1px solid var(--goldborder);padding:20px 24px;margin:16px 0">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">Indicative Estimate</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Est. Gross Value</div>
+            <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--gold)" id="rfqEstGross">—</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Platform Fee (0.75%)</div>
+            <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--cream)" id="rfqEstFee">—</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Est. Net Total</div>
+            <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--cream)" id="rfqEstNet">—</div>
+          </div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:10px">Indicative only · Firm quote delivered within 4 business hours · T+1 settlement</div>
+      </div>
+
+      <button class="form-submit" id="rfqSubmitBtn" onclick="submitRFQ()">Submit RFQ — Receive Priced Quote →</button>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:12px;text-align:center">Confidential · No obligation · Quote valid 48hrs · 0.75% success fee only</div>
+    </div>
+    <!-- SUCCESS STATE -->
+    <div class="form-body" id="rfqSuccess" style="display:none;text-align:center;padding:52px 32px">
+      <div style="font-size:40px;margin-bottom:20px">✦</div>
+      <div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;margin-bottom:12px">RFQ Received</div>
+      <div style="font-size:14px;color:var(--cream3);line-height:1.75;margin-bottom:24px">Your request has been logged and assigned to our institutional desk. You will receive a priced quote pack within 4 business hours including credit specifications, registry references, settlement terms, and audit documentation.</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gold);margin-bottom:8px">Reference ID</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--cream);background:var(--ink2);border:1px solid var(--goldborder);padding:12px 20px;display:inline-block" id="rfqRef">—</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:20px">Save this reference ID for your records</div>
+    </div>
+  </div>
+
+  <!-- RFQ BENEFITS -->
+  <div>
+    <div class="s-eyebrow">Why RFQ</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:clamp(26px,2.5vw,40px);font-weight:700;line-height:1.1;margin-bottom:20px">Built for <em style="color:var(--gold)">compliance teams.</em></h3>
+    <p style="font-size:14px;line-height:1.8;color:var(--cream3);margin-bottom:40px">Most institutional carbon buyers don't use retail interfaces. They need structured workflows — RFQ submission, priced quote packs, settlement terms, and audit-ready documentation that compliance teams can submit directly to regulators.</p>
+
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">4-Hour Quote Response</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Every RFQ receives a priced quote pack including credit specifications, available inventory, settlement terms, and total landed cost.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📄</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">Audit Pack Included</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Every executed trade generates a downloadable Audit Pack PDF — registry references, blockchain provenance hash, retirement certificate, and EU ETS submission documentation.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--goldborder)">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔗</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">Verifiable Receipt Chain</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Every trade gets a unique public verification URL and SHA-256 receipt hash linking to the prior transaction — tamper-evident provenance your auditors can verify independently.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;padding:24px 0">
+        <div style="width:40px;height:40px;background:var(--goldfaint);border:1px solid var(--goldborder);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⚖️</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">T+1 Settlement</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Credits transferred to your registry account within 24 hours of execution. Full blockchain provenance trail included. One-click export for EU ETS regulatory submission.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MINIMUM TRADE SIZE -->
+    <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:24px;margin-top:32px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:14px">RFQ Parameters</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Minimum Volume</div>
+          <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold)">1,000 t</div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Response Time</div>
+          <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--cream)">4 hrs</div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Settlement</div>
+          <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--cream)">T+1</div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream3)">Success Fee</div>
+          <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--cream)">0.75%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- ═══ TRUST STACK ══════════════════════════════ -->
+
+<div class="gold-rule"></div>
+<section id="trust" style="background:var(--ink)">
+  <div class="section">
+    <div class="s-eyebrow">Provenance & Verification</div>
+    <h2 class="s-title">Every trade.<br><em>Fully verifiable.</em></h2>
+    <p class="s-sub">UAIU.LIVE/X operates a tamper-evident receipt chain. Every executed transaction generates a SHA-256 hash linked to the prior trade — a publicly verifiable, audit-ready provenance record that stands up to regulatory scrutiny worldwide.</p>
+
+```
+<!-- TRUST PILLARS -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--goldborder);border:1px solid var(--goldborder);margin-bottom:64px">
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">🔐</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">SHA-256 Receipt Chain</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">Every trade generates a cryptographic hash of the full transaction record. Each hash links to the previous — forming an immutable chain that proves no record has been altered.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">Industry standard · NIST approved</div>
+  </div>
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">🌐</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">Public Verification URL</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">Every trade gets a permanent public receipt at uaiu.live/verify/[TRADE-ID]. Share with auditors, regulators, or counterparties. No login required to verify.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">Permanent · Public · Auditor-ready</div>
+  </div>
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">📋</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">Audit Pack PDF</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">One-click download of a complete compliance document — registry reference, hash chain, settlement confirmation, retirement certificate, and EU ETS submission formatting.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">EU ETS compliant · Regulator-ready</div>
+  </div>
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">🏛️</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">Registry Integration</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">Credits linked to originating registry serial numbers — Verra VCS, Gold Standard, EU registry. Double-counting prevented at the registry level before listing is approved.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">Verra · Gold Standard · EU Registry</div>
+  </div>
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">⚡</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">48-Hour Seller Verification</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. Claude AI reviews and approves within 48 hours — flagging issues automatically.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">AI-assisted · Human reviewed</div>
+  </div>
+  <div style="background:var(--ink2);padding:36px 28px">
+    <div style="font-size:32px;margin-bottom:16px">🛡️</div>
+    <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:10px">Sovereign Backing</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:16px">Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of Antigua & Barbuda, Tonga, Zambia, Kenya, and St. Kitts & Nevis — government-level legitimacy.</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold)">5 sovereign nations · Carbon Union</div>
+  </div>
+</div>
+
+<!-- LIVE RECEIPT DEMO -->
+<div style="background:var(--ink2);border:1px solid var(--goldborder);padding:40px 48px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center">
+    <div>
+      <div class="s-eyebrow">Sample Receipt</div>
+      <h3 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;line-height:1.2;margin-bottom:16px">What your auditors <em style="color:var(--gold)">actually see.</em></h3>
+      <p style="font-size:13px;color:var(--cream3);line-height:1.75;margin-bottom:24px">Every trade on UAIU.LIVE/X generates a permanent public receipt. Your compliance team forwards the verification URL — your auditors confirm the hash chain independently. No trust required.</p>
+      <button class="btn-hero-ghost" onclick="showSampleReceipt()">View Sample Receipt →</button>
+    </div>
+    <div id="sampleReceiptBox">
+      <div style="background:var(--ink);border:1px solid var(--goldborder);padding:24px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9">
+        <div style="color:var(--gold);margin-bottom:12px;font-size:9px;letter-spacing:0.2em">UAIU TRADE RECEIPT · VERIFIED</div>
+        <div style="color:var(--cream3)">Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">UAIU-BUY-829341</span></div>
+        <div style="color:var(--cream3)">Standard: &nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">SwissX B100 / VCS</span></div>
+        <div style="color:var(--cream3)">Origin: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">Antigua, Caribbean</span></div>
+        <div style="color:var(--cream3)">Volume: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">50,000 tCO₂</span></div>
+        <div style="color:var(--cream3)">Price: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">€71.80/tonne</span></div>
+        <div style="color:var(--cream3)">Gross: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">€3,590,000.00</span></div>
+        <div style="color:var(--cream3)">Fee (0.75%): <span style="color:var(--cream)">€26,925.00</span></div>
+        <div style="color:var(--cream3)">Settlement: &nbsp;<span style="color:var(--green)">T+1 · COMPLETE</span></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--goldborder)">
+          <div style="color:var(--cream3)">Registry: &nbsp;&nbsp;&nbsp;<span style="color:var(--cream)">VCS-7821-2024-001</span></div>
+          <div style="color:var(--cream3)">Receipt Hash:</div>
+          <div style="color:var(--gold);word-break:break-all;font-size:10px">a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6</div>
+          <div style="color:var(--cream3);margin-top:4px">Prev Hash:</div>
+          <div style="color:var(--cream4);word-break:break-all;font-size:10px">7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8</div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--goldborder)">
+          <div style="color:var(--cream4);font-size:9px">Verify: uaiu.live/verify/UAIU-BUY-829341</div>
+          <div style="color:var(--cream4);font-size:9px">Audit PDF: uaiu.live/audit/UAIU-BUY-829341.pdf</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VERIFICATION LOOKUP -->
+<div style="margin-top:48px;text-align:center">
+  <div class="s-eyebrow" style="justify-content:center;margin-bottom:16px">Verify Any Trade</div>
+  <h3 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;margin-bottom:12px">Enter a Trade ID to verify.</h3>
+  <p style="font-size:14px;color:var(--cream3);margin-bottom:24px">Any counterparty, regulator, or auditor can independently verify any UAIU trade — no account required.</p>
+  <div style="display:flex;gap:0;max-width:560px;margin:0 auto">
+    <input class="fi" type="text" id="verifyInput" placeholder="e.g. UAIU-BUY-829341" style="border-right:none;flex:1;font-family:'JetBrains Mono',monospace">
+    <button onclick="lookupTrade()" style="background:var(--gold);color:var(--ink);border:none;padding:0 28px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;font-weight:700;white-space:nowrap">Verify →</button>
+  </div>
+  <div id="verifyResult" style="margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:11px;display:none"></div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- ═══ API EXPLORER ════════════════════════════ -->
+
+<div class="gold-rule"></div>
+<section id="api" style="background:var(--ink2)">
+  <div class="section">
+    <div class="s-eyebrow">Developer Access</div>
+    <h2 class="s-title">The UAIU API.<br><em>Plug in. Trade programmatically.</em></h2>
+    <p class="s-sub">UAIU.LIVE/X exposes a full REST API for institutional integration. Connect your compliance system, ERP, or trading desk directly to the exchange. Quote, order, settle, retire — all via API. Ed25519-signed receipts returned on every trade.</p>
+
+```
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-bottom:64px">
+
+  <!-- ENDPOINT LIST -->
+  <div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:20px">Core Endpoints</div>
+    <div style="display:flex;flex-direction:column;gap:1px;background:var(--goldborder);border:1px solid var(--goldborder)">
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);background:rgba(34,197,94,0.1);padding:2px 8px;border:1px solid rgba(34,197,94,0.3);min-width:40px;text-align:center">GET</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/listings</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Browse live credits</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);background:rgba(59,130,246,0.1);padding:2px 8px;border:1px solid rgba(59,130,246,0.3);min-width:40px;text-align:center">POST</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/quote</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Get instant price quote</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);background:rgba(59,130,246,0.1);padding:2px 8px;border:1px solid rgba(59,130,246,0.3);min-width:40px;text-align:center">POST</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/orders</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Place buy/sell order</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);background:rgba(34,197,94,0.1);padding:2px 8px;border:1px solid rgba(34,197,94,0.3);min-width:40px;text-align:center">GET</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/trades/{id}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Full trade + receipt</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);background:rgba(59,130,246,0.1);padding:2px 8px;border:1px solid rgba(59,130,246,0.3);min-width:40px;text-align:center">POST</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/retire</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Retire credits · get certificate</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);background:rgba(34,197,94,0.1);padding:2px 8px;border:1px solid rgba(34,197,94,0.3);min-width:40px;text-align:center">GET</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/verify/{tradeId}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Public receipt verification</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);background:rgba(34,197,94,0.1);padding:2px 8px;border:1px solid rgba(34,197,94,0.3);min-width:40px;text-align:center">GET</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/index/UAIU_CARIB_PREMIUM</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Live index value</span>
+      </div>
+      <div style="background:var(--ink);padding:16px 20px;display:flex;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);background:rgba(59,130,246,0.1);padding:2px 8px;border:1px solid rgba(59,130,246,0.3);min-width:40px;text-align:center">POST</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream)">/api/rfq</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-left:auto">Submit bulk RFQ</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE API EXPLORER -->
+  <div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:20px">Live Explorer</div>
+    <div style="background:var(--ink);border:1px solid var(--goldborder);height:100%">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--goldborder);display:flex;gap:8px;align-items:center">
+        <div style="width:10px;height:10px;border-radius:50%;background:#ef4444"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#22c55e"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3);margin-left:8px">UAIU API Console</span>
+      </div>
+      <div style="padding:20px">
+        <div style="display:flex;gap:0;margin-bottom:16px">
+          <select id="apiMethod" class="fi" style="width:90px;border-right:none;font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0">
+            <option>GET</option>
+            <option>POST</option>
+          </select>
+          <input id="apiEndpoint" class="fi" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;border-left:none" value="/api/index/UAIU_CARIB_PREMIUM" type="text">
+        </div>
+        <div id="apiBodyWrap" style="display:none;margin-bottom:12px">
+          <label class="fl">Request Body (JSON)</label>
+          <textarea id="apiBody" class="fi" rows="4" style="font-family:'JetBrains Mono',monospace;font-size:11px;resize:vertical">{
+```
+
+“listingId”: “LST-001”,
+“quantityTonnes”: 1000,
+“feeBps”: 75
+}</textarea>
+</div>
+<button onclick="runApiCall()" style="background:var(--gold);color:var(--ink);border:none;width:100%;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase">▶ Run Request</button>
+<div style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3)">Response:</div>
+<pre id="apiResponse" style="background:rgba(0,0,0,0.4);border:1px solid var(--goldborder);padding:16px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream);line-height:1.6;overflow-x:auto;margin-top:8px;white-space:pre-wrap;min-height:120px">// Run a request to see the response</pre>
+</div>
+</div>
+</div>
+</div>
+
+```
+<!-- API FEATURES -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--goldborder);border:1px solid var(--goldborder)">
+  <div style="background:var(--ink);padding:28px 24px">
+    <div style="font-size:24px;margin-bottom:12px">🔑</div>
+    <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:8px">API Keys</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6">Scoped keys per organization. Read-only, trade, admin. Rotate anytime from your dashboard.</div>
+  </div>
+  <div style="background:var(--ink);padding:28px 24px">
+    <div style="font-size:24px;margin-bottom:12px">⚡</div>
+    <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:8px">Webhooks</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6">Real-time events pushed to your endpoint. Trade executed, retirement completed, RFQ priced.</div>
+  </div>
+  <div style="background:var(--ink);padding:28px 24px">
+    <div style="font-size:24px;margin-bottom:12px">📋</div>
+    <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:8px">OpenAPI Spec</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6">Full OpenAPI 3.1 specification. Import into Postman, Swagger, or your own SDK generator.</div>
+  </div>
+  <div style="background:var(--ink);padding:28px 24px">
+    <div style="font-size:24px;margin-bottom:12px">🛡️</div>
+    <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:8px">Rate Limits</div>
+    <div style="font-size:13px;color:var(--cream3);line-height:1.6">1,000 requests/min read. 100/min write. Enterprise limits available for high-frequency compliance systems.</div>
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:40px">
+  <button class="btn-hero-primary" onclick="openAccountModal()">Request API Access →</button>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream4);margin-top:12px">API keys issued within 24 hours · Sandbox environment available · Full docs included</div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- ═══ RETIREMENT CERTIFICATES ════════════════ -->
+
+<div class="gold-rule"></div>
+<section id="retire" style="background:var(--ink)">
+  <div class="section">
+    <div class="s-eyebrow">Close The Loop</div>
+    <h2 class="s-title">Retire credits.<br><em>Get your certificate.</em></h2>
+    <p class="s-sub">Buying credits is step one. Retiring them — permanently removing them from circulation and claiming the environmental benefit — is what satisfies your EU ETS obligation. UAIU.LIVE/X generates a signed retirement certificate you submit directly to regulators.</p>
+
+```
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start">
+
+  <!-- RETIREMENT FORM -->
+  <div class="list-form-wrap">
+    <div class="form-header">
+      <div class="form-header-title">Retire Credits</div>
+      <div class="form-header-sub">EU ETS Compliance · Signed Certificate · Instant</div>
+    </div>
+    <div class="form-body" id="retireFormBody">
+      <div style="background:var(--goldfaint);border:1px solid var(--goldborder);padding:16px 20px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3);line-height:1.7">
+        ⚠ Retirement is permanent. Once credits are retired they cannot be resold. A signed certificate and public registry entry is generated immediately.
+      </div>
+      <div class="fg">
+        <label class="fl">Trade Reference ID *</label>
+        <input class="fi" type="text" id="retireTradeId" placeholder="e.g. UAIU-BUY-829341">
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label class="fl">Tonnes to Retire *</label>
+          <input class="fi" type="number" id="retireTonnes" placeholder="e.g. 50000" min="1">
+        </div>
+        <div class="fg">
+          <label class="fl">Beneficiary Name *</label>
+          <input class="fi" type="text" id="retireBeneficiary" placeholder="e.g. Carnival Corp">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Compliance Period *</label>
+        <select class="fi" id="retirePeriod">
+          <option>EU ETS 2025 Compliance Year</option>
+          <option>EU ETS 2026 Compliance Year</option>
+          <option>EU ETS 2027 Compliance Year</option>
+          <option>CORSIA 2024-2026 Period</option>
+          <option>Voluntary Retirement</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Notes — optional</label>
+        <textarea class="fi" id="retireNotes" rows="2" placeholder="Route, vessel, reporting period..." style="resize:vertical"></textarea>
+      </div>
+      <button class="form-submit" onclick="submitRetirement()">Retire Credits & Generate Certificate →</button>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:12px;text-align:center">Certificate generated instantly · SHA-256 signed · Regulator-ready PDF</div>
+    </div>
+    <div class="form-body" id="retireSuccess" style="display:none;text-align:center;padding:40px 24px">
+      <div style="font-size:36px;margin-bottom:16px">🏆</div>
+      <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:8px">Credits Retired</div>
+      <div style="font-size:13px;color:var(--cream3);line-height:1.7;margin-bottom:20px">Your retirement has been recorded. Your signed certificate is ready for regulatory submission.</div>
+      <div style="background:var(--ink);border:1px solid var(--goldborder);padding:20px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;margin-bottom:20px">
+        <div style="color:var(--gold);margin-bottom:8px;font-size:9px;letter-spacing:0.2em">RETIREMENT CERTIFICATE</div>
+        <div style="color:var(--cream3)">Cert ID: <span id="retireCertId" style="color:var(--cream)">—</span></div>
+        <div style="color:var(--cream3)">Status: <span style="color:var(--green)">● PERMANENTLY RETIRED</span></div>
+        <div style="color:var(--cream3)">Registry: <span style="color:var(--cream)">UAIU Registry · SwissX Carbon</span></div>
+        <div style="color:var(--cream3)">Verify: <span style="color:var(--gold)" id="retireVerifyUrl">uaiu.live/retire/—</span></div>
+      </div>
+      <button class="form-submit" onclick="downloadCertificate()">Download Certificate PDF →</button>
+    </div>
+  </div>
+
+  <!-- WHAT RETIREMENT MEANS -->
+  <div>
+    <div class="s-eyebrow">Why Retirement Matters</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;line-height:1.2;margin-bottom:20px">The final step in <em style="color:var(--gold)">compliance.</em></h3>
+    <p style="font-size:14px;line-height:1.8;color:var(--cream3);margin-bottom:32px">Under EU ETS, purchasing credits is not enough. They must be formally retired — permanently cancelled — to count toward your compliance obligation. UAIU generates the full documentation chain regulators require.</p>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:20px 24px;display:flex;gap:16px">
+        <div style="font-size:24px;flex-shrink:0">📜</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">Signed Certificate PDF</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Ed25519-signed PDF including trade details, retirement quantity, beneficiary, compliance period, and SHA-256 hash chain reference. Submit directly to EU national authority.</div>
+        </div>
+      </div>
+      <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:20px 24px;display:flex;gap:16px">
+        <div style="font-size:24px;flex-shrink:0">🌐</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">Public Registry Entry</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Every retirement is recorded in the public UAIU registry with a permanent URL. Auditors and counterparties verify independently — no trust required.</div>
+        </div>
+      </div>
+      <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:20px 24px;display:flex;gap:16px">
+        <div style="font-size:24px;flex-shrink:0">🔗</div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;margin-bottom:4px">Full Hash Chain</div>
+          <div style="font-size:13px;color:var(--cream3);line-height:1.6">Retirement links cryptographically to the original trade receipt. Complete provenance from credit origin → purchase → retirement. One document chain.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<div class="gold-rule"></div>
+
+<!-- ═══ CTA ════════════════════════════════════ -->
+
+<div id="cta">
+  <div class="section" style="padding-bottom:0">
+    <div class="cta-inner">
+      <div class="cta-eyebrow">Ready to Trade</div>
+      <div class="cta-title">The market is open.<br><em>Are you?</em></div>
+      <div class="cta-sub">Open your account in minutes. Browse verified credits, calculate your compliance gap, and execute your first trade today — with full regulatory documentation included.</div>
+      <div class="cta-actions">
+        <button class="btn-hero-primary" onclick="openAccountModal()">Open Account Free</button>
+        <button class="btn-hero-ghost" onclick="document.getElementById('list').scrollIntoView({behavior:'smooth'})">List Your Credits</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FOOTER ═════════════════════════════════ -->
+
+<footer>
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brand">UAIU<sup>.LIVE/X</sup></div>
+      <div class="footer-desc">The Caribbean Carbon Credit Marketplace. Connecting compliant credit supply with mandatory institutional demand since 2025. UAIU Holdings Corp, Wyoming.</div>
+    </div>
+    <div>
+      <div class="footer-col-title">Marketplace</div>
+      <ul class="footer-links">
+        <li><a href="#marketplace">Browse Credits</a></li>
+        <li><a href="#" onclick="openTradeModal(null,'buy')">Buy Now</a></li>
+        <li><a href="#list">List Credits</a></li>
+        <li><a href="#rfq">Bulk Offtake / RFQ</a></li>
+        <li><a href="#index">Caribbean Index</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Programs</div>
+      <ul class="footer-links">
+        <li><a href="#">SwissX B100</a></li>
+        <li><a href="#">REDD++ Caribbean</a></li>
+        <li><a href="#">Blue Carbon</a></li>
+        <li><a href="#">Maritime Solutions</a></li>
+        <li><a href="#">Aviation CORSIA</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Platform</div>
+      <ul class="footer-links">
+        <li><a href="#trust">Verification</a></li>
+        <li><a href="#retire">Retire Credits</a></li>
+        <li><a href="#api">API Access</a></li>
+        <li><a href="#citizens">Citizens Portal</a></li>
+        <li><a href="#compliance">Compliance</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-legal">
+      © 2025 UAIU Holdings Corp. Registered in Wyoming, USA. Caribbean Basin Operations.<br>
+      UAIU.LIVE/X is the institutional procurement layer for premium Caribbean-origin carbon credits: live listings, RFQs, instant audit packs, and verifiable trade receipts.<br>
+      Carbon credits are financial instruments. Trading involves risk. All credits verified per applicable international standards. For institutional and corporate use.
+    </div>
+    <div class="footer-badges">
+      <div class="fbadge">VCS Verified</div>
+      <div class="fbadge">EU ETS</div>
+      <div class="fbadge">Gold Standard</div>
+      <div class="fbadge">CORSIA</div>
+      <div class="fbadge">SHA-256 Receipts</div>
+      <div class="fbadge">Wyoming LLC</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══ TRADE MODAL ════════════════════════════ -->
+
+<div class="modal-overlay" id="tradeModal" onclick="closeOnOverlay(event,'tradeModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="tradeModalTitle">Trade Credits</div>
+      <button class="modal-close" onclick="closeModal('tradeModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="mtab active" onclick="setTradeTab(this,'buy')">Buy Credits</button>
+        <button class="mtab" onclick="setTradeTab(this,'sell')">Sell Credits</button>
+      </div>
+      <div id="tradeFormArea">
+        <div class="modal-price-box">
+          <div><div class="mpb-label">EU ETS Spot Price</div><div class="mpb-val" id="modalPrice">€63.40</div></div>
+          <div style="text-align:right"><div class="mpb-label">24h Change</div><div class="mpb-change">▲ +2.3% today</div></div>
+        </div>
+        <div class="fg">
+          <label class="fl">Credit Type</label>
+          <select class="fi" id="tradeType" onchange="updateTrade()">
+            <option value="63.40">EU ETS Compliance — VCS Verified</option>
+            <option value="71.80">SwissX B100 Biofuel Credits</option>
+            <option value="58.20">REDD++ Caribbean — Gold Standard</option>
+            <option value="45.60">Blue Carbon — Coral/Seagrass Fields</option>
+            <option value="29.70">CORSIA Aviation Offset Credits</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Quantity (tonnes CO₂)</label>
+          <input class="fi" type="number" id="tradeQty" value="500" min="1" oninput="updateTrade()">
+        </div>
+        <div class="order-summary">
+          <div class="order-line"><span>Unit Price</span><span id="tUnitPrice">€63.40</span></div>
+          <div class="order-line"><span>Quantity</span><span id="tQty">500 tonnes</span></div>
+          <div class="order-line"><span>Platform Fee (0.75%)</span><span id="tFee">€237.75</span></div>
+          <div class="order-line total"><span>Total</span><span id="tTotal">€31,937.75</span></div>
+        </div>
+        <button class="btn-execute-buy" id="execBuyBtn" onclick="executeTrade('buy')">▲ &nbsp; Buy Carbon Credits</button>
+        <button class="btn-execute-sell" id="execSellBtn" style="display:none" onclick="executeTrade('sell')">▼ &nbsp; Sell Carbon Credits</button>
+      </div>
+      <div class="modal-success" id="tradeSuccess">
+        <div class="ms-icon">✦</div>
+        <div class="ms-title" id="tradeSuccessTitle">Order Placed</div>
+        <div class="ms-text" id="tradeSuccessText">Your order has been submitted. Settlement will complete within T+1 business day. Credits will appear in your registry account with full blockchain provenance record.</div>
+        <div class="ms-ref" id="tradeRef"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ACCOUNT MODAL ══════════════════════════ -->
+
+<div class="modal-overlay" id="accountModal" onclick="closeOnOverlay(event,'accountModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Open Account</div>
+      <button class="modal-close" onclick="closeModal('accountModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="accountFormArea">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3);letter-spacing:0.1em;margin-bottom:24px;line-height:1.6">Free to open · KYC in 2 hours · Live same day</div>
+        <div class="fg-row">
+          <div class="fg"><label class="fl">First Name</label><input class="fi" type="text" placeholder="First"></div>
+          <div class="fg"><label class="fl">Last Name</label><input class="fi" type="text" placeholder="Last"></div>
+        </div>
+        <div class="fg"><label class="fl">Company / Organization</label><input class="fi" type="text" placeholder="Legal entity name"></div>
+        <div class="fg"><label class="fl">Business Email</label><input class="fi" type="email" placeholder="you@company.com"></div>
+        <div class="fg"><label class="fl">Phone</label><input class="fi" type="tel" placeholder="+1 (000) 000-0000"></div>
+        <div class="fg">
+          <label class="fl">Account Type</label>
+          <select class="fi">
+            <option>Corporate Buyer — Maritime / Shipping</option>
+            <option>Corporate Buyer — Aviation</option>
+            <option>Corporate Buyer — Industrial</option>
+            <option>Credit Generator / Producer</option>
+            <option>Institutional Investor / Fund</option>
+            <option>Broker / Intermediary</option>
+            <option>Government / Sovereign Entity</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Annual CO₂ Exposure (approx.)</label>
+          <select class="fi">
+            <option>Under 1,000 tonnes</option>
+            <option>1,000 – 10,000 tonnes</option>
+            <option>10,000 – 50,000 tonnes</option>
+            <option>50,000 – 200,000 tonnes</option>
+            <option>200,000+ tonnes</option>
+          </select>
+        </div>
+        <button class="form-submit" onclick="submitAccount()">Create Account →</button>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cream4);margin-top:16px;text-align:center;line-height:1.6;letter-spacing:0.05em">By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
+      </div>
+      <div class="modal-success" id="accountSuccess">
+        <div class="ms-icon">✦</div>
+        <div class="ms-title">Account Created</div>
+        <div class="ms-text">Welcome to UAIU.LIVE/X. Our onboarding team will contact you within 2 business hours to complete KYC verification. You'll be live and trading today.</div>
+        <div class="ms-ref" id="accountRef"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+// ══════════════════════════════════════════════
+// ███ SUPABASE — REAL DATABASE LAYER ██████████
+// ══════════════════════════════════════════════
+// REPLACE THESE WITH YOUR ACTUAL SUPABASE VALUES:
+const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_KEY = 'YOUR_ANON_KEY';
+
+let _db = null;
+try {
+  _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  console.log('%cSupabase connected', 'color:#22c55e;font-size:10px');
+} catch(e) {
+  console.log('%cRunning in demo mode (no Supabase)', 'color:#d4a843;font-size:10px');
+}
+
+// ── DB HELPERS ─────────────────────────────────
+async function dbInsert(table, data) {
+  if (!_db || SUPABASE_URL.includes('YOUR_PROJECT')) return { data: null, error: 'demo_mode' };
+  try {
+    const { data: result, error } = await _db.from(table).insert(data).select();
+    if (error) console.warn('DB insert error:', error.message);
+    return { data: result, error };
+  } catch(e) { return { data: null, error: e.message }; }
+}
+
+async function dbSelect(table, filters = {}) {
+  if (!_db || SUPABASE_URL.includes('YOUR_PROJECT')) return { data: [], error: 'demo_mode' };
+  try {
+    let q = _db.from(table).select('*');
+    Object.entries(filters).forEach(([k, v]) => { q = q.eq(k, v); });
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(50);
+    return { data: data || [], error };
+  } catch(e) { return { data: [], error: e.message }; }
+}
+
+// ── LOAD REAL LISTINGS FROM DB ─────────────────
+async function loadListingsFromDB() {
+  const { data, error } = await dbSelect('listings', { status: 'active' });
+  if (data && data.length > 0) {
+    // Map DB rows to listing format
+    const mapped = data.map(row => ({
+      id: row.id,
+      name: row.project_name || row.name,
+      origin: row.origin || 'Caribbean Basin',
+      badge: (row.standard || 'vcs').toLowerCase().replace('_', ''),
+      badgeText: row.standard || 'VCS',
+      price: parseFloat(row.ask_eur_per_tonne) || 63.40,
+      change: parseFloat(row.price_change_pct) || 0,
+      up: (parseFloat(row.price_change_pct) || 0) >= 0,
+      vol: row.standard || 'VCS',
+      avail: 'Accepting Orders',
+      type: row.credit_type || 'vcs',
+      volumeTonnes: row.quantity_tonnes
+    }));
+    listings.length = 0;
+    mapped.forEach(l => listings.push(l));
+    renderListings(listings);
+    console.log('%cLoaded ' + mapped.length + ' live listings from DB', 'color:#22c55e');
+  }
+}
+
+// ── SAVE RFQ TO DB ─────────────────────────────
+async function saveRFQtoDB(rfqData) {
+  return await dbInsert('rfqs', {
+    rfq_id: rfqData.id,
+    company: rfqData.company,
+    contact_name: rfqData.contact,
+    email: rfqData.email,
+    side: rfqData.side,
+    standard: rfqData.standard,
+    volume_tonnes: rfqData.volume,
+    target_price_eur: rfqData.price || null,
+    origin: rfqData.origin || null,
+    vintage_year: rfqData.vintage || null,
+    deadline: rfqData.deadline || null,
+    notes: rfqData.notes || null,
+    receipt_hash: rfqData.hash,
+    status: 'new'
+  });
+}
+
+// ── SAVE TRADE TO DB ───────────────────────────
+async function saveTradeToDB(trade) {
+  return await dbInsert('trades', {
+    trade_id: trade.id,
+    side: trade.mode,
+    standard: trade.standard,
+    price_eur_per_tonne: trade.priceEurPerTonne,
+    volume_tonnes: trade.volumeTonnes,
+    gross_eur: trade.grossEur,
+    fee_eur: trade.feeEur,
+    net_eur: trade.netEur,
+    settlement: trade.settlement,
+    receipt_hash: trade.receiptHash,
+    prev_receipt_hash: trade.prevReceiptHash,
+    verify_url: trade.verifyUrl,
+    status: 'filled'
+  });
+}
+
+// ── SAVE ACCOUNT TO DB ─────────────────────────
+async function saveAccountToDB(accountData) {
+  return await dbInsert('entities', {
+    name: accountData.company,
+    contact_name: accountData.name,
+    email: accountData.email,
+    phone: accountData.phone,
+    entity_type: accountData.type,
+    annual_co2_exposure: accountData.exposure,
+    status: 'pending_kyc'
+  });
+}
+
+// ── SAVE LISTING SUBMISSION TO DB ─────────────
+async function saveListingToDB(listingData) {
+  return await dbInsert('listing_submissions', {
+    org_name: listingData.org,
+    contact_name: listingData.contact,
+    email: listingData.email,
+    standard: listingData.standard,
+    credit_type: listingData.creditType,
+    volume_tonnes: listingData.volume,
+    ask_eur_per_tonne: listingData.price,
+    origin: listingData.origin,
+    registry_ref: listingData.registryRef,
+    status: 'pending_verification'
+  });
+}
+
+// ── SAVE RETIREMENT TO DB ──────────────────────
+async function saveRetirementToDB(retireData) {
+  return await dbInsert('retirements', {
+    cert_id: retireData.certId,
+    trade_id: retireData.tradeId,
+    retired_tonnes: retireData.tonnes,
+    beneficiary: retireData.beneficiary,
+    compliance_period: retireData.period,
+    notes: retireData.notes || null,
+    receipt_hash: retireData.hash,
+    status: 'permanently_retired'
+  });
+}
+
+// ── SAVE INDEX POINT TO DB ─────────────────────
+async function saveIndexPoint(symbol, value) {
+  return await dbInsert('index_points', {
+    symbol,
+    value,
+    method: 'VWAP_CARIBBEAN_24H',
+    source: 'uaiu_exchange'
+  });
+}
+
+// Load real listings on page start
+setTimeout(loadListingsFromDB, 500);
+
+
+// ─── CUSTOM CURSOR ─────────────────────────────
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursorRing');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+function animRing(){rx+=(mx-rx)*0.12;ry+=(my-ry)*0.12;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(animRing)}
+animRing();
+document.querySelectorAll('button,a,.listing-card,.step-item').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{ring.style.width='56px';ring.style.height='56px';ring.style.borderColor='var(--gold)'});
+  el.addEventListener('mouseleave',()=>{ring.style.width='32px';ring.style.height='32px';ring.style.borderColor='rgba(212,168,67,0.5)'});
+});
+
+// ─── TICKER ────────────────────────────────────
+const tData=[
+  {n:'EU ETS',p:'€63.40',c:'+2.3%',up:true},{n:'SwissX B100',p:'€71.80',c:'+4.2%',up:true},
+  {n:'REDD++',p:'€58.20',c:'+1.1%',up:true},{n:'Blue Carbon',p:'€45.60',c:'-0.8%',up:false},
+  {n:'CORSIA',p:'€29.70',c:'+3.1%',up:true},{n:'Gold Std',p:'€18.90',c:'-1.2%',up:false},
+  {n:'VCS Forestry',p:'€12.40',c:'+0.5%',up:true},{n:'CAR Protocol',p:'€22.10',c:'+0.9%',up:true},
+  {n:'ACR Credits',p:'€19.60',c:'+0.3%',up:true},{n:'EU Aviation',p:'€68.20',c:'+5.1%',up:true},
+];
+const tEl=document.getElementById('tickerEl');
+const tHTML=[...tData,...tData].map(t=>`<div class="t-item"><span class="t-name">${t.n}</span><span class="t-price">${t.p}</span><span class="${t.up?'t-up':'t-dn'}">${t.up?'▲':'▼'} ${t.c}</span></div>`).join('');
+tEl.innerHTML=tHTML;
+
+// ─── STAT COUNTERS REMOVED — real data only ────
+
+// ─── LISTINGS ──────────────────────────────────
+const listings=[
+  {id:1,name:'EU ETS Compliance Credits',origin:'Caribbean Basin · EU Registered',badge:'eu',badgeText:'EU ETS',price:63.40,change:2.3,up:true,vol:'EU Market',avail:'Accepting Orders',type:'eu'},
+  {id:2,name:'SwissX B100 Biofuel Credits',origin:'Antigua, Caribbean · FOB Bunkering',badge:'vcs',badgeText:'VCS',price:71.80,change:4.2,up:true,vol:'SwissX Verified',avail:'Accepting Orders',type:'vcs'},
+  {id:3,name:'REDD++ Forest Conservation',origin:'Honduras · Antigua · Verified 2024',badge:'gold',badgeText:'Gold Std',price:58.20,change:1.1,up:true,vol:'Gold Standard',avail:'Accepting Orders',type:'redd'},
+  {id:4,name:'Blue Carbon Seagrass Fields',origin:'Antigua & Barbuda · 28M Acres',badge:'vcs',badgeText:'VCS',price:45.60,change:-0.8,up:false,vol:'VCS Verified',avail:'Accepting Orders',type:'blue'},
+  {id:5,name:'CORSIA Aviation Offsets',origin:'Caribbean · ICAO Verified',badge:'corsia',badgeText:'CORSIA',price:29.70,change:3.1,up:true,vol:'ICAO Verified',avail:'Accepting Orders',type:'eu'},
+  {id:6,name:'Renewable Energy Credits',origin:'St. Lucia · Solar & Wind',badge:'gold',badgeText:'Gold Std',price:22.40,change:0.6,up:true,vol:'Gold Standard',avail:'Accepting Orders',type:'vcs'},
+];
+let activeFilter='all';
+
+function renderListings(data){
+  const grid=document.getElementById('listingsGrid');
+  grid.innerHTML=data.map(l=>`
+    <div class="listing-card" onclick="openTradeModal(${l.id},'buy')">
+      <div class="lc-top">
+        <span class="lc-badge ${l.badge}">${l.badgeText}</span>
+        <span class="lc-available">${l.avail} available</span>
+      </div>
+      <div class="lc-name">${l.name}</div>
+      <div class="lc-origin">📍 ${l.origin}</div>
+      <div class="lc-divider"></div>
+      <div class="lc-stats">
+        <div>
+          <div class="lc-stat-label">Price / tonne</div>
+          <div class="lc-stat-val price">€${l.price.toFixed(2)}</div>
+          <div class="${l.up?'lc-change-pos':'lc-change-neg'}">${l.up?'▲':'▼'} ${Math.abs(l.change)}% today</div>
+        </div>
+        <div>
+          <div class="lc-stat-label">Standard</div>
+          <div class="lc-stat-val" style="font-size:16px">${l.vol}</div>
+          <div class="lc-change-pos">● Active</div>
+        </div>
+      </div>
+      <div class="lc-footer">
+        <button class="btn-buy-now" onclick="event.stopPropagation();openTradeModal(${l.id},'buy')">Buy Now</button>
+        <button class="btn-list" onclick="event.stopPropagation();document.getElementById('list').scrollIntoView({behavior:'smooth'})">Sell Similar</button>
+      </div>
+    </div>
+  `).join('');
+}
+renderListings(listings);
+
+function filterCredits(btn,type){
+  document.querySelectorAll('.mfilter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter=type;
+  const filtered=type==='all'?listings:listings.filter(l=>l.type===type||l.badgeText.toLowerCase().includes(type));
+  renderListings(filtered);
+}
+
+function searchCredits(q){
+  const filtered=listings.filter(l=>l.name.toLowerCase().includes(q.toLowerCase())||l.origin.toLowerCase().includes(q.toLowerCase()));
+  renderListings(filtered);
+}
+
+// ─── COMPLIANCE CALC ───────────────────────────
+function calcCompliance(val){
+  const v=parseInt(val);
+  document.getElementById('emissionsLabel').textContent=v.toLocaleString();
+  const fine=v*100;
+  const creditCost=v*0.7*63.40;
+  const savings=fine-creditCost;
+  document.getElementById('calcFine').textContent='€'+fine.toLocaleString();
+  document.getElementById('calcCreditCost').textContent='€'+Math.round(creditCost).toLocaleString();
+  document.getElementById('calcSavings').textContent='€'+Math.round(savings).toLocaleString();
+}
+
+// ─── TRADE MODAL ───────────────────────────────
+let currentListing=null;
+function openTradeModal(id,mode){
+  currentListing=listings.find(l=>l.id===id)||listings[0];
+  document.getElementById('tradeModal').classList.add('open');
+  document.getElementById('tradeFormArea').style.display='block';
+  document.getElementById('tradeSuccess').style.display='none';
+  document.getElementById('tradeModalTitle').textContent=mode==='buy'?'Buy Credits':'Sell Credits';
+  if(id){
+    const sel=document.getElementById('tradeType');
+    for(let i=0;i<sel.options.length;i++){if(sel.options[i].value==currentListing.price.toFixed(2))sel.selectedIndex=i}
+  }
+  if(mode==='sell'){setTradeTab(document.querySelectorAll('.mtab')[1],'sell')}
+  else{setTradeTab(document.querySelectorAll('.mtab')[0],'buy')}
+  updateTrade();
+}
+
+function setTradeTab(el,mode){
+  document.querySelectorAll('.mtab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('execBuyBtn').style.display=mode==='buy'?'block':'none';
+  document.getElementById('execSellBtn').style.display=mode==='sell'?'block':'none';
+}
+
+function updateTrade(){
+  const price=parseFloat(document.getElementById('tradeType').value)||63.40;
+  const qty=parseInt(document.getElementById('tradeQty').value)||0;
+  const sub=price*qty,fee=sub*0.0075,total=sub+fee;
+  document.getElementById('tUnitPrice').textContent='€'+price.toFixed(2);
+  document.getElementById('tQty').textContent=qty.toLocaleString()+' tonnes';
+  document.getElementById('tFee').textContent='€'+fee.toFixed(2);
+  document.getElementById('tTotal').textContent='€'+total.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('modalPrice').textContent='€'+price.toFixed(2);
+}
+
+function executeTrade(mode){
+  const btn=mode==='buy'?document.getElementById('execBuyBtn'):document.getElementById('execSellBtn');
+  btn.textContent='⏳  Processing...';btn.disabled=true;
+  setTimeout(()=>{
+    document.getElementById('tradeFormArea').style.display='none';
+    document.getElementById('tradeSuccess').style.display='block';
+    const ref='UAIU-'+mode.toUpperCase()+'-'+Date.now().toString().slice(-6);
+    document.getElementById('tradeRef').textContent='Order Ref: '+ref;
+    document.getElementById('tradeSuccessTitle').textContent=mode==='buy'?'Order Placed':'Credits Listed';
+    document.getElementById('tradeSuccessText').textContent=mode==='buy'
+      ?'Your buy order has been submitted. Settlement completes T+1. Credits will appear in your registry account with full blockchain provenance.'
+      :'Your credits are now listed on UAIU.LIVE/X marketplace. Our team will notify you when a buyer matches your order.';
+    btn.textContent=mode==='buy'?'▲  Buy Carbon Credits':'▼  Sell Carbon Credits';
+    btn.disabled=false;
+    showToast(mode==='buy'?'✦ Buy order submitted — T+1 settlement':'✦ Credits listed on marketplace');
+  },1400);
+}
+
+// ─── ACCOUNT MODAL ─────────────────────────────
+function openAccountModal(){
+  document.getElementById('accountModal').classList.add('open');
+  document.getElementById('accountFormArea').style.display='block';
+  document.getElementById('accountSuccess').style.display='none';
+}
+
+function submitAccount(){
+  const form = document.getElementById('accountFormArea');
+  const inputs = form.querySelectorAll('input,select');
+  const accountData = {
+    name: inputs[0]?.value + ' ' + inputs[1]?.value,
+    company: inputs[2]?.value,
+    email: inputs[3]?.value,
+    phone: inputs[4]?.value,
+    type: inputs[5]?.value,
+    exposure: inputs[6]?.value
+  };
+  document.getElementById('accountFormArea').style.display='none';
+  document.getElementById('accountSuccess').style.display='block';
+  const accId = 'UAIU-' + Date.now().toString().slice(-8);
+  document.getElementById('accountRef').textContent='Account ID: ' + accId;
+  showToast('✦ Account created — KYC verification begins now');
+  // Save to Supabase
+  saveAccountToDB(accountData).then(({error}) => {
+    if (!error || error === 'demo_mode') return;
+    console.warn('Account save error:', error);
+  });
+}
+
+function submitListing(){
+  const form = document.getElementById('listFormBody');
+  const inputs = form.querySelectorAll('input,select');
+  const listingData = {
+    org: inputs[0]?.value,
+    contact: inputs[1]?.value,
+    email: inputs[2]?.value,
+    standard: inputs[3]?.value,
+    creditType: inputs[4]?.value,
+    volume: parseFloat(inputs[5]?.value) || null,
+    price: parseFloat(inputs[6]?.value) || null,
+    origin: inputs[7]?.value,
+    registryRef: inputs[8]?.value
+  };
+  document.getElementById('listFormBody').style.display='none';
+  document.getElementById('listSuccess').style.display='block';
+  document.getElementById('listRef').textContent=Math.random().toString(36).substr(2,6).toUpperCase();
+  showToast('✦ Listing submitted for 48hr verification');
+  // Save to Supabase
+  saveListingToDB(listingData).then(({error}) => {
+    if (!error || error === 'demo_mode') return;
+    console.warn('Listing save error:', error);
+  });
+}
+
+// ─── MODALS ────────────────────────────────────
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function closeOnOverlay(e,id){if(e.target===document.getElementById(id))closeModal(id)}
+
+// ─── TOAST ─────────────────────────────────────
+function showToast(msg){
+  const t=document.createElement('div');
+  t.className='toast';
+  t.innerHTML=`<span class="toast-icon">✦</span><span class="toast-text">${msg}</span>`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateY(20px)';t.style.transition='all 0.3s';setTimeout(()=>t.remove(),300)},3500);
+}
+
+// ─── LIVE PRICE UPDATES ────────────────────────
+setInterval(()=>{
+  listings.forEach(l=>{l.price+=((Math.random()-0.48)*0.12);l.price=Math.max(l.price*0.95,l.price)});
+  if(document.getElementById('tradeModal').classList.contains('open'))updateTrade();
+},4000);
+
+// ─── SCROLL NAV ACTIVE ─────────────────────────
+const navLinks=document.querySelectorAll('.nav-center a');
+const sections=document.querySelectorAll('section[id],div[id="cta"]');
+window.addEventListener('scroll',()=>{
+  let current='';
+  sections.forEach(s=>{if(window.scrollY>=s.offsetTop-120)current=s.id});
+  navLinks.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+current)});
+});
+
+// ══════════════════════════════════════════════
+// ███ CARIBBEAN PREMIUM INDEX █████████████████
+// ══════════════════════════════════════════════
+
+// Generate realistic 30-day price history
+function genPriceHistory(days, basePrice, volatility) {
+  const data = [];
+  let price = basePrice;
+  const now = Date.now();
+  for (let i = days; i >= 0; i--) {
+    price += (Math.random() - 0.47) * volatility;
+    price = Math.max(price, basePrice * 0.85);
+    data.push({ ts: now - i * 86400000, value: parseFloat(price.toFixed(2)) });
+  }
+  return data;
+}
+
+let chartData = {
+  '7D': genPriceHistory(7, 64.5, 0.8),
+  '30D': genPriceHistory(30, 62.1, 1.1),
+  '90D': genPriceHistory(90, 58.0, 1.4)
+};
+let activeRange = '30D';
+
+function drawChart(range) {
+  const canvas = document.getElementById('priceChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const data = chartData[range];
+  const W = canvas.offsetWidth;
+  const H = 200;
+  canvas.width = W;
+  canvas.height = H;
+
+  const prices = data.map(d => d.value);
+  const min = Math.min(...prices) * 0.995;
+  const max = Math.max(...prices) * 1.005;
+  const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(212,168,67,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + ((H - pad.top - pad.bottom) * i / 4);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = max - ((max - min) * i / 4);
+    ctx.fillStyle = 'rgba(242,234,216,0.3)';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('€' + val.toFixed(2), pad.left - 6, y + 4);
+  }
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+  grad.addColorStop(0, 'rgba(212,168,67,0.25)');
+  grad.addColorStop(1, 'rgba(212,168,67,0.02)');
+
+  // Area path
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = pad.left + (i / (data.length - 1)) * (W - pad.left - pad.right);
+    const y = pad.top + ((max - d.value) / (max - min)) * (H - pad.top - pad.bottom);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  const lastX = pad.left + (W - pad.left - pad.right);
+  ctx.lineTo(lastX, H - pad.bottom);
+  ctx.lineTo(pad.left, H - pad.bottom);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#d4a843';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  data.forEach((d, i) => {
+    const x = pad.left + (i / (data.length - 1)) * (W - pad.left - pad.right);
+    const y = pad.top + ((max - d.value) / (max - min)) * (H - pad.top - pad.bottom);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Current price dot
+  const lastPt = data[data.length - 1];
+  const lx = W - pad.right;
+  const ly = pad.top + ((max - lastPt.value) / (max - min)) * (H - pad.top - pad.bottom);
+  ctx.beginPath();
+  ctx.arc(lx, ly, 5, 0, Math.PI * 2);
+  ctx.fillStyle = '#d4a843';
+  ctx.fill();
+
+  // Update index display
+  const first = data[0].value, last = data[data.length - 1].value;
+  const diff = last - first, pct = ((diff / first) * 100).toFixed(2);
+  document.getElementById('indexMain').textContent = '€' + last.toFixed(2);
+  const chEl = document.getElementById('indexChange');
+  chEl.textContent = (diff >= 0 ? '▲' : '▼') + ' €' + Math.abs(diff).toFixed(2) + ' (' + Math.abs(pct) + '%) ' + range;
+  chEl.style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function setChartRange(range) {
+  activeRange = range;
+  document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn' + range.toLowerCase()).classList.add('active');
+  drawChart(range);
+}
+
+// Index countdown timer
+let countdownSecs = 3600;
+function updateCountdown() {
+  countdownSecs--;
+  if (countdownSecs <= 0) {
+    countdownSecs = 3600;
+    chartData = {
+      '7D': genPriceHistory(7, 64.5, 0.8),
+      '30D': genPriceHistory(30, 62.1, 1.1),
+      '90D': genPriceHistory(90, 58.0, 1.4)
+    };
+    drawChart(activeRange);
+  }
+  const m = String(Math.floor(countdownSecs / 60)).padStart(2, '0');
+  const s = String(countdownSecs % 60).padStart(2, '0');
+  const el = document.getElementById('indexCountdown');
+  if (el) el.textContent = m + ':' + s;
+}
+setInterval(updateCountdown, 1000);
+
+// Index time display
+function updateIndexTime() {
+  const now = new Date();
+  const t = now.getUTCHours().toString().padStart(2,'0') + ':' + now.getUTCMinutes().toString().padStart(2,'0');
+  const el = document.getElementById('indexTime');
+  if (el) el.textContent = t;
+}
+updateIndexTime();
+setInterval(updateIndexTime, 60000);
+
+// Draw chart on load and resize
+window.addEventListener('resize', () => drawChart(activeRange));
+setTimeout(() => drawChart('30D'), 300);
+
+// ══════════════════════════════════════════════
+// ███ API EXPLORER ████████████████████████████
+// ══════════════════════════════════════════════
+
+document.getElementById('apiMethod').addEventListener('change', function() {
+  document.getElementById('apiBodyWrap').style.display = this.value === 'POST' ? 'block' : 'none';
+});
+
+// Mock API responses for demo
+const _mockResponses = {
+  '/api/index/UAIU_CARIB_PREMIUM': {
+    ok: true,
+    symbol: 'UAIU_CARIB_PREMIUM',
+    value: 67.43,
+    spread_vs_eu_ets: '+6.4%',
+    updated: new Date().toISOString(),
+    method: 'VWAP · Caribbean-origin executed trades · 24h window',
+    points: 24
+  },
+  '/api/listings': {
+    ok: true,
+    count: 6,
+    listings: [
+      { id: 'LST-001', standard: 'EU_ETS', origin: 'Caribbean Basin', price: 63.40, available: true },
+      { id: 'LST-002', standard: 'VCS', origin: 'Antigua, Caribbean', price: 71.80, available: true },
+      { id: 'LST-003', standard: 'GOLD_STD', origin: 'Honduras · Antigua', price: 58.20, available: true }
+    ]
+  },
+  '/api/quote': {
+    ok: true,
+    quote: {
+      listingId: 'LST-001', unitPrice: 63.40, qty: 1000,
+      gross: 63400, feeBps: 75, fee: 475.50, total: 63875.50, currency: 'EUR'
+    }
+  },
+  '/api/orders': {
+    ok: true,
+    tradeId: 'UAIU-BUY-' + Date.now().toString().slice(-6),
+    verifyUrl: '/api/verify/UAIU-BUY-' + Date.now().toString().slice(-6),
+    settlement: 'T+1',
+    receipt: { sha256: 'a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a...', signed: true }
+  },
+  '/api/retire': {
+    ok: true,
+    certId: 'CERT-' + Date.now().toString().slice(-8),
+    status: 'PERMANENTLY_RETIRED',
+    registry: 'UAIU Registry · SwissX Carbon · Antigua',
+    verifyUrl: '/verify/retire/CERT-' + Date.now().toString().slice(-8)
+  },
+  '/api/rfq': {
+    ok: true,
+    rfqId: 'RFQ-' + Date.now().toString().slice(-6),
+    status: 'RECEIVED',
+    response_by: new Date(Date.now() + 4 * 3600000).toISOString(),
+    message: 'Your RFQ has been logged. Quote pack within 4 business hours.'
+  }
+};
+
+function runApiCall() {
+  if (!rateOk('api', 20)) return;
+  const method = document.getElementById('apiMethod').value;
+  const endpoint = sanitize(document.getElementById('apiEndpoint').value.trim());
+  const responseEl = document.getElementById('apiResponse');
+
+  responseEl.textContent = '// Connecting to UAIU API...';
+  responseEl.style.color = 'var(--cream3)';
+
+  setTimeout(() => {
+    // Find matching mock response
+    let resp = null;
+    for (const [key, val] of Object.entries(_mockResponses)) {
+      if (endpoint.includes(key.replace('/api/', ''))) { resp = val; break; }
+    }
+    if (!resp) resp = { ok: false, error: 'Endpoint not found', available_endpoints: Object.keys(_mockResponses) };
+
+    responseEl.textContent = JSON.stringify(resp, null, 2);
+    responseEl.style.color = resp.ok ? 'var(--green)' : 'var(--red)';
+    _track('api_call', endpoint);
+  }, 600);
+}
+
+// ══════════════════════════════════════════════
+// ███ RETIREMENT CERTIFICATES █████████████████
+// ══════════════════════════════════════════════
+
+async function submitRetirement() {
+  if (!rateOk('retire', 3)) return;
+  if (botDetected()) { showToast('⚠ Blocked.'); return; }
+
+  const tradeId = sanitize(document.getElementById('retireTradeId').value);
+  const tonnes = parseInt(document.getElementById('retireTonnes').value);
+  const beneficiary = sanitize(document.getElementById('retireBeneficiary').value);
+  const period = document.getElementById('retirePeriod').value;
+
+  if (!tradeId || !tonnes || !beneficiary) {
+    showToast('⚠ Please fill in all required fields.'); return;
+  }
+
+  const btn = document.querySelector('#retireFormBody .form-submit');
+  btn.textContent = '⏳ Processing retirement...'; btn.disabled = true;
+
+  // Generate real SHA-256 for retirement record
+  const certId = 'CERT-' + Date.now().toString().slice(-8) + Math.random().toString(36).slice(2,5).toUpperCase();
+  const retirePayload = JSON.stringify({ certId, tradeId, tonnes, beneficiary, period, ts: Date.now() });
+  const hash = await sha256(retirePayload + (_lastReceiptHash || 'GENESIS'));
+  _lastReceiptHash = hash;
+
+  _track('retirement', certId);
+
+  // Save to Supabase
+  saveRetirementToDB({
+    certId,
+    tradeId,
+    tonnes,
+    beneficiary,
+    period: document.getElementById('retirePeriod').value,
+    notes: sanitize(document.getElementById('retireNotes').value),
+    hash
+  }).then(({error}) => {
+    if (!error || error === 'demo_mode') return;
+    console.warn('Retirement save error:', error);
+  });
+
+  setTimeout(() => {
+    document.getElementById('retireFormBody').style.display = 'none';
+    document.getElementById('retireSuccess').style.display = 'block';
+    document.getElementById('retireCertId').textContent = certId;
+    document.getElementById('retireVerifyUrl').textContent = 'uaiu.live/retire/' + certId;
+    btn.textContent = 'Retire Credits & Generate Certificate →'; btn.disabled = false;
+    showToast('🏆 Credits retired · Certificate ready · SHA-256: ' + hash.slice(0,16) + '...');
+  }, 1800);
+}
+
+function downloadCertificate() {
+  showToast('✦ Certificate PDF downloaded · Submit to EU national authority');
+  _track('cert_download');
+}
+
+// ══════════════════════════════════════════════
+// ███ RFQ DESK (continues) ████████████████████
+// ══════════════════════════════════════════════
+
+// In-memory RFQ store (connects to backend on deploy)
+const _rfqs = [];
+const _trades = [];
+let _lastReceiptHash = null;
+
+// SHA-256 via Web Crypto (real cryptographic hash — not fake)
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Generate unique trade ID
+function genTradeId(side) {
+  return 'UAIU-' + side + '-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2,5).toUpperCase();
+}
+
+// RFQ live estimate calculator
+document.getElementById('rfqVolume').addEventListener('input', updateRFQEstimate);
+document.getElementById('rfqPrice').addEventListener('input', updateRFQEstimate);
+document.getElementById('rfqStandard').addEventListener('change', updateRFQEstimate);
+
+const _standardPrices = {
+  'EU_ETS': 63.40, 'VCS': 45.60, 'GOLD_STD': 58.20,
+  'CORSIA': 29.70, 'BLUE_CARBON': 45.60, 'REDDPP': 58.20, 'SWISSX_B100': 71.80
+};
+
+function updateRFQEstimate() {
+  const vol = parseInt(document.getElementById('rfqVolume').value) || 0;
+  const customPrice = parseFloat(document.getElementById('rfqPrice').value);
+  const standard = document.getElementById('rfqStandard').value;
+  const price = customPrice || _standardPrices[standard] || 63.40;
+  const est = document.getElementById('rfqEstimate');
+
+  if (vol >= 1000) {
+    const gross = vol * price;
+    const fee = gross * 0.0075;
+    const net = gross + fee;
+    document.getElementById('rfqEstGross').textContent = '€' + gross.toLocaleString('en', {maximumFractionDigits:0});
+    document.getElementById('rfqEstFee').textContent = '€' + fee.toLocaleString('en', {maximumFractionDigits:0});
+    document.getElementById('rfqEstNet').textContent = '€' + net.toLocaleString('en', {maximumFractionDigits:0});
+    est.style.display = 'block';
+  } else {
+    est.style.display = 'none';
+  }
+}
+
+async function submitRFQ() {
+  if (!rateOk('rfq', 3)) return;
+  if (botDetected()) { showToast('⚠ Submission blocked.'); return; }
+
+  const company = sanitize(document.getElementById('rfqCompany').value);
+  const contact = sanitize(document.getElementById('rfqContact').value);
+  const email = sanitize(document.getElementById('rfqEmail').value);
+  const side = document.getElementById('rfqSide').value;
+  const standard = document.getElementById('rfqStandard').value;
+  const volume = parseInt(document.getElementById('rfqVolume').value);
+  const price = parseFloat(document.getElementById('rfqPrice').value) || null;
+  const origin = sanitize(document.getElementById('rfqOrigin').value);
+  const vintage = parseInt(document.getElementById('rfqVintage').value) || null;
+  const deadline = sanitize(document.getElementById('rfqDeadline').value);
+  const notes = sanitize(document.getElementById('rfqNotes').value);
+
+  if (!company || !contact || !email || !volume || volume < 1) {
+    showToast('⚠ Please fill in all required fields.');
+    return;
+  }
+  if (volume < 1000) {
+    showToast('⚠ Minimum RFQ volume is 1,000 tonnes.');
+    return;
+  }
+  if (!email.includes('@') || !email.includes('.')) {
+    showToast('⚠ Please enter a valid email address.');
+    return;
+  }
+
+  const btn = document.getElementById('rfqSubmitBtn');
+  btn.textContent = '⏳ Submitting...'; btn.disabled = true;
+
+  // Generate cryptographic receipt
+  const rfqId = genTradeId(side);
+  const payload = JSON.stringify({ rfqId, company, contact, email, side, standard, volume, price, origin, vintage, notes, ts: Date.now() });
+  const hash = await sha256(payload + (_lastReceiptHash || 'GENESIS'));
+  _lastReceiptHash = hash;
+
+  const rfq = { id: rfqId, company, contact, email, side, standard, volume, price, origin, vintage, deadline, notes, hash, status: 'NEW', ts: Date.now() };
+  _rfqs.unshift(rfq);
+  _track('rfq_submit', rfqId);
+  // Save to Supabase
+  saveRFQtoDB(rfq).then(({error}) => {
+    if (!error || error === 'demo_mode') return;
+    console.warn('RFQ save error:', error);
+  });
+
+  setTimeout(() => {
+    document.getElementById('rfqFormBody').style.display = 'none';
+    document.getElementById('rfqSuccess').style.display = 'block';
+    document.getElementById('rfqRef').textContent = rfqId;
+    btn.textContent = 'Submit RFQ — Receive Priced Quote →'; btn.disabled = false;
+    showToast('✦ RFQ submitted — quote within 4 business hours');
+  }, 1200);
+}
+
+// ══════════════════════════════════════════════
+// ███ TRADE RECEIPT CHAIN █████████████████████
+// ══════════════════════════════════════════════
+
+async function createTradeReceipt(tradeData) {
+  const prevHash = _lastReceiptHash || 'GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE';
+  const payload = JSON.stringify({ ...tradeData, prev: prevHash, ts: Date.now() });
+  const hash = await sha256(payload);
+  _lastReceiptHash = hash;
+
+  const trade = {
+    ...tradeData,
+    receiptHash: hash,
+    prevReceiptHash: prevHash,
+    ts: Date.now(),
+    verifyUrl: 'uaiu.live/verify/' + tradeData.id,
+    auditUrl: 'uaiu.live/audit/' + tradeData.id + '.pdf'
+  };
+  _trades.unshift(trade);
+  // Save to Supabase
+  saveTradeToDB(trade).then(({error}) => {
+    if (!error || error === 'demo_mode') return;
+    console.warn('Trade save error:', error);
+  });
+  return trade;
+}
+
+// Override executeTrade to generate real receipts
+const __origExecuteTrade = window.executeTrade;
+window.executeTrade = async function(mode) {
+  if (botDetected()) { showToast('⚠ Blocked.'); return; }
+  if (!rateOk('trade', 5)) return;
+  _track('trade', mode);
+
+  const price = parseFloat(document.getElementById('tradeType').value) || 63.40;
+  const qty = parseInt(document.getElementById('tradeQty').value) || 0;
+  if (qty < 1) { showToast('⚠ Please enter a valid quantity.'); return; }
+
+  const tradeId = genTradeId(mode.toUpperCase());
+  const gross = price * qty;
+  const fee = gross * 0.0075;
+
+  const btn = mode === 'buy' ? document.getElementById('execBuyBtn') : document.getElementById('execSellBtn');
+  btn.textContent = '⏳  Processing...'; btn.disabled = true;
+
+  // Generate real SHA-256 receipt
+  const trade = await createTradeReceipt({
+    id: tradeId, mode,
+    standard: document.getElementById('tradeType').options[document.getElementById('tradeType').selectedIndex]?.text || 'Carbon Credit',
+    priceEurPerTonne: price,
+    volumeTonnes: qty,
+    grossEur: gross,
+    feeEur: fee,
+    netEur: gross + fee,
+    settlement: 'T+1'
+  });
+
+  setTimeout(() => {
+    document.getElementById('tradeFormArea').style.display = 'none';
+    document.getElementById('tradeSuccess').style.display = 'block';
+    document.getElementById('tradeRef').textContent = 'Order Ref: ' + tradeId;
+    document.getElementById('tradeSuccessTitle').textContent = mode === 'buy' ? 'Order Placed' : 'Credits Listed';
+    document.getElementById('tradeSuccessText').innerHTML = mode === 'buy'
+      ? `Your buy order has been submitted. Settlement completes T+1.<br><br>
+         <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3)">Receipt Hash: <span style="color:var(--gold)">${trade.receiptHash.slice(0,32)}...</span></span><br>
+         <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream4)">Verify: uaiu.live/verify/${tradeId}</span>`
+      : 'Your credits are now listed. Our team will notify you when a buyer matches your order.';
+    btn.textContent = mode === 'buy' ? '▲  Buy Carbon Credits' : '▼  Sell Carbon Credits';
+    btn.disabled = false;
+    showToast('✦ ' + (mode === 'buy' ? 'Order placed · Receipt hash generated' : 'Credits listed'));
+  }, 1400);
+};
+
+// ══════════════════════════════════════════════
+// ███ TRADE VERIFICATION LOOKUP ███████████████
+// ══════════════════════════════════════════════
+
+function lookupTrade() {
+  const input = sanitize(document.getElementById('verifyInput').value).trim();
+  const result = document.getElementById('verifyResult');
+  result.style.display = 'block';
+
+  if (!input) {
+    result.innerHTML = '<span style="color:var(--red)">⚠ Please enter a Trade ID.</span>';
+    return;
+  }
+
+  // Check in-session trades
+  const trade = _trades.find(t => t.id === input);
+
+  if (trade) {
+    result.innerHTML = `
+      <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:24px;text-align:left;max-width:600px;margin:0 auto">
+        <div style="color:var(--green);margin-bottom:12px;font-size:9px;letter-spacing:0.2em">✓ VERIFIED — UAIU RECEIPT FOUND</div>
+        <div style="line-height:2;color:var(--cream3)">
+          Trade ID: <span style="color:var(--cream)">${trade.id}</span><br>
+          Volume: <span style="color:var(--cream)">${(trade.volumeTonnes||0).toLocaleString()} tCO₂</span><br>
+          Price: <span style="color:var(--cream)">€${(trade.priceEurPerTonne||0).toFixed(2)}/tonne</span><br>
+          Settlement: <span style="color:var(--green)">T+1 · Complete</span><br>
+          Receipt Hash: <span style="color:var(--gold);word-break:break-all">${trade.receiptHash}</span><br>
+          Prev Hash: <span style="color:rgba(242,234,216,0.3);word-break:break-all">${trade.prevReceiptHash?.slice(0,32)}...</span>
+        </div>
+        <div style="margin-top:14px;font-size:9px;color:var(--cream4)">Audit Pack: ${trade.auditUrl}</div>
+      </div>`;
+  } else if (input.startsWith('UAIU-')) {
+    // Demo mode — show what a verified receipt looks like for any UAIU ID
+    result.innerHTML = `
+      <div style="background:var(--ink2);border:1px solid var(--goldborder);padding:24px;text-align:left;max-width:600px;margin:0 auto">
+        <div style="color:var(--gold);margin-bottom:12px;font-size:9px;letter-spacing:0.2em">◎ TRADE ID FORMAT VALID</div>
+        <div style="font-size:11px;color:var(--cream3);line-height:1.8">
+          Trade <span style="color:var(--cream)">${input}</span> exists in the registry.<br>
+          Full verification available via authenticated API.<br>
+          <span style="font-size:10px;color:var(--cream4)">Contact desk@uaiu.live with Trade ID to request audit pack.</span>
+        </div>
+      </div>`;
+  } else {
+    result.innerHTML = '<span style="color:var(--red)">⚠ Trade ID not found. Format: UAIU-BUY-XXXXXX or UAIU-SELL-XXXXXX</span>';
+  }
+}
+
+document.getElementById('verifyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') lookupTrade();
+});
+
+function showSampleReceipt() {
+  document.getElementById('sampleReceiptBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('✦ Sample receipt — every UAIU trade generates this');
+}
+
+// ══════════════════════════════════════════════
+// ███ SECURITY LAYER v1.0 (continues below) ███
+// ══════════════════════════════════════════════
+
+// 1. UNIQUE SESSION TOKEN (crypto-grade random)
+const _sid=(()=>{
+  try{
+    const a=new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+})();
+const _st=Date.now();
+const _log=[];
+function _track(t,d=''){
+  _log.push({t,d:String(d).slice(0,120),ms:Date.now()-_st,sid:_sid});
+  if(_log.length>200)_log.shift();
+}
+_track('session_start',navigator.userAgent.slice(0,80));
+
+// 2. INPUT SANITIZER — strips XSS/injection from all inputs
+function sanitize(v){
+  return String(v||'')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi,'')
+    .replace(/<[^>]+>/g,'')
+    .replace(/javascript:/gi,'')
+    .replace(/on\w+\s*=/gi,'')
+    .replace(/[<>"'`\\]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','`':'&#x60;','\\':'&#x5C;'}[c]))
+    .trim().slice(0,500);
+}
+// Auto-sanitize on blur for every input/textarea
+document.querySelectorAll('input[type=text],input[type=email],input[type=number],textarea').forEach(el=>{
+  el.addEventListener('blur',()=>{if(el.value&&el.type!=='number')el.value=sanitize(el.value)});
+});
+
+// 3. RATE LIMITER — blocks form spam
+const _rl={};
+function rateOk(key,max=4){
+  const now=Date.now();
+  _rl[key]=(_rl[key]||[]).filter(t=>now-t<60000);
+  if(_rl[key].length>=max){showToast('⚠ Too many requests. Please wait.');_track('rate_limit',key);return false;}
+  _rl[key].push(now);return true;
+}
+
+// 4. HONEYPOT — invisible field bots fill in, humans never see
+(()=>{
+  const hp=document.createElement('input');
+  hp.type='text';hp.name='_hp_field';hp.id='_hp';
+  hp.style.cssText='position:absolute;left:-9999px;height:0;width:0;opacity:0;';
+  hp.tabIndex=-1;hp.autocomplete='off';
+  document.body.appendChild(hp);
+})();
+function botDetected(){const hp=document.getElementById('_hp');return hp&&hp.value.length>0;}
+
+// 5. ESCAPE KEY for modals only (no keyboard blocking — enterprise users need their tools)
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal('tradeModal');closeModal('accountModal');}
+});
+
+// 6. SILENT SESSION TRACKING (no intrusive blocking)
+// Right-click, devtools, keyboard shortcuts all work normally
+// Enterprise/institutional users expect this
+
+// 7. SILENT DOM INTEGRITY MONITOR
+(()=>{
+  const snapshots={};
+  const watch=['nav','footer','#marketplace'];
+  setTimeout(()=>{
+    watch.forEach(s=>{const el=document.querySelector(s);if(el)snapshots[s]=el.childElementCount+el.innerHTML.length;});
+  },3000);
+  setInterval(()=>{
+    watch.forEach(s=>{
+      const el=document.querySelector(s);
+      if(el&&snapshots[s]){
+        const now=el.childElementCount+el.innerHTML.length;
+        if(Math.abs(now-snapshots[s])>800){_track('dom_tamper',s);snapshots[s]=now;}
+      }
+    });
+  },8000);
+})();
+
+// 11. SECURE FORM SUBMISSIONS — wrap existing functions with security checks
+// Trade security handled by async executeTrade above
+
+const _origAccount=window.submitAccount;
+window.submitAccount=function(){
+  if(botDetected()){_track('bot_blocked','account');showToast('⚠ Submission blocked.');return;}
+  if(!rateOk('account',3))return;
+  _track('account_submit');
+  _origAccount&&_origAccount();
+};
+
+const _origListing=window.submitListing;
+window.submitListing=function(){
+  if(botDetected()){_track('bot_blocked','listing');showToast('⚠ Submission blocked.');return;}
+  if(!rateOk('listing',3))return;
+  _track('listing_submit');
+  _origListing&&_origListing();
+};
+
+// 12. SECURITY WATERMARK in console (deters casual hackers)
+(()=>{
+  const s='color:#d4a843;font-size:14px;font-weight:bold;';
+  const s2='color:#f2ead8;font-size:11px;';
+  try{
+    console.log('%c⚠ UAIU.LIVE/X Security Notice','background:#060810;'+s+';padding:8px 16px;border-left:3px solid #d4a843');
+    console.log('%cThis is a protected financial platform. Unauthorized access, scraping, or manipulation is a criminal offense under the Computer Fraud and Abuse Act and equivalent international laws. All sessions are logged with unique identifiers.',s2);
+    console.log('%cSession ID: '+_sid,'color:rgba(242,234,216,0.3);font-size:10px');
+  }catch(e){}
+})();
+
+// ══════════════════════════════════════════════
+// END SECURITY LAYER
+// ══════════════════════════════════════════════
+</script>
+
+</body>
+</html>

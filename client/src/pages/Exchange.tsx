@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { dbInsert } from "@/lib/supabase";
 import { Globe, Waves, Leaf, Trees, Droplets, Building2, Shield, Zap, Link2, Scale, Star, MapPin, CheckCircle, Lock, FileText, Clock, Users } from "lucide-react";
 
 const C = {
@@ -137,6 +138,8 @@ export default function Exchange() {
   const lastReceiptHashRef = useRef<string>('GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE');
   const rlRef = useRef<Record<string, number[]>>({});
   const sessionIdRef = useRef<string>('');
+  const _sessionLogRef = useRef<{ t: string; d: string; ms: number }[]>([]);
+  const _sessionStartRef = useRef<number>(Date.now());
 
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -196,7 +199,6 @@ export default function Exchange() {
   const [verifyResult, setVerifyResult] = useState<any>(null);
 
   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: '' });
-  const [devToolsOpen, setDevToolsOpen] = useState(false);
 
   const { data: listings = [] } = useQuery<Listing[]>({ queryKey: ['/api/exchange/listings'] });
 
@@ -220,10 +222,21 @@ export default function Exchange() {
   }
 
   useEffect(() => {
+    // Session ID (crypto-grade random)
     const bytes = new Uint8Array(16);
     try { crypto.getRandomValues(bytes); } catch {}
     sessionIdRef.current = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    _sessionStartRef.current = Date.now();
 
+    // Track helper (capped log, silent)
+    function _track(type: string, detail = '') {
+      const log = _sessionLogRef.current;
+      log.push({ t: type, d: String(detail).slice(0, 120), ms: Date.now() - _sessionStartRef.current });
+      if (log.length > 200) log.shift();
+    }
+    _track('session_start', navigator.userAgent.slice(0, 80));
+
+    // Console security watermark
     try {
       const s = 'color:#d4a843;font-size:14px;font-weight:bold;';
       const s2 = 'color:#f2ead8;font-size:11px;';
@@ -232,35 +245,40 @@ export default function Exchange() {
       console.log('%cSession ID: ' + sessionIdRef.current, 'color:rgba(242,234,216,0.3);font-size:10px');
     } catch {}
 
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      setToast({ show: true, msg: 'This platform is protected. Access attempts are logged.' });
-      setTimeout(() => setToast({ show: false, msg: '' }), 4500);
-    };
-
+    // Escape key only — no blocking of any other shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (e.key === 'F12') { e.preventDefault(); return; }
-      if (ctrl && e.shiftKey && 'ijckIJCK'.includes(e.key)) { e.preventDefault(); return; }
-      if (ctrl && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); return; }
-      if (ctrl && (e.key === 's' || e.key === 'S')) { e.preventDefault(); return; }
       if (e.key === 'Escape') { setShowTradeModal(false); setShowAccountModal(false); }
     };
 
-    const devToolsInterval = setInterval(() => {
-      const open = window.outerWidth - window.innerWidth > 300 || window.outerHeight - window.innerHeight > 300;
-      setDevToolsOpen(open);
-      document.body.style.filter = open ? 'blur(12px)' : '';
-    }, 800);
-
-    document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('keydown', handleKeyDown);
 
+    // DOM integrity monitor (silent — no UI reaction, just logs)
+    const snapshots: Record<string, number> = {};
+    const watchSelectors = ['nav', 'footer', '#marketplace'];
+    const snapshotTimer = setTimeout(() => {
+      watchSelectors.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) snapshots[sel] = el.childElementCount + el.innerHTML.length;
+      });
+    }, 3000);
+
+    const integrityInterval = setInterval(() => {
+      watchSelectors.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el && snapshots[sel] !== undefined) {
+          const now = el.childElementCount + el.innerHTML.length;
+          if (Math.abs(now - snapshots[sel]) > 800) {
+            _track('dom_tamper', sel);
+            snapshots[sel] = now;
+          }
+        }
+      });
+    }, 8000);
+
     return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('keydown', handleKeyDown);
-      clearInterval(devToolsInterval);
-      document.body.style.filter = '';
+      clearTimeout(snapshotTimer);
+      clearInterval(integrityInterval);
     };
   }, []);
 
@@ -342,8 +360,26 @@ export default function Exchange() {
     const fee = gross * 0.0075;
     const payload = JSON.stringify({ tradeId, mode, standard: TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit', priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
     const hash = await sha256(payload);
+    const prevHash = lastReceiptHashRef.current;
     lastReceiptHashRef.current = hash;
-    const trade = { id: tradeId, mode, standard: TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: lastReceiptHashRef.current, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
+    const standard = TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
+    const trade = { id: tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: prevHash, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
+    // Non-blocking Supabase save
+    dbInsert('trades', {
+      trade_id: tradeId,
+      side: mode,
+      standard,
+      price_eur_per_tonne: tradePrice,
+      volume_tonnes: tradeQty,
+      gross_eur: gross,
+      fee_eur: fee,
+      net_eur: gross + fee,
+      settlement: 'T+1',
+      receipt_hash: hash,
+      prev_receipt_hash: prevHash,
+      verify_url: `uaiu.live/verify/${tradeId}`,
+      status: 'filled',
+    }).catch(() => {});
     setTimeout(() => {
       setSessionTrades(prev => [trade, ...prev]);
       setTradeRefStr(tradeId);
@@ -366,6 +402,16 @@ export default function Exchange() {
       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
       setAcctSuccess(true);
       showToast('Account created — KYC verification begins now');
+      // Non-blocking Supabase save
+      dbInsert('entities', {
+        name: `${acctFirstName} ${acctLastName}`.trim(),
+        contact_name: `${acctFirstName} ${acctLastName}`.trim(),
+        email: acctEmail,
+        phone: acctPhone || null,
+        entity_type: acctType,
+        annual_co2_exposure: acctCo2 || null,
+        status: 'pending_kyc',
+      }).catch(() => {});
     } catch {
       showToast('Failed to submit. Please try again.');
     } finally {
@@ -383,6 +429,19 @@ export default function Exchange() {
       await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial });
       setListSuccess(true);
       showToast('Credits submitted for verification');
+      // Non-blocking Supabase save
+      dbInsert('listing_submissions', {
+        org_name: listOrgName,
+        contact_name: listContact,
+        email: listEmail,
+        standard: listStandard,
+        credit_type: listType,
+        volume_tonnes: parseFloat(listVolume) || null,
+        ask_eur_per_tonne: parseFloat(listPrice) || null,
+        origin: listOrigin,
+        registry_ref: listSerial || null,
+        status: 'pending_verification',
+      }).catch(() => {});
     } catch {
       showToast('Failed to submit. Please try again.');
     } finally {
@@ -401,9 +460,26 @@ export default function Exchange() {
     try {
       const res = await apiRequest('POST', '/api/exchange/rfq', { company: rfqCompany, contact: rfqContact, email: rfqEmail, side: rfqSide, standard: rfqStandard, volumeTonnes: vol, targetPrice: rfqPrice ? parseFloat(rfqPrice) : undefined, preferredOrigin: rfqOrigin, vintageYear: rfqVintage ? parseInt(rfqVintage) : undefined, deadline: rfqDeadline, notes: rfqNotes });
       const data = await res.json();
-      setRfqId(data.id || genTradeId('RFQ'));
+      const rfqIdGenerated = data.id || genTradeId('RFQ');
+      setRfqId(rfqIdGenerated);
       setRfqSuccess(true);
       showToast('RFQ submitted — quote within 4 business hours');
+      // Non-blocking Supabase save
+      dbInsert('rfqs', {
+        rfq_id: rfqIdGenerated,
+        company: rfqCompany,
+        contact_name: rfqContact,
+        email: rfqEmail,
+        side: rfqSide,
+        standard: rfqStandard,
+        volume_tonnes: vol,
+        target_price_eur: rfqPrice ? parseFloat(rfqPrice) : null,
+        origin: rfqOrigin || null,
+        vintage_year: rfqVintage ? parseInt(rfqVintage) : null,
+        deadline: rfqDeadline || null,
+        notes: rfqNotes || null,
+        status: 'new',
+      }).catch(() => {});
     } catch {
       showToast('Failed to submit RFQ. Please try again.');
     } finally {
@@ -503,16 +579,6 @@ export default function Exchange() {
       <div ref={ringRef} style={{ position: 'fixed', width: 32, height: 32, border: '1px solid rgba(212,168,67,0.5)', borderRadius: '50%', pointerEvents: 'none', zIndex: 99998, transform: 'translate(-50%,-50%)', transition: 'width 0.2s,height 0.2s,border-color 0.2s' }} />
 
       <div style={{ position: 'fixed', inset: 0, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")`, pointerEvents: 'none', zIndex: 9999, opacity: 0.6 }} />
-
-      {devToolsOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(6,8,16,0.97)' }}>
-          <div style={{ textAlign: 'center', fontFamily: F.mono, padding: 48 }}>
-            <div style={{ fontSize: 36, marginBottom: 16, color: C.gold }}>&#9888;</div>
-            <div style={{ fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase', color: C.cream, marginBottom: 12 }}>UAIU.LIVE/X Security</div>
-            <div style={{ fontSize: 12, color: C.cream3, lineHeight: 1.8 }}>Unauthorized access detected.<br />This session has been flagged and logged.<br /><br /><span style={{ color: C.gold }}>Close developer tools to continue.</span></div>
-          </div>
-        </div>
-      )}
 
       <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.syne, color: C.cream, overflowX: 'hidden', cursor: 'none' }}>
 
