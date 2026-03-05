@@ -69,18 +69,34 @@ export function MobileNav({ links, onLinkClick }: { links: NavLink[]; onLinkClic
         <span style={{ width: 16, height: 1, background: C.gold, display: 'block', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translateY(-6px)' : 'none' }} />
       </button>
       {open && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,8,16,0.98)', zIndex: 99996, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
-          <button onClick={() => setOpen(false)} style={{ position: 'absolute', top: 20, right: 20, background: 'transparent', border: 'none', color: C.gold, fontSize: 22, cursor: 'pointer' }}>✕</button>
-          {links.map(link => (
-            <a
-              key={link.href}
-              href={link.href}
-              onClick={e => { e.preventDefault(); setOpen(false); onLinkClick && onLinkClick(link.href); }}
-              style={{ fontFamily: F.mono, fontSize: 14, letterSpacing: '0.25em', textTransform: 'uppercase', color: C.cream, textDecoration: 'none', padding: '8px 0', borderBottom: `1px solid ${C.goldborder}`, width: 200, textAlign: 'center' }}
-            >
-              {link.label}
-            </a>
-          ))}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: isDark ? '#060810' : '#f5ede0', zIndex: 99996, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32, paddingTop: 60 }}>
+          <button onClick={() => setOpen(false)} style={{ position: 'absolute', top: 20, right: 20, background: 'transparent', border: 'none', color: C.gold, fontSize: 22, cursor: 'pointer', zIndex: 10 }}>✕</button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxHeight: '80vh', overflowY: 'auto', padding: '20px 0' }}>
+            {links.map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={e => { e.preventDefault(); setOpen(false); onLinkClick && onLinkClick(link.href); }}
+                style={{ 
+                  fontFamily: F.mono, 
+                  fontSize: 16, 
+                  letterSpacing: '0.25em', 
+                  textTransform: 'uppercase', 
+                  color: isDark ? '#f2ead8' : '#0d0a06', 
+                  textDecoration: 'none', 
+                  padding: '12px 24px', 
+                  background: isDark ? 'rgba(212,168,67,0.05)' : 'rgba(184,146,46,0.08)',
+                  border: `1px solid ${C.goldborder}`, 
+                  width: '260px', 
+                  textAlign: 'center',
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
         </div>
       )}
     </div>
