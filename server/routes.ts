@@ -1097,6 +1097,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!account) {
         return res.status(404).json({ message: 'No account found' });
       }
+      const fullName = [account.firstName, account.lastName].filter(Boolean).join(' ') || account.contactName || 'N/A';
+      sendExchangeEmail('Exchange Account Sign-In', {
+        'Name': fullName,
+        'Email': account.email,
+        'Company': account.orgName || 'N/A',
+        'Account Type': account.accountType || account.role || 'N/A',
+        'Signed In At': new Date().toUTCString(),
+      }).catch(err => console.error('Sign-in email error:', err));
       return res.json({
         id: account.id,
         email: account.email,
