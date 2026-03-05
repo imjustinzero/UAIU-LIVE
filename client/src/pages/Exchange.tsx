@@ -606,14 +606,15 @@ export default function Exchange() {
         .x-execute-sell { width:100%;padding:18px;background:linear-gradient(135deg,#991b1b,#ef4444);border:none;color:white;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s; }
         .x-execute-sell:hover { filter:brightness(1.1);transform:translateY(-1px); }
         @media(max-width:1024px){.x-listings-grid{grid-template-columns:1fr 1fr!important}.x-steps-layout{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr 1fr!important}.x-compliance-grid{grid-template-columns:1fr 1fr!important}.x-list-layout{grid-template-columns:1fr!important}.x-rfq-layout{grid-template-columns:1fr!important}.x-proof-grid{grid-template-columns:1fr!important}.x-section{padding:80px 24px!important}nav{padding:0 24px!important}.x-nav-center{display:none!important}}
-        @media(max-width:640px){.x-listings-grid{grid-template-columns:1fr!important}.x-footer-grid{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr!important}nav{padding:0 12px!important}.x-markets-open{display:none!important}.x-nav-logo{font-size:16px!important}.x-btn-nav{display:none!important}}
+        @media(max-width:640px){.x-listings-grid{grid-template-columns:1fr!important}.x-footer-grid{grid-template-columns:1fr!important}.x-hero-metrics{grid-template-columns:1fr!important}nav{padding:0 16px!important}.x-markets-open{display:none!important}.x-nav-logo{font-size:16px!important}.x-btn-nav{display:none!important}}
+        @media(hover:none),(pointer:coarse){*{cursor:auto!important}.x-cursor-dot,.x-cursor-ring{display:none!important;pointer-events:none!important}[data-terminal-hint]{display:none!important}}
         @media print{body{display:none!important}}
       ` }} />
 
       <input type="text" id="_hp_exchange" style={{ position: 'absolute', left: -9999, height: 0, width: 0, opacity: 0 }} tabIndex={-1} autoComplete="off" />
 
-      <div ref={cursorRef} style={{ position: 'fixed', width: 8, height: 8, background: C.gold, borderRadius: '50%', pointerEvents: 'none', zIndex: 99999, transform: 'translate(-50%,-50%)', mixBlendMode: 'difference' }} />
-      <div ref={ringRef} style={{ position: 'fixed', width: 32, height: 32, border: '1px solid rgba(212,168,67,0.5)', borderRadius: '50%', pointerEvents: 'none', zIndex: 99998, transform: 'translate(-50%,-50%)', transition: 'width 0.2s,height 0.2s,border-color 0.2s' }} />
+      <div ref={cursorRef} className="x-cursor-dot" style={{ position: 'fixed', width: 8, height: 8, background: C.gold, borderRadius: '50%', pointerEvents: 'none', zIndex: 99999, transform: 'translate(-50%,-50%)', mixBlendMode: 'difference' }} />
+      <div ref={ringRef} className="x-cursor-ring" style={{ position: 'fixed', width: 32, height: 32, border: '1px solid rgba(212,168,67,0.5)', borderRadius: '50%', pointerEvents: 'none', zIndex: 99998, transform: 'translate(-50%,-50%)', transition: 'width 0.2s,height 0.2s,border-color 0.2s' }} />
 
       <div style={{ position: 'fixed', inset: 0, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")`, pointerEvents: 'none', zIndex: 9999, opacity: 0.6 }} />
 
@@ -1156,7 +1157,10 @@ export default function Exchange() {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            </div>
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${C.goldborder}`, paddingTop: 40, marginTop: 8 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 24 }}>AI-Assisted Input — Auto-fill form fields with voice or text</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
                 <VoiceRFQ isDark={isDark} onParsed={(parsed) => {
                   if (parsed.volume_tonnes) setRfqVolume(String(parsed.volume_tonnes));
                   if (parsed.standard) setRfqStandard(parsed.standard);

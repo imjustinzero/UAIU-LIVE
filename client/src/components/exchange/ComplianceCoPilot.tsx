@@ -197,7 +197,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
     <>
       {/* FLOATING BUTTON */}
       <div style={{
-        position: 'fixed', bottom: '24px', right: '24px',
+        position: 'fixed', bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))', right: '24px',
         zIndex: 9998, display: 'flex', flexDirection: 'column',
         alignItems: 'flex-end', gap: '8px'
       }}>

@@ -50,16 +50,17 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName 
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20, marginBottom: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 40 }}>
           {[
-            { label: 'Carbon Position', val: totalTonnes.toLocaleString() + ' t', color: C.cream },
-            { label: 'Total Spend', val: '€' + totalSpend.toLocaleString(undefined, { maximumFractionDigits: 0 }), color: C.cream },
-            { label: 'Trades', val: trades.length.toString(), color: C.cream },
-            { label: 'Retirements', val: retirements.length.toString(), color: C.cream },
-          ].map(({ label, val, color }) => (
-            <div key={label} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '24px 20px' }}>
+            { label: 'Carbon Position', val: totalTonnes.toLocaleString() + ' t', sub: 'tonnes CO₂ held', color: C.green },
+            { label: 'Total Spend', val: '€' + totalSpend.toLocaleString(undefined, { maximumFractionDigits: 0 }), sub: 'gross value', color: C.gold },
+            { label: 'Trades Executed', val: trades.length.toString(), sub: `this period`, color: C.cream },
+            { label: 'Retirements', val: retirements.length.toString(), sub: 'credits retired', color: compliancePct >= 100 ? C.green : C.cream2 },
+          ].map(({ label, val, sub, color }) => (
+            <div key={label} style={{ background: C.ink2, padding: '28px 24px' }}>
               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.cream3, marginBottom: 10 }}>{label}</div>
-              <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{val}</div>
+              <div style={{ fontFamily: F.playfair, fontSize: 30, fontWeight: 900, color, lineHeight: 1, marginBottom: 6 }}>{val}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4 }}>{sub}</div>
             </div>
           ))}
         </div>
@@ -127,10 +128,26 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName 
         )}
 
         {activeTab === 'overview' && (
-          <div style={{ fontFamily: F.syne, fontSize: 14, color: C.cream3, lineHeight: 1.7, padding: '20px 0' }}>
-            {trades.length === 0 && retirements.length === 0
-              ? 'Complete a trade or retire credits to see your portfolio summary here.'
-              : `You have executed ${trades.length} trade${trades.length !== 1 ? 's' : ''} totaling ${totalTonnes.toLocaleString()} tonnes with a gross value of €${totalSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}. ${retirements.length} retirement${retirements.length !== 1 ? 's' : ''} recorded totaling ${totalRetired.toLocaleString()} tonnes.`}
+          <div style={{ padding: '20px 0' }}>
+            {trades.length === 0 && retirements.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 24px', border: `1px solid ${C.goldborder}` }}>
+                <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.cream2, marginBottom: 12 }}>No trades yet</div>
+                <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, lineHeight: 1.7 }}>Execute a trade in the marketplace to begin building your carbon portfolio.<br />Your position, spend, and compliance status will appear here.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '28px 24px' }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 16 }}>Carbon Acquired</div>
+                  <div style={{ fontFamily: F.playfair, fontSize: 36, fontWeight: 900, color: C.green, marginBottom: 8 }}>{totalTonnes.toLocaleString()} t</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Across {trades.length} trade{trades.length !== 1 ? 's' : ''} · Avg €{trades.length ? (totalSpend / totalTonnes).toFixed(2) : '—'}/t</div>
+                </div>
+                <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '28px 24px' }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 16 }}>Compliance Progress</div>
+                  <div style={{ fontFamily: F.playfair, fontSize: 36, fontWeight: 900, color: complianceColor, marginBottom: 8 }}>{compliancePct.toFixed(0)}%</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>{totalRetired.toLocaleString()} / {annualTarget.toLocaleString()} t retired · {compliancePct >= 100 ? 'Fully compliant' : `${(annualTarget - totalRetired).toLocaleString()} t remaining`}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

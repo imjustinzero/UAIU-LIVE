@@ -357,9 +357,17 @@ interface DueDiligenceProps {
 export function DueDiligenceReport({
   listing, currentIndexPrice = 64.20, isDark = true, onClose
 }: DueDiligenceProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [report, setReport] = useState<DDReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setGenerated(false);
+    setReport(null);
+    onClose?.();
+  };
 
   const generateReport = async () => {
     setLoading(true);
@@ -417,10 +425,35 @@ export function DueDiligenceReport({
 
   const overlay: React.CSSProperties = {
     position:'fixed', inset:0,
-    background:'rgba(0,0,0,0.85)',
-    display:'flex', alignItems:'center', justifyContent:'center',
-    zIndex:1050, padding:'20px', overflowY:'auto'
+    background:'rgba(0,0,0,0.88)',
+    display:'flex', alignItems:'flex-start', justifyContent:'center',
+    zIndex:1050, padding:'20px', overflowY:'auto',
+    WebkitOverflowScrolling: 'touch' as any,
+    paddingTop: 'max(20px, env(safe-area-inset-top))',
   };
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        data-testid={`button-dd-report-${listing.id}`}
+        style={{
+          width:'100%', padding:'9px 14px',
+          borderRadius:'8px',
+          border:`1px solid rgba(212,168,67,0.3)`,
+          background:'transparent',
+          color: GOLD,
+          fontSize:'12px', fontWeight:600,
+          cursor:'pointer', textAlign:'left',
+          letterSpacing:'0.05em',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+        }}
+      >
+        <span>AI Due Diligence Report</span>
+        <span style={{ opacity:0.6 }}>→</span>
+      </button>
+    );
+  }
 
   if (!generated) {
     return (
@@ -463,7 +496,7 @@ export function DueDiligenceReport({
             }}>
               {loading ? '⟳ Generating Report...' : 'Generate Report →'}
             </button>
-            <button onClick={onClose} style={{
+            <button onClick={handleClose} style={{
               padding:'14px 18px', borderRadius:'10px',
               border:'1px solid rgba(255,255,255,0.1)',
               background:'transparent', color:'rgba(255,255,255,0.4)',
@@ -571,7 +604,7 @@ export function DueDiligenceReport({
 
           {/* Action buttons */}
           <div style={{ display:'flex', gap:'10px', marginTop:'24px', flexWrap:'wrap' }}>
-            <button onClick={() => { window.location.href='#rfq'; onClose?.(); }} style={{
+            <button onClick={() => { window.location.href='#rfq'; handleClose(); }} style={{
               flex:1, padding:'12px', borderRadius:'8px', border:'none',
               background:GOLD, color:'#0a0a0f', fontWeight:700,
               fontSize:'13px', cursor:'pointer'
@@ -587,7 +620,7 @@ export function DueDiligenceReport({
               background:'transparent', color:GOLD,
               fontWeight:600, fontSize:'12px', cursor:'pointer'
             }}>Copy Report</button>
-            <button onClick={onClose} style={{
+            <button onClick={handleClose} style={{
               padding:'12px 18px', borderRadius:'8px',
               border:'1px solid rgba(255,255,255,0.1)',
               background:'transparent', color:'rgba(255,255,255,0.4)',

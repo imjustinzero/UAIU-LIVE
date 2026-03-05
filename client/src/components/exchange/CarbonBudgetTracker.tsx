@@ -1,27 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
-// ── CARBON BUDGET TRACKER ─────────────────────────────────
-// Corporate buyer sets annual carbon budget
-// Tracks spend vs budget in real time
-// Alerts when approaching limit
-// Auto-suggests cheapest credits to cover remaining liability
+const C = {
+  ink: '#060810', ink2: '#0d1220', ink3: '#141e30',
+  gold: '#d4a843', goldfaint: 'rgba(212,168,67,0.10)',
+  goldborder: 'rgba(212,168,67,0.22)',
+  cream: '#f2ead8', cream2: 'rgba(242,234,216,0.7)',
+  cream3: 'rgba(242,234,216,0.35)', cream4: 'rgba(242,234,216,0.12)',
+  green: '#22c55e', red: '#ef4444', amber: '#f59e0b', blue: '#60a5fa',
+};
+const F = {
+  mono: "'JetBrains Mono', monospace",
+  syne: "'Syne', sans-serif",
+  playfair: "'Playfair Display', serif",
+};
 
-interface BudgetTrade {
-  id: string;
-  date: string;
-  tonnes: number;
-  price_eur: number;
-  standard: string;
-}
-
-interface Listing {
-  id: string;
-  name: string;
-  standard: string;
-  price: number;
-  available_tonnes: number;
-}
-
+interface BudgetTrade { id: string; date: string; tonnes: number; price_eur: number; standard: string; }
+interface Listing { id: string; name: string; standard: string; price: number; available_tonnes: number; }
 interface CarbonBudgetTrackerProps {
   trades?: BudgetTrade[];
   listings?: Listing[];
@@ -34,7 +28,6 @@ const MOCK_LISTINGS: Listing[] = [
   { id:'l2', name:'Tonga Coral Restoration', standard:'VCS', price:71.50, available_tonnes:280000 },
   { id:'l3', name:'Roatan REDD++ Forest', standard:'VCS REDD++', price:58.80, available_tonnes:180000 },
   { id:'l4', name:'Tuskegee Regenerative City', standard:'ACR', price:62.40, available_tonnes:40000 },
-  { id:'l5', name:'East Delta Dena Zone', standard:'CAR', price:65.00, available_tonnes:25000 },
 ];
 
 const MOCK_TRADES: BudgetTrade[] = [
@@ -47,14 +40,13 @@ export function CarbonBudgetTracker({
   trades = MOCK_TRADES,
   listings = MOCK_LISTINGS,
   isDark = true,
-  onBuyListing
+  onBuyListing,
 }: CarbonBudgetTrackerProps) {
   const [annualBudgetEur, setAnnualBudgetEur] = useState(500000);
   const [annualTargetTonnes, setAnnualTargetTonnes] = useState(20000);
   const [editing, setEditing] = useState(false);
   const [budgetInput, setBudgetInput] = useState('500000');
   const [tonnesInput, setTonnesInput] = useState('20000');
-  const [alertDismissed, setAlertDismissed] = useState(false);
 
   const spentEur = trades.reduce((s, t) => s + (t.tonnes * t.price_eur), 0);
   const boughtTonnes = trades.reduce((s, t) => s + t.tonnes, 0);
@@ -64,12 +56,9 @@ export function CarbonBudgetTracker({
   const tonnesPct = Math.min(100, Math.round((boughtTonnes / annualTargetTonnes) * 100));
 
   const alertLevel = budgetPct >= 90 ? 'critical' : budgetPct >= 75 ? 'warning' : budgetPct >= 50 ? 'info' : 'safe';
-  const alertColors = {
-    critical: '#f87171', warning: '#D4A843', info: '#60a5fa', safe: '#4ade80'
-  };
-  const alertColor = alertColors[alertLevel];
+  const alertColor = alertLevel === 'critical' ? C.red : alertLevel === 'warning' ? C.gold : alertLevel === 'info' ? C.blue : C.green;
+  const alertLabel = alertLevel === 'critical' ? 'CRITICAL — Budget nearly exhausted' : alertLevel === 'warning' ? 'WARNING — 75% of budget consumed' : 'INFO — Budget halfway mark reached';
 
-  // Cheapest credits that fit remaining budget
   const suggestions = [...listings]
     .filter(l => l.price * 100 <= remainingBudgetEur && l.available_tonnes > 0)
     .sort((a, b) => a.price - b.price)
@@ -77,224 +66,174 @@ export function CarbonBudgetTracker({
     .map(l => ({
       ...l,
       affordable_tonnes: Math.floor(remainingBudgetEur / l.price),
-      covers_remaining: Math.floor(remainingBudgetEur / l.price) >= remainingTonnes
+      covers_remaining: Math.floor(remainingBudgetEur / l.price) >= remainingTonnes,
     }));
 
-  const GOLD = '#D4A843';
-  const bg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
-  const cardBorder = '1px solid rgba(212,168,67,0.15)';
+  const fi: React.CSSProperties = {
+    width: '100%', background: C.ink3, border: `1px solid ${C.goldborder}`,
+    color: C.cream, padding: '12px 14px', fontFamily: F.mono, fontSize: 13,
+    outline: 'none', boxSizing: 'border-box',
+  };
 
   return (
-    <div style={{
-      padding: 'clamp(60px,8vw,100px) clamp(20px,5vw,80px)',
-      background: isDark ? '#08080f' : '#f0f4f8'
-    }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end',
-          marginBottom:'40px', flexWrap:'wrap', gap:'12px' }}>
-          <div>
-            <p style={{ margin:'0 0 8px', fontSize:'11px', fontWeight:700,
-              letterSpacing:'0.15em', textTransform:'uppercase', color:GOLD }}>
-              ◈ BUDGET MANAGEMENT
-            </p>
-            <h2 style={{ margin:0, fontSize:'clamp(24px,4vw,36px)', fontWeight:800,
-              color: isDark?'#ffffff':'#0d1b3e', letterSpacing:'-0.02em' }}>
-              Carbon Budget Tracker.
-            </h2>
+    <div style={{ background: C.ink2, maxWidth: 1440, margin: '0 auto', padding: 'clamp(60px,7vw,100px) clamp(24px,5vw,80px)' }}>
+
+      {/* HEADER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 48, flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', color: C.gold, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ width: 24, height: 1, background: C.gold, display: 'inline-block' }} />
+            Budget Management
           </div>
-          <button onClick={() => setEditing(!editing)} style={{
-            padding:'8px 18px', borderRadius:'8px',
-            border:`1px solid ${GOLD}44`, background:'transparent',
-            color:GOLD, fontSize:'12px', fontWeight:600, cursor:'pointer'
-          }}>
-            {editing ? '✓ Save' : '⚙ Edit Budget'}
-          </button>
+          <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(28px,4vw,44px)', fontWeight: 900, color: C.cream, margin: 0, letterSpacing: '-0.02em' }}>
+            Carbon Budget<br /><em style={{ color: C.gold, fontStyle: 'italic' }}>Tracker.</em>
+          </h2>
         </div>
+        <button
+          onClick={() => setEditing(!editing)}
+          style={{ padding: '12px 24px', background: 'transparent', border: `1px solid ${C.goldborder}`, color: C.gold, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}
+          data-testid="button-edit-budget"
+        >
+          {editing ? 'Save Budget' : 'Edit Budget'}
+        </button>
+      </div>
 
-        {/* EDIT BUDGET */}
-        {editing && (
-          <div style={{
-            background: bg, border: cardBorder, borderRadius:'12px',
-            padding:'24px', marginBottom:'24px',
-            display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'
-          }}>
-            <div>
-              <label style={{ display:'block', marginBottom:'6px', fontSize:'11px',
-                fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase',
-                color:'rgba(212,168,67,0.6)' }}>Annual Budget (EUR)</label>
-              <input type="number" value={budgetInput}
-                onChange={e => setBudgetInput(e.target.value)}
-                onBlur={() => { setAnnualBudgetEur(parseInt(budgetInput)||500000); setEditing(false); }}
-                style={{ width:'100%', padding:'10px 14px', borderRadius:'8px',
-                  border:'1px solid rgba(212,168,67,0.2)',
-                  background: isDark?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.8)',
-                  color: isDark?'#ffffff':'#0d1b3e', fontSize:'16px',
-                  fontFamily:'JetBrains Mono,monospace', boxSizing:'border-box' }} />
-            </div>
-            <div>
-              <label style={{ display:'block', marginBottom:'6px', fontSize:'11px',
-                fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase',
-                color:'rgba(212,168,67,0.6)' }}>Annual Target (Tonnes)</label>
-              <input type="number" value={tonnesInput}
-                onChange={e => setTonnesInput(e.target.value)}
-                onBlur={() => { setAnnualTargetTonnes(parseInt(tonnesInput)||20000); setEditing(false); }}
-                style={{ width:'100%', padding:'10px 14px', borderRadius:'8px',
-                  border:'1px solid rgba(212,168,67,0.2)',
-                  background: isDark?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.8)',
-                  color: isDark?'#ffffff':'#0d1b3e', fontSize:'16px',
-                  fontFamily:'JetBrains Mono,monospace', boxSizing:'border-box' }} />
-            </div>
+      {/* EDIT BUDGET PANEL */}
+      {editing && (
+        <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '28px 32px', marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>Annual Budget (EUR)</label>
+            <input type="number" value={budgetInput}
+              onChange={e => setBudgetInput(e.target.value)}
+              onBlur={() => { setAnnualBudgetEur(parseInt(budgetInput) || 500000); setEditing(false); }}
+              style={fi} data-testid="input-annual-budget" />
           </div>
-        )}
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>Annual Target (Tonnes CO₂)</label>
+            <input type="number" value={tonnesInput}
+              onChange={e => setTonnesInput(e.target.value)}
+              onBlur={() => { setAnnualTargetTonnes(parseInt(tonnesInput) || 20000); setEditing(false); }}
+              style={fi} data-testid="input-annual-tonnes" />
+          </div>
+        </div>
+      )}
 
-        {/* ALERT BANNER */}
-        {alertLevel !== 'safe' && !alertDismissed && (
-          <div style={{
-            background: `${alertColor}11`,
-            border: `1px solid ${alertColor}44`,
-            borderLeft: `4px solid ${alertColor}`,
-            borderRadius:'10px', padding:'14px 20px',
-            marginBottom:'24px',
-            display:'flex', justifyContent:'space-between', alignItems:'center'
-          }}>
-            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-              <span style={{ fontSize:'18px' }}>
-                {alertLevel==='critical'?'🚨':alertLevel==='warning'?'⚠️':'ℹ️'}
-              </span>
+      {/* ALERT BANNER */}
+      {alertLevel !== 'safe' && (
+        <div style={{ background: `${alertColor}11`, border: `1px solid ${alertColor}44`, padding: '16px 24px', marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', fontWeight: 700, color: alertColor, marginBottom: 4 }}>{alertLabel}</div>
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>€{Math.round(remainingBudgetEur).toLocaleString()} remaining · {remainingTonnes.toLocaleString()} tonnes still needed</div>
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 22, fontWeight: 900, color: alertColor }}>{budgetPct}%</div>
+        </div>
+      )}
+
+      {/* STATS GRID */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 32 }}>
+        {[
+          { label: 'Annual Budget', val: `€${annualBudgetEur.toLocaleString()}`, sub: 'allocated', color: C.gold },
+          { label: 'Spent to Date', val: `€${Math.round(spentEur).toLocaleString()}`, sub: `${budgetPct}% used`, color: alertColor },
+          { label: 'Remaining', val: `€${Math.round(remainingBudgetEur).toLocaleString()}`, sub: 'available', color: C.green },
+          { label: 'Tonnes Bought', val: boughtTonnes.toLocaleString(), sub: `of ${annualTargetTonnes.toLocaleString()} t target`, color: C.cream },
+          { label: 'Still Needed', val: remainingTonnes > 0 ? remainingTonnes.toLocaleString() : '—', sub: 'tonnes', color: tonnesPct >= 90 ? C.red : C.cream2 },
+          { label: 'Avg Price Paid', val: trades.length ? `€${(spentEur / boughtTonnes).toFixed(2)}` : '—', sub: 'per tonne CO₂', color: C.blue },
+        ].map((stat, i) => (
+          <div key={i} style={{ background: C.ink2, padding: '24px 20px', textAlign: 'center' }}>
+            <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.cream3, marginBottom: 10 }}>{stat.label}</div>
+            <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 900, color: stat.color, lineHeight: 1, marginBottom: 6 }}>{stat.val}</div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4 }}>{stat.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* PROGRESS BARS */}
+      <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '32px 36px', marginBottom: 28 }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>Budget Utilization</div>
+            <div style={{ fontFamily: F.mono, fontSize: 12, color: C.cream }}>€{Math.round(spentEur).toLocaleString()} / €{annualBudgetEur.toLocaleString()}</div>
+          </div>
+          <div style={{ height: 8, background: C.ink3, position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, width: `${budgetPct}%`, background: alertColor, transition: 'width 0.8s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+            {[0, 25, 50, 75, 100].map(m => (
+              <div key={m} style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4 }}>{m}%</div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>Tonnage Progress</div>
+            <div style={{ fontFamily: F.mono, fontSize: 12, color: C.cream }}>{boughtTonnes.toLocaleString()} / {annualTargetTonnes.toLocaleString()} t</div>
+          </div>
+          <div style={{ height: 8, background: C.ink3, position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, width: `${tonnesPct}%`, background: C.green, transition: 'width 0.8s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+            {[0, 25, 50, 75, 100].map(m => (
+              <div key={m} style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4 }}>{m}%</div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* TRADE HISTORY */}
+      {trades.length > 0 && (
+        <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, marginBottom: 28 }}>
+          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.goldborder}` }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.gold }}>Trade History — {trades.length} transaction{trades.length !== 1 ? 's' : ''}</div>
+          </div>
+          {trades.map((t, i) => (
+            <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16, padding: '16px 24px', borderBottom: i < trades.length - 1 ? `1px solid ${C.goldborder}` : 'none', alignItems: 'center' }}>
               <div>
-                <p style={{ margin:'0 0 2px', fontWeight:700, fontSize:'13px', color:alertColor }}>
-                  {alertLevel==='critical' ? 'CRITICAL: Budget nearly exhausted' :
-                   alertLevel==='warning' ? 'WARNING: 75% of budget used' :
-                   'INFO: Budget halfway mark reached'}
-                </p>
-                <p style={{ margin:0, fontSize:'12px',
-                  color: isDark?'rgba(255,255,255,0.6)':'rgba(0,0,0,0.6)' }}>
-                  €{remainingBudgetEur.toLocaleString()} remaining for {remainingTonnes.toLocaleString()} tonnes still needed
-                </p>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Standard</div>
+                <div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>{t.standard}</div>
               </div>
-            </div>
-            <button onClick={() => setAlertDismissed(true)} style={{
-              background:'transparent', border:'none',
-              color:'rgba(255,255,255,0.3)', cursor:'pointer', fontSize:'16px'
-            }}>✕</button>
-          </div>
-        )}
-
-        {/* STATS GRID */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',
-          gap:'16px', marginBottom:'32px' }}>
-          {[
-            { label:'Annual Budget', value:`€${annualBudgetEur.toLocaleString()}`, sub:'allocated', color:GOLD },
-            { label:'Spent to Date', value:`€${Math.round(spentEur).toLocaleString()}`, sub:`${budgetPct}% used`, color: alertColor },
-            { label:'Remaining Budget', value:`€${Math.round(remainingBudgetEur).toLocaleString()}`, sub:'available', color:'#4ade80' },
-            { label:'Tonnes Purchased', value:boughtTonnes.toLocaleString(), sub:`of ${annualTargetTonnes.toLocaleString()} target`, color:GOLD },
-            { label:'Tonnes Remaining', value:remainingTonnes.toLocaleString(), sub:'still needed', color: tonnesPct>=90?'#f87171':GOLD },
-            { label:'Avg Price Paid', value:trades.length?`€${(spentEur/boughtTonnes).toFixed(2)}`:'—', sub:'per tonne', color:'#60a5fa' },
-          ].map((stat,i) => (
-            <div key={i} style={{ background:bg, border:cardBorder,
-              borderRadius:'12px', padding:'20px', textAlign:'center' }}>
-              <p style={{ margin:'0 0 4px', fontSize:'10px', fontWeight:700,
-                letterSpacing:'0.1em', textTransform:'uppercase',
-                color:'rgba(212,168,67,0.6)' }}>{stat.label}</p>
-              <p style={{ margin:'0 0 2px', fontFamily:'JetBrains Mono,monospace',
-                fontSize:'22px', fontWeight:700, color:stat.color }}>{stat.value}</p>
-              <p style={{ margin:0, fontSize:'11px',
-                color: isDark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)' }}>{stat.sub}</p>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Date</div>
+                <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream2 }}>{t.date}</div>
+              </div>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Tonnes</div>
+                <div style={{ fontFamily: F.syne, fontSize: 13, fontWeight: 700, color: C.green }}>{t.tonnes.toLocaleString()} t</div>
+              </div>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Cost</div>
+                <div style={{ fontFamily: F.syne, fontSize: 13, fontWeight: 700, color: C.cream }}>€{Math.round(t.tonnes * t.price_eur).toLocaleString()}</div>
+              </div>
             </div>
           ))}
         </div>
+      )}
 
-        {/* PROGRESS BARS */}
-        <div style={{ background:bg, border:cardBorder, borderRadius:'12px',
-          padding:'24px', marginBottom:'24px' }}>
-          <div style={{ marginBottom:'20px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'8px' }}>
-              <span style={{ fontSize:'12px', fontWeight:700, color:'rgba(212,168,67,0.8)',
-                letterSpacing:'0.05em' }}>BUDGET UTILIZATION</span>
-              <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'12px',
-                color: isDark?'#ffffff':'#0d1b3e' }}>
-                €{Math.round(spentEur).toLocaleString()} / €{annualBudgetEur.toLocaleString()}
-              </span>
-            </div>
-            <div style={{ height:'12px', background:'rgba(255,255,255,0.08)',
-              borderRadius:'6px', overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${budgetPct}%`,
-                background:`linear-gradient(90deg,${alertColor},${alertColor}88)`,
-                borderRadius:'6px', transition:'width 0.8s ease' }} />
-            </div>
-            {[25,50,75,90].map(mark => (
-              <div key={mark} style={{ position:'relative' }}>
-                <div style={{
-                  position:'absolute', left:`${mark}%`, top:'-12px',
-                  width:'1px', height:'12px',
-                  background:'rgba(255,255,255,0.1)'
-                }} />
+      {/* AI SUGGESTIONS */}
+      {remainingTonnes > 0 && suggestions.length > 0 && (
+        <div style={{ background: C.ink, border: `1px solid ${C.goldborder}` }}>
+          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.goldborder}` }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.gold }}>Recommended Credits — Cheapest within remaining budget</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 1, background: C.goldborder }}>
+            {suggestions.map((s, i) => (
+              <div key={i} style={{ background: s.covers_remaining ? `${C.green}08` : C.ink2, padding: '24px' }}>
+                {s.covers_remaining && (
+                  <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.green, marginBottom: 10 }}>Covers Full Remaining Liability</div>
+                )}
+                <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700, color: C.cream, marginBottom: 4, lineHeight: 1.3 }}>{s.name}</div>
+                <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginBottom: 16 }}>{s.standard} · €{s.price.toFixed(2)}/t · {s.affordable_tonnes.toLocaleString()}t affordable</div>
+                <button
+                  onClick={() => onBuyListing?.(s)}
+                  style={{ width: '100%', padding: '12px 0', background: i === 0 ? C.gold : 'transparent', border: `1px solid ${i === 0 ? C.gold : C.goldborder}`, color: i === 0 ? C.ink : C.gold, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, cursor: 'pointer' }}
+                  data-testid={`button-buy-suggestion-${i}`}
+                >
+                  Buy {Math.min(s.affordable_tonnes, remainingTonnes).toLocaleString()} tonnes
+                </button>
               </div>
             ))}
           </div>
-          <div>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'8px' }}>
-              <span style={{ fontSize:'12px', fontWeight:700, color:'rgba(212,168,67,0.8)',
-                letterSpacing:'0.05em' }}>TONNAGE PROGRESS</span>
-              <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'12px',
-                color: isDark?'#ffffff':'#0d1b3e' }}>
-                {boughtTonnes.toLocaleString()} / {annualTargetTonnes.toLocaleString()} t
-              </span>
-            </div>
-            <div style={{ height:'12px', background:'rgba(255,255,255,0.08)',
-              borderRadius:'6px', overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${tonnesPct}%`,
-                background:'linear-gradient(90deg,#4ade80,#4ade8088)',
-                borderRadius:'6px', transition:'width 0.8s ease' }} />
-            </div>
-          </div>
         </div>
-
-        {/* AI SUGGESTIONS */}
-        {remainingTonnes > 0 && suggestions.length > 0 && (
-          <div style={{ background:bg, border:cardBorder, borderRadius:'12px', padding:'24px' }}>
-            <p style={{ margin:'0 0 16px', fontSize:'12px', fontWeight:700,
-              letterSpacing:'0.1em', textTransform:'uppercase', color:GOLD }}>
-              ✦ AUTO-SUGGESTED CREDITS — cheapest available within your remaining budget
-            </p>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',
-              gap:'12px' }}>
-              {suggestions.map((s, i) => (
-                <div key={i} style={{
-                  background: s.covers_remaining
-                    ? 'rgba(74,222,128,0.05)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${s.covers_remaining ? '#4ade8033' : 'rgba(212,168,67,0.1)'}`,
-                  borderRadius:'10px', padding:'16px'
-                }}>
-                  {s.covers_remaining && (
-                    <span style={{ fontSize:'10px', fontWeight:700, color:'#4ade80',
-                      letterSpacing:'0.08em', display:'block', marginBottom:'6px' }}>
-                      ✓ COVERS YOUR FULL REMAINING LIABILITY
-                    </span>
-                  )}
-                  <p style={{ margin:'0 0 4px', fontSize:'13px', fontWeight:700,
-                    color: isDark?'#ffffff':'#0d1b3e', lineHeight:1.3 }}>
-                    {s.name}
-                  </p>
-                  <p style={{ margin:'0 0 10px', fontSize:'11px',
-                    color: isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.5)' }}>
-                    {s.standard} · €{s.price.toFixed(2)}/t · {s.affordable_tonnes.toLocaleString()}t affordable
-                  </p>
-                  <button onClick={() => onBuyListing?.(s)} style={{
-                    width:'100%', padding:'8px', borderRadius:'7px', border:'none',
-                    background: i===0 ? GOLD : 'rgba(212,168,67,0.15)',
-                    color: i===0 ? '#0a0a0f' : GOLD,
-                    fontWeight:700, fontSize:'12px', cursor:'pointer'
-                  }}>
-                    Buy {Math.min(s.affordable_tonnes, remainingTonnes).toLocaleString()} tonnes →
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
