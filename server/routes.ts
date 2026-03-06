@@ -32,6 +32,24 @@ import { generateTradePDF } from "./pdf-generator";
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
 
+function estimateNextStripePayoutDate(from = new Date()): string {
+  const next = new Date(from);
+  next.setDate(next.getDate() + 2);
+  return next.toISOString().split('T')[0];
+}
+
+async function sendSellerDestinationPayoutEmail(params: {
+  sellerEmail: string;
+  tradeId: string;
+  payoutAmountEur: number;
+  chargeId?: string | null;
+}): Promise<void> {
+  if (!params.sellerEmail || !isZohoConfigured()) return;
+  const expectedPayoutDate = estimateNextStripePayoutDate();
+  const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Seller Payout Confirmed</h2><p>Your payout has been routed by Stripe.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Payout Amount:</strong> €${params.payoutAmountEur.toFixed(2)}</li><li><strong>Expected Stripe Payout Date:</strong> ${expectedPayoutDate}</li><li><strong>Charge:</strong> ${params.chargeId || 'n/a'}</li></ul><p>Funds were sent using Stripe Connect destination charges. No funds passed through UAIU's account.</p></div>`;
+  await sendZohoEmail(params.sellerEmail, `UAIU Seller Payout Confirmed — ${params.tradeId}`, html);
+}
+
 // Legacy Pong code removed - all games now use GameManager
 
 // Legacy Pong functions removed - all game logic now in GameManager
@@ -271,8 +289,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 const pricePerT   = parseFloat(meta.price_per_tonne || '0');
                 const side        = meta.side || 'BUY';
                 const email       = meta.email || cs.customer_email || '';
-                const grossEur    = (cs.amount_total || 0) / 100;
-                const feeEur      = grossEur * 0.0075;
+                const grossEur    = Number(meta.gross_eur || ((cs.amount_total || 0) / 100));
+                const feeEur      = Number(meta.fee_eur || (grossEur * 0.0075));
+                const paymentModel = String(meta.payment_model || 'platform_collect');
                 const settled_at  = new Date().toISOString();
                 const receiptData = `${tradeId}:${cs.id}:${grossEur}:${settled_at}`;
                 const receiptHash = createHash('sha256').update(receiptData).digest('hex');
@@ -291,6 +310,66 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   stripeSessionId: cs.id,
                   status:          'completed',
                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
+
+                // Look up seller email and destination transfer if this was a destination charge
+                let sellerEmail = '';
+                let destinationTransferId = '';
+                if (meta.seller_profile_id) {
+                  const sellerProfileLookup = await db.execute(sql`
+                    SELECT exchange_account_email
+                    FROM seller_profiles
+                    WHERE id = ${meta.seller_profile_id}
+                    LIMIT 1
+                  `).catch(() => ({ rows: [] } as any));
+                  sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
+                }
+                if (paymentModel === 'destination_charge' && cs.payment_intent) {
+                  try {
+                    const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
+                    const latestCharge: any = pi.latest_charge as any;
+                    destinationTransferId = typeof latestCharge?.transfer === 'string'
+                      ? latestCharge.transfer
+                      : latestCharge?.transfer?.id || '';
+                  } catch (err: any) {
+                    console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                  }
+                }
+
+                // Insert seller_payouts row — immediately paid for destination charges
+                if (meta.seller_profile_id) {
+                  await db.execute(sql`
+                    INSERT INTO seller_payouts (
+                      trade_id, seller_profile_id, seller_email,
+                      gross_eur, fee_eur, seller_net_eur,
+                      payout_status, payout_provider, payout_reference,
+                      settlement_method, stripe_destination_charge_id, stripe_transfer_id, released_at
+                    ) VALUES (
+                      ${tradeId},
+                      ${meta.seller_profile_id},
+                      ${sellerEmail || null},
+                      ${grossEur},
+                      ${feeEur},
+                      ${grossEur - feeEur},
+                      ${paymentModel === 'destination_charge' ? 'paid' : 'pending_release'},
+                      ${paymentModel === 'destination_charge' ? 'stripe_destination' : 'workflow_only'},
+                      ${paymentModel === 'destination_charge' ? (destinationTransferId || String(cs.payment_intent || cs.id)) : null},
+                      ${paymentModel},
+                      ${String(cs.payment_intent || '')},
+                      ${destinationTransferId || null},
+                      ${paymentModel === 'destination_charge' ? new Date() : null}
+                    )
+                  `).catch((e: any) => console.error('[seller_payouts insert]', e.message));
+                }
+
+                // Send seller payout email for destination charges
+                if (paymentModel === 'destination_charge' && sellerEmail) {
+                  sendSellerDestinationPayoutEmail({
+                    sellerEmail,
+                    tradeId,
+                    payoutAmountEur: grossEur - feeEur,
+                    chargeId: String(cs.payment_intent || ''),
+                  }).catch((e: any) => console.error('[Seller payout email]', e.message));
+                }
 
                 // Generate and email PDF receipt
                 generateTradePDF({
@@ -315,7 +394,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   return sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
                 }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
 
-                console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Gross: €${grossEur}`);
+                console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: €${grossEur}`);
               }
 
               // Stripe Connect - account.updated (onboarding complete / requirements changed)
@@ -1521,7 +1600,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const stripe = stripeInit.stripeSync;
       const gross = serverPrice * parseFloat(volumeTonnes);
       const fee = gross * 0.0075;
-      const totalCents = Math.round((gross + fee) * 100);
+      const grossCents = Math.round(gross * 100);
+      const applicationFeeAmount = Math.round(fee * 100);
+      const connectAccountId: string | null = (activeListing as any).stripe_connect_account_id || null;
+      const connectReady: boolean = (activeListing as any).connect_onboarding_complete === true;
+      const paymentModel = connectAccountId && connectReady ? 'destination_charge' : 'platform_collect';
       const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -1531,13 +1614,41 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             currency: 'eur',
             product_data: {
               name: `${standard} Carbon Credits — ${volumeTonnes} tonnes`,
-              description: `${side || 'BUY'} order · Trade ID: ${tradeId} · Platform fee (0.75%) included`,
+              description: `${side || 'BUY'} order · Trade ID: ${tradeId}`,
             },
-            unit_amount: totalCents,
+            unit_amount: grossCents,
           },
           quantity: 1,
         }],
-        metadata: { trade_id: tradeId, standard, volume_tonnes: String(volumeTonnes), email, side: side || 'BUY', price_per_tonne: String(serverPrice) },
+        metadata: {
+          trade_id: tradeId,
+          standard,
+          volume_tonnes: String(volumeTonnes),
+          email,
+          side: side || 'BUY',
+          price_per_tonne: String(serverPrice),
+          gross_eur: gross.toFixed(2),
+          fee_eur: fee.toFixed(2),
+          seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+          seller_connect_account_id: String(connectAccountId || ''),
+          payment_model: paymentModel,
+        },
+        payment_intent_data: paymentModel === 'destination_charge' ? {
+          application_fee_amount: applicationFeeAmount,
+          transfer_data: { destination: connectAccountId as string },
+          metadata: {
+            trade_id: tradeId,
+            payment_model: paymentModel,
+            seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+            seller_connect_account_id: String(connectAccountId || ''),
+          },
+        } : {
+          metadata: {
+            trade_id: tradeId,
+            payment_model: paymentModel,
+            seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+          },
+        },
         success_url: `${origin}/x?trade=success&id=${tradeId}`,
         cancel_url: `${origin}/x`,
         customer_email: email,
@@ -3019,7 +3130,7 @@ Respond with a JSON object (no markdown) with these exact fields:
   app.post('/api/escrow/create', async (req, res) => {
     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
-      const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard } = req.body;
+      const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
       if (!trade_id || !amount_eur || amount_eur < 100) {
         return res.status(400).json({ error: 'Invalid escrow parameters' });
       }
@@ -3027,12 +3138,34 @@ Respond with a JSON object (no markdown) with these exact fields:
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
       const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+
+      let escrowSellerProfileId = '';
+      let escrowConnectAccountId: string = seller_connect_account_id || '';
+      let escrowPaymentModel: 'destination_charge' | 'platform_collect' = 'platform_collect';
+      if (listing_id) {
+        const listingLookup = await db.execute(sql`
+          SELECT el.seller_profile_id, sp.stripe_connect_account_id, sp.connect_onboarding_complete
+          FROM exchange_listings el
+          LEFT JOIN seller_profiles sp ON sp.id = el.seller_profile_id
+          WHERE el.id = ${listing_id}
+          LIMIT 1
+        `).catch(() => ({ rows: [] } as any));
+        const listingRow = (listingLookup as any).rows?.[0];
+        escrowSellerProfileId = listingRow?.seller_profile_id || '';
+        if (!escrowConnectAccountId) escrowConnectAccountId = listingRow?.stripe_connect_account_id || '';
+        if (escrowConnectAccountId && listingRow?.connect_onboarding_complete === true) {
+          escrowPaymentModel = 'destination_charge';
+        }
+      }
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amount_eur * 100),
         currency: 'eur',
         capture_method: 'manual',
         receipt_email: buyer_email,
-        metadata: { trade_id, listing_id: listing_id || '', volume_tonnes: String(volume_tonnes), standard: standard || '', escrow_type: 'carbon_credit_t1', platform: 'uaiu_exchange', buyer_email: buyer_email || '', created_at: new Date().toISOString() },
+        application_fee_amount: escrowPaymentModel === 'destination_charge' ? Math.round(amount_eur * 0.0075 * 100) : undefined,
+        transfer_data: escrowPaymentModel === 'destination_charge' ? { destination: escrowConnectAccountId } : undefined,
+        metadata: { trade_id, listing_id: listing_id || '', volume_tonnes: String(volume_tonnes), standard: standard || '', escrow_type: 'carbon_credit_t1', platform: 'uaiu_exchange', buyer_email: buyer_email || '', created_at: new Date().toISOString(), seller_profile_id: escrowSellerProfileId, seller_connect_account_id: escrowConnectAccountId, payment_model: escrowPaymentModel },
         description: `UAIU Carbon Credit Escrow — Trade ${trade_id} — ${volume_tonnes?.toLocaleString()}t ${standard}`,
         statement_descriptor: 'UAIU EXCH',
       });
@@ -3078,12 +3211,23 @@ Respond with a JSON object (no markdown) with these exact fields:
       const gross = captured.amount / 100;
       const uaiu_fee = gross * 0.0075;
       const seller_net = gross - uaiu_fee;
+      const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
+      if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
+        const escrowSellerLookup = await db.execute(sql`
+          SELECT exchange_account_email FROM seller_profiles
+          WHERE id = ${(captured.metadata as any).seller_profile_id} LIMIT 1
+        `).catch(() => ({ rows: [] } as any));
+        const escrowSellerEmail = (escrowSellerLookup as any).rows?.[0]?.exchange_account_email || '';
+        if (escrowSellerEmail) {
+          sendSellerDestinationPayoutEmail({ sellerEmail: escrowSellerEmail, tradeId: trade_id, payoutAmountEur: seller_net, chargeId: String(captured.latest_charge || '') }).catch(() => {});
+        }
+      }
       try {
         const { sendExchangeEmail } = await import('./email-service');
-        await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Stripe Charge': captured.latest_charge as string });
+        await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Settlement Model': escrowPaymentModel, 'Stripe Charge': captured.latest_charge as string });
       } catch (emailError) { console.error('Settlement email error:', emailError); }
-      res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
+      res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, payment_model: escrowPaymentModel, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
     } catch (e: any) {
       console.error('Escrow release error:', e);
       res.status(500).json({ error: safeError(e) });

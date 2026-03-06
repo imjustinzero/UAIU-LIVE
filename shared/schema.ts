@@ -293,6 +293,7 @@ export const exchangeListings = pgTable("exchange_listings", {
   badgeLabel: varchar("badge_label").notNull(),
   name: varchar("name").notNull(),
   origin: varchar("origin").notNull(),
+  sellerProfileId: varchar("seller_profile_id"),
   pricePerTonne: real("price_per_tonne").notNull(),
   changePercent: real("change_percent").notNull().default(0),
   changeDirection: varchar("change_direction").notNull().default('up'),

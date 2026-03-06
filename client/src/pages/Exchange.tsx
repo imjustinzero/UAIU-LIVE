@@ -551,7 +551,7 @@ export default function Exchange() {
   const tradePrice = parseFloat(tradeTypeValue) || 63.40;
   const tradeSub = tradePrice * tradeQty;
   const tradeFee = tradeSub * 0.0075;
-  const tradeTotal = tradeSub + tradeFee;
+  const tradeTotal = tradeSub;
 
   function openTrade(listing: Listing | null, mode: 'buy' | 'sell') {
     setCurrentListing(listing);
@@ -1865,13 +1865,16 @@ export default function Exchange() {
                     <input className="x-fi" style={s.fi} type="number" value={tradeQty} min={1} onChange={e => setTradeQty(parseInt(e.target.value) || 0)} data-testid="input-trade-qty" />
                   </div>
                   <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '16px 20px', margin: '20px 0' }}>
-                    {[{ k: 'Unit Price', v: `€${tradePrice.toFixed(2)}` }, { k: 'Quantity', v: `${tradeQty.toLocaleString()} tonnes` }, { k: 'Platform Fee (0.75%)', v: `€${tradeFee.toFixed(2)}` }].map(r => (
+                    {[{ k: 'Unit Price', v: `€${tradePrice.toFixed(2)}` }, { k: 'Quantity', v: `${tradeQty.toLocaleString()} tonnes` }].map(r => (
                       <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: `1px solid rgba(212,168,67,0.08)`, fontFamily: F.mono, fontSize: 11 }}>
                         <span style={{ color: C.cream3 }}>{r.k}</span><span style={{ color: C.cream }}>{r.v}</span>
                       </div>
                     ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: `1px solid rgba(212,168,67,0.08)`, fontFamily: F.mono, fontSize: 10 }}>
+                      <span style={{ color: C.cream3 }}>UAIU fee (0.75% from seller proceeds)</span><span style={{ color: C.cream3 }}>−€{tradeFee.toFixed(2)}</span>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', fontFamily: F.mono, fontSize: 14 }}>
-                      <span style={{ color: C.gold }}>Total</span><span style={{ color: C.gold }}>€{tradeTotal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span style={{ color: C.gold }}>Buyer Total</span><span style={{ color: C.gold }}>€{tradeTotal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                   {tradeTab === 'buy' ? (

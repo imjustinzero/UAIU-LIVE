@@ -613,11 +613,20 @@ export class DbStorage implements IStorage {
     const badge = standardMap[submission.standard] || 'VCS';
     const priceNum = parseFloat(String(submission.askingPricePerTonne)) || 0;
 
+    const sellerProfileResult = await db.execute(sql`
+      SELECT id
+      FROM seller_profiles
+      WHERE exchange_account_email = ${submission.email}
+      LIMIT 1
+    `);
+    const sellerProfileId: string | null = (sellerProfileResult as any).rows?.[0]?.id ?? null;
+
     const [newListing] = await db.insert(exchangeListings).values({
       standard:          badge,
       badgeLabel:        badge,
       name:              `${submission.creditType} — ${submission.orgName}`,
       origin:            submission.projectOrigin,
+      sellerProfileId,
       pricePerTonne:     priceNum,
       changePercent:     0,
       changeDirection:   'up',
@@ -713,9 +722,18 @@ export class DbStorage implements IStorage {
   }
 
   async getExchangeListingsByStandard(standard: string): Promise<ExchangeListing[]> {
-    return db.select().from(exchangeListings)
-      .where(and(eq(exchangeListings.standard, standard), eq(exchangeListings.status, 'active')))
-      .orderBy(desc(exchangeListings.createdAt));
+    const result = await db.execute(sql`
+      SELECT
+        el.*,
+        sp.stripe_connect_account_id,
+        sp.connect_onboarding_complete
+      FROM exchange_listings el
+      LEFT JOIN seller_profiles sp ON sp.id = el.seller_profile_id
+      WHERE el.standard = ${standard}
+        AND el.status = 'active'
+      ORDER BY el.created_at DESC
+    `);
+    return ((result as any).rows || []) as ExchangeListing[];
   }
 
   async incrementExchangeFailedLogin(email: string): Promise<{ failedLoginAttempts: number; lockedUntil: Date | null } | null> {

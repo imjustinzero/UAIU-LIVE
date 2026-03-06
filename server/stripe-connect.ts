@@ -20,6 +20,7 @@ export async function createConnectAccount(email: string, country = "US"): Promi
     country,
     email,
     capabilities: {
+      card_payments: { requested: true },
       transfers: { requested: true },
     },
     settings: {
@@ -61,6 +62,10 @@ export async function createTransfer(
   tradeId: string,
   sellerEmail: string
 ): Promise<{ id: string }> {
+  // Fallback path only.
+  // Primary settlement model is Stripe destination charges using:
+  // payment_intent_data.application_fee_amount + transfer_data.destination
+  // so funds never rest in the platform balance.
   const stripe = await getStripe();
   const transfer = await stripe.transfers.create({
     amount: Math.round(amountEur * 100),

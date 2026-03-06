@@ -558,32 +558,40 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const gross = Number(trade.grossEur || 0);
       const sellerNet = Math.max(0, gross - fee);
 
-      const payout = await db.execute(sql`
-        INSERT INTO seller_payouts (
-          trade_id,
-          seller_profile_id,
-          seller_email,
-          gross_eur,
-          fee_eur,
-          seller_net_eur,
-          payout_status,
-          payout_provider,
-          payout_reference
-        )
-        VALUES (
-          ${tradeId},
-          ${seller.seller_profile_id},
-          ${seller.seller_email},
-          ${gross},
-          ${fee},
-          ${sellerNet},
-          'pending_release',
-          'workflow_only',
-          ${seller.payout_reference || null}
-        )
-        ON CONFLICT DO NOTHING
-        RETURNING *
+      const existingPayoutResult = await db.execute(sql`
+        SELECT * FROM seller_payouts WHERE trade_id = ${tradeId} ORDER BY created_at DESC LIMIT 1
       `);
+      const existingPayoutRow = (existingPayoutResult as any).rows?.[0];
+
+      const payout = existingPayoutRow
+        ? { rows: [existingPayoutRow] }
+        : await db.execute(sql`
+          INSERT INTO seller_payouts (
+            trade_id,
+            seller_profile_id,
+            seller_email,
+            gross_eur,
+            fee_eur,
+            seller_net_eur,
+            payout_status,
+            payout_provider,
+            payout_reference,
+            settlement_method
+          )
+          VALUES (
+            ${tradeId},
+            ${seller.seller_profile_id},
+            ${seller.seller_email},
+            ${gross},
+            ${fee},
+            ${sellerNet},
+            'pending_release',
+            'workflow_only',
+            ${seller.payout_reference || null},
+            'platform_collect'
+          )
+          RETURNING *
+        `);
 
       const payoutRow = (payout as any).rows?.[0];
 
@@ -747,6 +755,32 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       if (!payout) return res.status(404).json({ error: "Payout not found." });
       if (payout.payout_status === "paid" || payout.payout_status === "released") {
         return res.json({ success: true, alreadyReleased: true, payout });
+      }
+
+      // ── Destination charge: funds already with seller — no transfer needed
+      if (payout.settlement_method === 'destination_charge') {
+        await db.execute(sql`
+          UPDATE seller_payouts
+          SET payout_status = 'paid',
+              payout_provider = 'stripe_destination',
+              released_at = COALESCE(released_at, NOW()),
+              stripe_transfer_id = COALESCE(stripe_transfer_id, payout_reference),
+              updated_at = NOW()
+          WHERE id = ${payout.id}
+        `);
+        await db.execute(sql`
+          UPDATE exchange_settlement_runs
+          SET settlement_status = 'released', settled_at = NOW()
+          WHERE trade_id = ${tradeId}
+        `);
+        return res.json({
+          success: true,
+          method: 'stripe_destination',
+          tradeId,
+          payoutId: payout.id,
+          sellerNet: payout.seller_net_eur,
+          transferId: payout.stripe_transfer_id || payout.payout_reference || null,
+        });
       }
 
       const connectAccountId: string | null = payout.stripe_connect_account_id || null;
