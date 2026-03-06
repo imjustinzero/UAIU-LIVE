@@ -1,0 +1,16 @@
+Static prices — The ticker shows hardcoded numbers (€63.40, €71.80, etc.) that never change. Any institutional trader will notice immediately. The prices need to move in real time, even if it's a simulated live feed, not frozen data.
+Trade execution is cosmetic — The Buy/Sell modal confirms an order but doesn't actually move money for the spot market. Only the escrow flow processes real payments. Institutional buyers expect Stripe checkout or wire instruction to trigger on every confirmed trade, not just a toast message.
+Sign-in is just email lookup — The Exchange account login has no password or any authentication. An institutional user who registered their fund's email could be impersonated by anyone who knows the address. This needs a password or a one-time email link at minimum.
+No KYC gate — The account opening form collects information but doesn't enforce identity verification before a user can execute trades. Real compliance requires ID verification before a corporate buyer can settle anything.
+High priority (erodes institutional trust)
+
+No trade history dashboard — After logging in, the session account has no view of past trades, outstanding bids, or carbon positions. Institutional users need a persistent ledger visible on login.
+No real price charts — There's an AI price prediction but no historical candlestick or line chart for EU ETS or REDD++ prices. Institutions need context before executing.
+No retirement certificate flow — When credits are retired (used for compliance), there's no automated certificate generated. This is a regulatory requirement for most compliance buyers.
+No legal gate — Users must agree to Terms of Service and a Trading Agreement before their first trade. Right now nothing gates them. A one-page acceptance on first login would close this.
+Medium priority (polish that signals quality)
+
+No portfolio summary — The Portfolio Dashboard component exists but the logged-in account view shows only a bare name. Institutions want live P&L, tonnes held, carbon exposure in euros, and compliance % met.
+No CSV/PDF export of trade history — Institutional buyers need exports for their finance and compliance teams.
+No dedicated Institutional Desk section — Trades above 50,000 tonnes should route to a white-glove contact form with a direct email or calendar link, not the same RFQ form used by small buyers.
+Seller notification — When a seller's listing is approved or matched, nothing automated notifies them. The email infrastructure is there but dormant.
