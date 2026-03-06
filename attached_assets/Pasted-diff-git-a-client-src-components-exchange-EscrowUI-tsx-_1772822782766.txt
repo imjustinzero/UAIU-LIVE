@@ -1,0 +1,57 @@
+diff --git a/client/src/components/exchange/EscrowUI.tsx b/client/src/components/exchange/EscrowUI.tsx
+index c1d8e68f4a55d9587989916c9a7220fe04426bbb..a9adce7dbe85781ed4352def0372435d526b3252 100644
+--- a/client/src/components/exchange/EscrowUI.tsx
++++ b/client/src/components/exchange/EscrowUI.tsx
+@@ -135,51 +135,51 @@ export function EscrowSettlement({
+               border:'1px solid rgba(212,168,67,0.15)',
+               borderRadius:'10px', padding:'18px', marginBottom:'20px' }}>
+               {[
+                 { label:'Trade ID', value:tradeId },
+                 { label:'Volume', value:`${volumeTonnes.toLocaleString()} tonnes ${standard}` },
+                 { label:'Gross Amount', value:`€${amountEur.toLocaleString()}` },
+                 { label:'UAIU Fee (0.75%)', value:`€${uaiu_fee.toFixed(2)}` },
+                 { label:'Net to Seller', value:`€${net.toFixed(2)}` },
+               ].map((r,i) => (
+                 <div key={i} style={{ display:'flex', justifyContent:'space-between',
+                   padding:'6px 0',
+                   borderBottom: i<4?'1px solid rgba(212,168,67,0.08)':'none' }}>
+                   <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.5)' }}>{r.label}</span>
+                   <span style={{ fontSize:'12px', fontWeight:700,
+                     fontFamily:'JetBrains Mono,monospace',
+                     color: r.label==='Net to Seller'?'#4ade80':isDark?'#ffffff':'#0d1b3e' }}>
+                     {r.value}
+                   </span>
+                 </div>
+               ))}
+             </div>
+             <div style={{ background:'rgba(96,165,250,0.06)',
+               border:'1px solid rgba(96,165,250,0.2)',
+               borderRadius:'8px', padding:'12px', marginBottom:'20px' }}>
+               <p style={{ margin:0, fontSize:'12px', color:'#93c5fd', lineHeight:1.6 }}>
+-                🔒 <strong>Stripe Escrow:</strong> Funds are held by Stripe — not UAIU. Released automatically at T+1 settlement confirmation. UAIU never holds your money.
++                🔒 <strong>Settlement-hold powered by Stripe Connect:</strong> Funds are held by Stripe — not UAIU. Released automatically at T+1 settlement confirmation. UAIU never holds your money.
+               </p>
+             </div>
+             {error && <p style={{ color:'#f87171', fontSize:'12px', marginBottom:'12px' }}>{error}</p>}
+             <div style={{ display:'flex', gap:'10px' }}>
+               <button onClick={createEscrow} disabled={loading} style={{
+                 flex:1, padding:'14px', borderRadius:'10px', border:'none',
+                 background:loading?'rgba(212,168,67,0.3)':GOLD,
+                 color:'#0a0a0f', fontWeight:700, fontSize:'14px',
+                 cursor:loading?'wait':'pointer'
+               }}>
+                 {loading?'⟳ Creating Escrow...':'Initiate Escrow →'}
+               </button>
+               <button onClick={onCancel} style={{
+                 padding:'14px 18px', borderRadius:'10px',
+                 border:'1px solid rgba(255,255,255,0.1)',
+                 background:'transparent', color:'rgba(255,255,255,0.4)',
+                 cursor:'pointer', fontSize:'13px'
+               }}>Cancel</button>
+             </div>
+           </>
+         )}
+ 
+         {step === 'held' && (
+           <div style={{ textAlign:'center' }}>
+             <div style={{ fontSize:'48px', marginBottom:'16px' }}>🔒</div>

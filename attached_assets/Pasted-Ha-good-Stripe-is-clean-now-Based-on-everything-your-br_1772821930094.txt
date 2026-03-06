@@ -1,0 +1,41 @@
+Ha — good, Stripe is clean now. Based on everything your brother flagged across both messages, here's the full remaining list ranked by actual risk:
+
+---
+
+**🔴 Still needs addressing**
+
+**1. Registry transfer gap**
+This is his biggest legitimate flag and it's still open. Credits live in Verra, Gold Standard, EU ETS, ACR. Your platform has no API connection to any of them. Until you do, sophisticated institutional buyers and any serious investor will call this a listing portal, not an execution platform. This is the one thing that could actually stall a big deal.
+
+**2. "Exchange" language**
+Footer still says Exchange: uaiu.live/x. One word change to Platform: uaiu.live/x removes the regulatory surface entirely. Takes 30 seconds.
+
+**3. Stripe Connect described as escrow in marketing**
+Your ToS is correct but your marketing copy still says "escrow settlement via Stripe Connect" in a few places. Needs one line added everywhere: "Settlement-hold powered by Stripe Connect" to match the ToS language exactly.
+
+---
+
+**🟡 Lower risk but worth cleaning up**
+
+**4. AI disclaimer language**
+Nowhere on the platform does it currently say AI-generated analysis is informational only and not financial or compliance advice. One footer line or tooltip covers this.
+
+**5. EU ETS price feed attribution**
+Needs a one-line data source credit wherever the feed displays confirming it comes through a licensed provider.
+
+**6. The 26 features claim**
+Not illegal, but if any of the 26 aren't fully functional yet, remove them from the count or mark them as coming soon. Overpromising to an institutional buyer who tests the platform is worse than underselling.
+
+---
+
+**✅ Already handled**
+
+- Money transmission — fixed with destination charges
+- Stripe key — fixed
+- Seller → marketplace listings bridge — in progress
+- Webhook reliability — in progress
+- PDF audit pack — in progress
+
+---
+
+The registry integration is the only one that could genuinely cost you a major deal. Everything else is language and disclaimers — afternoon fixes. Want me to draft the registry integration roadmap you can show investors so it's positioned as a known next phase rather than a gap?

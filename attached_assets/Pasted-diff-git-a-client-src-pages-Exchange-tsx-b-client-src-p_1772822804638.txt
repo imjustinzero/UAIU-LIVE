@@ -1,0 +1,241 @@
+diff --git a/client/src/pages/Exchange.tsx b/client/src/pages/Exchange.tsx
+index 584dc2874ff945d0098f712497ae0c655f927f66..60eff02a922f88cbe9b132ceace34014f4a428ee 100644
+--- a/client/src/pages/Exchange.tsx
++++ b/client/src/pages/Exchange.tsx
+@@ -997,72 +997,72 @@ export default function Exchange() {
+               </button>
+               <MobileNav links={[
+                 {label:'Markets', href:'#marketplace'},
+                 {label:'Intelligence', href:'#intelligence'},
+                 {label:'Pipeline', href:'#pipeline'},
+                 {label:'Calculator', href:'#calculator'},
+                 {label:'Dashboard', href:'#dashboard'},
+                 {label:'RFQ Desk', href:'#rfq'},
+                 {label:'Forecast', href:'#prediction'},
+                 {label:'Budget', href:'#budget'},
+                 {label:'Calendar', href:'#calendar'},
+                 {label:'Verify', href:'#trust'},
+               ]} isDark={isDark} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
+             </div>
+           </div>
+         </nav>
+ 
+         <TradeTicker newTrades={tickerTrades} />
+ 
+         <section id="home" style={{ minHeight: '100vh', paddingTop: 'clamp(80px, 12vh, 120px)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 100% 70% at 70% 30%,rgba(212,168,67,0.06) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 10% 90%,rgba(30,50,120,0.25) 0%,transparent 50%)` }} />
+           <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(212,168,67,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(212,168,67,0.035) 1px,transparent 1px)`, backgroundSize: '80px 80px', maskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%,black,transparent)' }} />
+           <div style={{ position: 'relative', zIndex: 2, ...CONTAINER_STYLE, paddingBlock: 'clamp(40px, 8vh, 80px)' }}>
+             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '8px 18px', marginBottom: 36 }}>
+               <span className="x-pulse" />
+-              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Exchange · Est. 2025</span>
++              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Platform · Est. 2025</span>
+             </div>
+             <h1 style={{ fontFamily: F.playfair, fontSize: 'clamp(42px, 8vw, 110px)', fontWeight: 900, lineHeight: 0.95, letterSpacing: '-0.03em', marginBottom: 40, maxWidth: 900 }}>
+               <span style={{ fontWeight: 400, color: C.cream2 }}>Carbon compliance</span><br />
+               <em style={{ fontStyle: 'italic', color: C.gold, display: 'block' }}>is the market.</em>
+             </h1>
+             <p style={{ fontSize: 'clamp(14px, 1.8vw, 16px)', lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a advantage.</p>
+             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 48 }}>
+               <button className="x-btn-primary" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('marketplace')}>Browse Credits →</button>
+               <button className="x-btn-ghost" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('list')}>List Your Credits</button>
+             </div>
+             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(24px, 5vw, 48px)', flexWrap: 'wrap', marginBottom: 48 }}>
+               <div style={{ flexShrink: 0, margin: '0 auto' }}>
+                 <Globe3D onPinClick={() => scrollTo('marketplace')} />
+               </div>
+               <div style={{ flex: '1 1 400px' }}>
+                 <CarbonClock />
+               </div>
+             </div>
+             <div className="x-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: `1px solid ${C.goldborder}`, background: 'rgba(13,18,32,0.8)', backdropFilter: 'blur(12px)', gap: 1 }}>
+               {[
+-                { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate' },
++                { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate · Licensed provider feed' },
+                 { val: '€100', label: 'EU Fine Per Tonne', sub: 'Cost of non-compliance' },
+                 { val: '2027', label: '100% EU ETS Mandate', sub: 'Maritime full coverage deadline' },
+                 { val: '5', label: 'Sovereign Nations', sub: 'Carbon Union · Registry backed' },
+               ].map((m, i) => (
+                 <div key={i} style={{ padding: '28px 32px', background: C.ink2 }}>
+                   <div style={{ fontFamily: F.playfair, fontSize: 'clamp(32px, 4vw, 42px)', fontWeight: 700, color: C.gold, lineHeight: 1, marginBottom: 6 }}>{m.val}</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.cream3 }}>{m.label}</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginTop: 4 }}>{m.sub}</div>
+                 </div>
+               ))}
+             </div>
+           </div>
+         </section>
+ 
+         <div style={s.goldRule} />
+ 
+         <section id="marketplace" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+           <div className="x-section" style={s.sectionWrap}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 20 }}>
+               <div>
+                 <div style={{ ...s.eyebrow as React.CSSProperties }}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Live Listings</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0 }}>Available <em style={{ fontStyle: 'italic', color: C.gold }}>Credits</em></h2>
+               </div>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                 {[['all','All'],['eu','EU ETS'],['vcs','VCS'],['redd','REDD++'],['blue','Blue Carbon']].map(([val,label]) => (
+@@ -1616,51 +1616,51 @@ export default function Exchange() {
+         <section id="pipeline" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+           <div className="x-section" style={s.sectionWrap}>
+             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Project Development</div>
+             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>Project<br /><em style={{ fontStyle: 'italic', color: C.gold }}>pipeline.</em></h2>
+             <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 48 }}>Live view of carbon projects in verification, awaiting issuance, or recently listed on the exchange.</p>
+             <ProjectPipeline />
+           </div>
+         </section>
+ 
+         <PortfolioDashboard
+           trades={[...dbTrades.map(t => ({ trade_id: t.tradeId || '', side: t.side || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volumeTonnes || 0, price_eur_per_tonne: t.pricePerTonne || 0, gross_eur: t.grossEur || 0, receipt_hash: t.receiptHash || '', prev_receipt_hash: '', payment_intent_id: t.stripeSessionId || '', settled_at: t.createdAt ? new Date(t.createdAt).toISOString() : '' })), ...sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '', prev_receipt_hash: t.prev_receipt_hash || t.prevReceiptHash || '', payment_intent_id: t.payment_intent_id || t.paymentIntentId || '', settled_at: t.settled_at || (t.ts ? new Date(t.ts).toISOString() : '') }))]}
+           retirements={dbTrades.filter(t => t.status === 'retired').map(t => ({ trade_id: t.tradeId || '', volume_tonnes: t.volumeTonnes || 0, retired_at: t.createdAt ? new Date(t.createdAt).toISOString() : '' }))}
+           accountName={sessionAccount?.company || 'Exchange Account'}
+           annualTarget={sessionAccount?.annualCo2 || 10000}
+         />
+ 
+         <div style={s.goldRule} />
+ 
+         <section id="trust" style={{ background: C.ink }}>
+           <div className="x-section" style={s.sectionWrap}>
+             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Trust &amp; Verification</div>
+             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 56 }}>Every trade.<br /><em style={{ fontStyle: 'italic', color: C.gold }}>On the record.</em></h2>
+             <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
+               {[
+                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
+-                { Icon: Clock, title: 'T+1 Settlement', text: 'Credits transfer to your registry account within one business day of trade execution. Full settlement confirmation with audit trail.' },
++                { Icon: Clock, title: 'T+1 Settlement', text: 'Settlement instructions are completed within one business day of trade execution, with full audit trail confirmation. Direct registry API transfer rails (Verra, Gold Standard, EU ETS, ACR) are being rolled out.' },
+                 { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves.' },
+                 { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of 5 Carbon Union nations.' },
+               ].map(({ Icon, title, text }, i) => (
+                 <div key={i} className="x-trust-card">
+                   <div style={{ marginBottom: 16 }}><Icon size={32} color={C.gold} /></div>
+                   <div style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700, marginBottom: 10 }}>{title}</div>
+                   <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.7, marginBottom: 16 }}>{text}</div>
+                 </div>
+               ))}
+             </div>
+ 
+             <div style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '40px 48px' }}>
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'clamp(32px, 5vw, 60px)', alignItems: 'center' }}>
+                 <div>
+                   <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Sample Receipt</div>
+                   <h3 style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, lineHeight: 1.2, marginBottom: 16 }}>What your auditors <em style={{ color: C.gold }}>actually see.</em></h3>
+                   <p style={{ fontSize: 13, color: C.cream3, lineHeight: 1.75, marginBottom: 24 }}>Every trade on UAIU.LIVE/X generates a permanent public receipt. Your compliance team forwards the verification URL — your auditors confirm the hash chain independently. No trust required.</p>
+                 </div>
+                 <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: 24, fontFamily: F.mono, fontSize: 11, lineHeight: 1.9 }}>
+                   <div style={{ color: C.gold, marginBottom: 12, fontSize: 9, letterSpacing: '0.2em' }}>UAIU TRADE RECEIPT · VERIFIED</div>
+                   <div style={{ color: C.cream3 }}>Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>UAIU-BUY-829341</span></div>
+                   <div style={{ color: C.cream3 }}>Standard: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>SwissX B100 / VCS</span></div>
+                   <div style={{ color: C.cream3 }}>Origin: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>Antigua, Caribbean</span></div>
+                   <div style={{ color: C.cream3 }}>Volume: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>50,000 tCO₂</span></div>
+                   <div style={{ color: C.cream3 }}>Price: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>€71.80/tonne</span></div>
+@@ -1692,50 +1692,54 @@ export default function Exchange() {
+                       <div style={{ color: C.green, marginBottom: 12, fontSize: 9, letterSpacing: '0.2em' }}>&#10003; VERIFIED — UAIU RECEIPT FOUND</div>
+                       <div style={{ lineHeight: 2, color: C.cream3 }}>
+                         Trade ID: <span style={{ color: C.cream }}>{verifyResult.trade.id}</span><br />
+                         Volume: <span style={{ color: C.cream }}>{(verifyResult.trade.volumeTonnes || 0).toLocaleString()} tCO₂</span><br />
+                         Price: <span style={{ color: C.cream }}>€{(verifyResult.trade.priceEurPerTonne || 0).toFixed(2)}/tonne</span><br />
+                         Settlement: <span style={{ color: C.green }}>T+1 · Complete</span><br />
+                         Receipt Hash: <span style={{ color: C.gold, wordBreak: 'break-all' }}>{verifyResult.trade.receiptHash}</span>
+                       </div>
+                     </div>
+                   )}
+                   {verifyResult.type === 'valid-format' && (
+                     <div style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: 24, textAlign: 'left', maxWidth: 600, margin: '0 auto' }}>
+                       <div style={{ color: C.gold, marginBottom: 12, fontSize: 9, letterSpacing: '0.2em' }}>&#9711; TRADE ID FORMAT VALID</div>
+                       <div style={{ fontSize: 11, color: C.cream3, lineHeight: 1.8 }}>
+                         Trade <span style={{ color: C.cream }}>{verifyResult.id}</span> exists in the registry.<br />
+                         Full verification available via authenticated API.<br />
+                         <span style={{ fontSize: 10, color: C.cream4 }}>Contact desk@uaiu.live with Trade ID to request audit pack.</span>
+                       </div>
+                     </div>
+                   )}
+                   {verifyResult.type === 'not-found' && <span style={{ color: C.red }}>&#9888; Trade ID not found. Format: UAIU-BUY-XXXXXX or UAIU-SELL-XXXXXX</span>}
+                   {verifyResult.type === 'error' && <span style={{ color: C.red }}>&#9888; {verifyResult.msg}</span>}
+                 </div>
+               )}
+             </div>
++
++            <p style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 18, lineHeight: 1.7 }}>
++              Registry transfer note: until direct API integrations are live, transfer/retirement instructions are coordinated with approved registry counterparties.
++            </p>
+           </div>
+         </section>
+ 
+         <div id="cta" style={{ background: C.ink, padding: '0 52px 120px' }}>
+           <div style={{ maxWidth: 1440, margin: '0 auto', background: C.ink2, border: `1px solid ${C.goldborder}`, padding: 80, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }} />
+             <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 60% 80% at 50% 50%,rgba(212,168,67,0.05),transparent)`, pointerEvents: 'none' }} />
+             <div style={{ position: 'relative' }}>
+               <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', color: C.gold, marginBottom: 24 }}>Ready to Trade</div>
+               <div style={{ fontFamily: F.playfair, fontSize: 'clamp(42px,5vw,72px)', fontWeight: 900, lineHeight: 1.0, marginBottom: 24, letterSpacing: '-0.02em' }}>The market is open.<br /><em style={{ fontStyle: 'italic', color: C.gold }}>Are you?</em></div>
+               <div style={{ fontSize: 16, color: C.cream3, maxWidth: 560, margin: '0 auto 48px', lineHeight: 1.7 }}>Open your account in minutes. Browse verified credits, calculate your compliance gap, and execute your first trade today — with full regulatory documentation included.</div>
+               <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+                 <button className="x-btn-primary" onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-open-account-cta">Open Account Free →</button>
+                 <button className="x-btn-ghost" onClick={() => scrollTo('list')} data-testid="button-list-cta">List Your Credits</button>
+               </div>
+             </div>
+           </div>
+         </div>
+ 
+         <section id="prediction" style={{ borderTop: `1px solid ${C.goldborder}` }}>
+           <AIPricePrediction currentPrice={currentIndexPrice} isDark={isDark} />
+         </section>
+ 
+         <section id="budget" style={{ borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+           <CarbonBudgetTracker trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', date: new Date().toISOString().split('T')[0], tonnes: t.volume_tonnes || 0, price_eur: t.gross_eur || 0, standard: t.standard || 'Carbon Credit' }))} listings={listings.map(l => ({ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, available_tonnes: 10000 }))} isDark={isDark} onBuyListing={() => scrollTo('marketplace')} />
+@@ -1761,51 +1765,53 @@ export default function Exchange() {
+             <div>
+               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Programs</div>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>SwissX B100</span>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>REDD++ Caribbean</span>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>Blue Carbon</span>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>Maritime Solutions</span>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>Aviation CORSIA</span>
+             </div>
+             <div>
+               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Company</div>
+               <span className="x-footer-link" style={{ cursor: 'default' }}>About UAIU</span>
+               <a href="#compliance" className="x-footer-link" onClick={e => { e.preventDefault(); scrollTo('compliance'); }}>Compliance</a>
+               <a href="#" className="x-footer-link" onClick={e => { e.preventDefault(); setAcctSuccess(false); setShowAccountModal(true); }}>Open Account</a>
+               <a href="#rfq" className="x-footer-link" onClick={e => { e.preventDefault(); scrollTo('rfq'); }}>Institutional</a>
+             </div>
+             <div>
+               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Trust & Legal</div>
+               <a href="/security" className="x-footer-link">Security</a>
+               <a href="/status" className="x-footer-link">Platform Status</a>
+               <a href="/legal" className="x-footer-link">Legal & Compliance</a>
+             </div>
+           </div>
+           <div style={{ maxWidth: 1440, margin: '0 auto', paddingTop: 32, borderTop: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 32, flexWrap: 'wrap' }}>
+             <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, lineHeight: 1.8, letterSpacing: '0.03em' }}>
+               © 2025 UAIU Holdings Corp. Registered in Wyoming, USA. Caribbean Basin Operations.<br />
++              Platform: uaiu.live/x.<br />
+               Carbon credits are financial instruments. Trading involves risk. Past performance does not guarantee future results.<br />
++              AI-generated analysis is informational only and does not constitute financial, legal, or compliance advice.<br />
+               All credits verified per applicable international standards. For institutional and corporate use.
+             </div>
+             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+               {['VCS Verified', 'EU ETS', 'Gold Standard', 'CORSIA', 'Wyoming LLC'].map(b => (
+                 <div key={b} style={{ fontFamily: F.mono, fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream4, border: `1px solid ${C.goldborder}`, padding: '5px 12px' }}>{b}</div>
+               ))}
+             </div>
+           </div>
+         </footer>
+ 
+       </div>
+ 
+       {showTradeModal && (
+         <div className="x-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowTradeModal(false); }}>
+           <div className="x-modal" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
+             <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: C.ink2, zIndex: 2 }}>
+               <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700 }}>{currentListing?.name || (tradeTab === 'buy' ? 'Buy Credits' : 'Sell Credits')}</div>
+               <button style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }} onClick={() => setShowTradeModal(false)} data-testid="button-close-trade">&#10005;</button>
+             </div>
+             {chartData.length > 0 && !tradeSuccess && (() => {
+               const prices = chartData.map(d => d.close);
+               const minP = Math.min(...prices), maxP = Math.max(...prices);
+               const W = 448, H = 100;
+               const pts = chartData.map((d, i) => {
+                 const x = (i / (chartData.length - 1)) * W;
