@@ -143,7 +143,9 @@ export async function triggerDatabaseBackup(
             console.warn("[Backup S3] Remote prune failed:", e.message)
           );
         } catch (s3Err: any) {
-          console.error("[Backup S3] Upload failed:", s3Err.message);
+          const errCode = s3Err.Code || s3Err.code || s3Err.name || "unknown";
+          const errDetail = s3Err.$metadata ? `HTTP ${s3Err.$metadata.httpStatusCode}` : "";
+          console.error(`[Backup S3] Upload failed: ${s3Err.message} [code=${errCode}] [${errDetail}]`);
           uploadStatus = "upload_failed";
           if (logId) {
             await db
