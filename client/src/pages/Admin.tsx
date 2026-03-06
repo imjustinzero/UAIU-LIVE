@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { EnterpriseOpsDashboard } from "@/components/admin/EnterpriseOpsDashboard";
+import { LaunchChecklist } from "@/components/admin/LaunchChecklist";
+import { IncidentBanner } from "@/components/admin/IncidentBanner";
 
 const C = {
   bg: '#05080f',
@@ -367,6 +370,12 @@ export default function Admin() {
             )}
           </div>
         )}
+      <section style={{ padding: '0 24px 40px', maxWidth: 1400, margin: '0 auto' }}>
+        <IncidentBanner status="ok" message="All systems operational. No active incidents." />
+        <EnterpriseOpsDashboard adminKey={adminKey} />
+        <LaunchChecklist />
+      </section>
+
       </main>
 
       <style>{`

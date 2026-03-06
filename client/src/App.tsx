@@ -11,6 +11,9 @@ import Feed from "@/pages/Feed";
 import LiveVideo from "@/pages/LiveVideo";
 import Exchange from "@/pages/Exchange";
 import Admin from "@/pages/Admin";
+import Security from "@/pages/Security";
+import Status from "@/pages/Status";
+import Legal from "@/pages/Legal";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,6 +25,9 @@ function Router() {
       <Route path="/live" component={LiveVideo} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />
+      <Route path="/security" component={Security} />
+      <Route path="/status" component={Status} />
+      <Route path="/legal" component={Legal} />
       <Route component={NotFound} />
     </Switch>
   );

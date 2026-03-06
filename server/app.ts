@@ -9,6 +9,7 @@ import express, {
 import helmet from "helmet";
 
 import { registerRoutes } from "./routes";
+import { createOpsMonitoringMiddleware } from "./ops-monitoring";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -50,6 +51,7 @@ declare module 'http' {
 // - All other routes use express.json() for JSON parsing
 // This prevents the webhook signature verification from breaking
 
+app.use(createOpsMonitoringMiddleware());
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {

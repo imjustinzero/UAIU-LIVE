@@ -18,6 +18,7 @@ import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertE
 import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
 import multer from "multer";
 import path from "path";
+import { registerOpsRoutes } from "./ops-routes";
 import fs from "fs";
 import PDFDocument from "pdfkit";
 import { createSession, getSession, requireAuth } from "./session-middleware";
@@ -3161,6 +3162,9 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.status(500).json({ error: 'Subscription failed' });
     }
   });
+
+  // ── Ops monitoring routes ──────────────────────────────────────────────────
+  registerOpsRoutes(app);
 
   // ── FIX 3: Start cron watchdog for stuck escrow trades ──────────────────────
   startCronJobs(app);

@@ -1773,6 +1773,12 @@ export default function Exchange() {
               <a href="#" className="x-footer-link" onClick={e => { e.preventDefault(); setAcctSuccess(false); setShowAccountModal(true); }}>Open Account</a>
               <a href="#rfq" className="x-footer-link" onClick={e => { e.preventDefault(); scrollTo('rfq'); }}>Institutional</a>
             </div>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Trust & Legal</div>
+              <a href="/security" className="x-footer-link">Security</a>
+              <a href="/status" className="x-footer-link">Platform Status</a>
+              <a href="/legal" className="x-footer-link">Legal & Compliance</a>
+            </div>
           </div>
           <div style={{ maxWidth: 1440, margin: '0 auto', paddingTop: 32, borderTop: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 32, flexWrap: 'wrap' }}>
             <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, lineHeight: 1.8, letterSpacing: '0.03em' }}>
