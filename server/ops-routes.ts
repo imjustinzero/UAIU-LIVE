@@ -27,15 +27,26 @@ export function registerOpsRoutes(app: Express) {
 
   app.get('/api/status/public', (_req, res) => {
     const ops = getOpsState();
+    const platformStatus = process.env.PLATFORM_STATUS || 'ok';
+    const tradingEnabled = process.env.TRADING_ENABLED !== 'false' && process.env.TRADING_DISABLED !== '1';
+    const message =
+      platformStatus === 'ok'
+        ? 'Platform operating normally.'
+        : platformStatus === 'maintenance'
+        ? 'Platform is under scheduled maintenance.'
+        : 'Platform status requires operator attention.';
     res.json({
-      status: 'operational',
+      platform: 'UAIU.LIVE/X',
+      status: platformStatus === 'ok' ? 'operational' : platformStatus,
+      tradingEnabled,
+      message,
       updatedAt: new Date().toISOString(),
       uptimeSec: ops.uptimeSec,
       components: [
         { name: 'Exchange API', status: 'operational' },
         { name: 'Trading Auth', status: 'operational' },
         { name: 'Webhooks', status: 'operational' },
-        { name: 'AI Services', status: process.env.ANTHROPIC_API_KEY ? 'degraded_possible' : 'unavailable' },
+        { name: 'AI Services', status: process.env.ANTHROPIC_API_KEY ? 'operational' : 'unavailable' },
       ],
     });
   });

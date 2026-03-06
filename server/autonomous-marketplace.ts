@@ -1,0 +1,688 @@
+import type { Express, Request } from "express";
+import { sql } from "drizzle-orm";
+import { db } from "./db";
+import { storage } from "./storage";
+import { requireAdminHeader, requireExchangeAuth, safeError } from "./exchange-auth";
+
+type RuleEval = {
+  decision: "approved" | "manual_review" | "rejected";
+  reason: string;
+  ruleHits: string[];
+  priority: number;
+  riskScore: number;
+};
+
+function reqIp(req: Request): string {
+  return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "");
+}
+
+function approvedStandard(input: string): boolean {
+  const value = (input || "").toUpperCase();
+  return [
+    "EU ETS",
+    "EU ETS — EUROPEAN UNION ALLOWANCES",
+    "VCS",
+    "VCS — VERIFIED CARBON STANDARD",
+    "GOLD STANDARD",
+    "GOLD STD",
+    "CORSIA",
+    "CORSIA — AVIATION OFFSETS",
+    "BLUE CARBON / VCS",
+  ].includes(value);
+}
+
+function evaluateListingRules(input: {
+  kybStatus?: string | null;
+  registrySerial?: string | null;
+  volumeTonnes?: number | null;
+  askingPricePerTonne?: number | null;
+  standard?: string | null;
+  inventoryVerified?: boolean;
+  riskScore?: number | null;
+}): RuleEval {
+  const hits: string[] = [];
+  let risk = Number(input.riskScore || 0);
+  let priority = 100;
+
+  if (input.kybStatus !== "verified") {
+    hits.push("kyb_not_verified");
+    risk += 35;
+    priority = 10;
+  }
+
+  if (!input.registrySerial || input.registrySerial.trim().length < 6) {
+    hits.push("registry_serial_missing_or_short");
+    risk += 20;
+    priority = Math.min(priority, 20);
+  }
+
+  if (!input.volumeTonnes || input.volumeTonnes <= 0) {
+    hits.push("invalid_volume");
+    risk += 50;
+    priority = 1;
+  }
+
+  if (!input.askingPricePerTonne || input.askingPricePerTonne <= 0) {
+    hits.push("invalid_price");
+    risk += 50;
+    priority = 1;
+  }
+
+  if (!approvedStandard(String(input.standard || ""))) {
+    hits.push("unsupported_standard");
+    risk += 30;
+    priority = Math.min(priority, 15);
+  }
+
+  if (!input.inventoryVerified) {
+    hits.push("inventory_not_verified");
+    risk += 15;
+    priority = Math.min(priority, 25);
+  }
+
+  if (hits.includes("invalid_volume") || hits.includes("invalid_price")) {
+    return {
+      decision: "rejected",
+      reason: "Listing rejected by rules engine.",
+      ruleHits: hits,
+      priority,
+      riskScore: risk,
+    };
+  }
+
+  if (risk >= 40) {
+    return {
+      decision: "manual_review",
+      reason: "Listing queued for manual review.",
+      ruleHits: hits,
+      priority,
+      riskScore: risk,
+    };
+  }
+
+  return {
+    decision: "approved",
+    reason: "Listing auto-approved by rules engine.",
+    ruleHits: hits.length ? hits : ["auto_pass"],
+    priority,
+    riskScore: risk,
+  };
+}
+
+async function raiseException(entityType: string, entityId: string, code: string, message: string, detail: any = {}, severity = "medium") {
+  await db.execute(sql`
+    INSERT INTO exchange_exception_queue (entity_type, entity_id, severity, status, code, message, detail)
+    VALUES (${entityType}, ${entityId}, ${severity}, 'open', ${code}, ${message}, ${JSON.stringify(detail)}::jsonb)
+  `);
+}
+
+export function registerAutonomousMarketplaceRoutes(app: Express) {
+  // Seller onboarding profile + KYB/KYC bootstrap
+  app.post("/api/seller/onboard/automatic", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const {
+        legalEntityName,
+        tradingName,
+        sellerType,
+        country,
+        registryName,
+        registryAccountId,
+        website,
+        taxId,
+        payoutMethod,
+        payoutReference,
+      } = req.body || {};
+
+      if (!legalEntityName || !registryName || !registryAccountId) {
+        return res.status(400).json({ error: "legalEntityName, registryName, and registryAccountId are required." });
+      }
+
+      const account = await storage.getExchangeAccountByEmail(email);
+      if (!account) return res.status(404).json({ error: "Exchange account not found." });
+
+      const result = await db.execute(sql`
+        INSERT INTO seller_profiles (
+          exchange_account_email,
+          legal_entity_name,
+          trading_name,
+          seller_type,
+          country,
+          registry_name,
+          registry_account_id,
+          website,
+          tax_id,
+          payout_method,
+          payout_reference,
+          onboarding_status,
+          kyb_status,
+          kyc_status,
+          updated_at
+        )
+        VALUES (
+          ${email},
+          ${legalEntityName},
+          ${tradingName || null},
+          ${sellerType || 'corporate'},
+          ${country || null},
+          ${registryName},
+          ${registryAccountId},
+          ${website || null},
+          ${taxId || null},
+          ${payoutMethod || 'bank_transfer'},
+          ${payoutReference || null},
+          'pending_kyb',
+          CASE WHEN ${account.kycStatus || 'not_started'} = 'verified' THEN 'verified' ELSE 'pending' END,
+          ${account.kycStatus || 'not_started'},
+          NOW()
+        )
+        ON CONFLICT (exchange_account_email)
+        DO UPDATE SET
+          legal_entity_name = EXCLUDED.legal_entity_name,
+          trading_name = EXCLUDED.trading_name,
+          seller_type = EXCLUDED.seller_type,
+          country = EXCLUDED.country,
+          registry_name = EXCLUDED.registry_name,
+          registry_account_id = EXCLUDED.registry_account_id,
+          website = EXCLUDED.website,
+          tax_id = EXCLUDED.tax_id,
+          payout_method = EXCLUDED.payout_method,
+          payout_reference = EXCLUDED.payout_reference,
+          updated_at = NOW()
+        RETURNING *
+      `);
+
+      return res.json({
+        success: true,
+        sellerProfile: (result as any).rows?.[0] || null,
+        nextStep: "Upload / verify KYB documents and inventory.",
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Admin KYB decision
+  app.patch("/api/admin/seller/kyb/:sellerProfileId", requireAdminHeader, async (req, res) => {
+    try {
+      const { sellerProfileId } = req.params;
+      const { kybStatus, riskScore = 0, autoApproved = false, note } = req.body || {};
+
+      if (!["verified", "rejected", "pending"].includes(String(kybStatus))) {
+        return res.status(400).json({ error: "kybStatus must be verified, rejected, or pending." });
+      }
+
+      await db.execute(sql`
+        UPDATE seller_profiles
+        SET
+          kyb_status = ${kybStatus},
+          onboarding_status = CASE
+            WHEN ${kybStatus} = 'verified' THEN 'active'
+            WHEN ${kybStatus} = 'rejected' THEN 'blocked'
+            ELSE 'pending_kyb'
+          END,
+          risk_score = ${Number(riskScore)},
+          auto_approved = ${Boolean(autoApproved)},
+          last_reviewed_at = NOW(),
+          updated_at = NOW()
+        WHERE id = ${sellerProfileId}
+      `);
+
+      if (String(kybStatus) === "rejected") {
+        await raiseException("seller_profile", sellerProfileId, "kyb_rejected", note || "Seller KYB rejected.", { sellerProfileId }, "high");
+      }
+
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Seller inventory / registry verification record
+  app.post("/api/seller/inventory/verify", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const {
+        listingSubmissionId,
+        registrySerial,
+        standard,
+        requestedVolumeTonnes,
+        verifiedVolumeTonnes,
+        verificationMethod = "manual_plus_rules",
+        evidence = {},
+      } = req.body || {};
+
+      if (!registrySerial || !standard || !requestedVolumeTonnes) {
+        return res.status(400).json({ error: "registrySerial, standard, and requestedVolumeTonnes are required." });
+      }
+
+      const sellerProfile = await db.execute(sql`
+        SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const seller = (sellerProfile as any).rows?.[0];
+      if (!seller) return res.status(404).json({ error: "Seller profile not found." });
+
+      const verificationStatus =
+        String(verifiedVolumeTonnes || requestedVolumeTonnes) > "0" && String(registrySerial).trim().length >= 6
+          ? "verified"
+          : "pending";
+
+      const insert = await db.execute(sql`
+        INSERT INTO seller_inventory_verifications (
+          seller_profile_id,
+          listing_submission_id,
+          registry_serial,
+          standard,
+          requested_volume_tonnes,
+          verified_volume_tonnes,
+          verification_status,
+          verification_method,
+          evidence_json,
+          verified_at
+        )
+        VALUES (
+          ${seller.id},
+          ${listingSubmissionId || null},
+          ${registrySerial},
+          ${standard},
+          ${Number(requestedVolumeTonnes)},
+          ${Number(verifiedVolumeTonnes || requestedVolumeTonnes)},
+          ${verificationStatus},
+          ${verificationMethod},
+          ${JSON.stringify(evidence)}::jsonb,
+          CASE WHEN ${verificationStatus} = 'verified' THEN NOW() ELSE NULL END
+        )
+        RETURNING *
+      `);
+
+      return res.json({ success: true, verification: (insert as any).rows?.[0] || null });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Seller listing auto-submit -> applies rules and either auto-approves or queues
+  app.post("/api/seller/listing/auto-submit", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const {
+        orgName,
+        contactName,
+        standard,
+        creditType,
+        volumeTonnes,
+        askingPricePerTonne,
+        projectOrigin,
+        registrySerial,
+      } = req.body || {};
+
+      if (!orgName || !contactName || !standard || !creditType || !volumeTonnes || !askingPricePerTonne || !projectOrigin) {
+        return res.status(400).json({ error: "Missing required listing fields." });
+      }
+
+      const sellerProfileResult = await db.execute(sql`
+        SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const seller = (sellerProfileResult as any).rows?.[0];
+      if (!seller) return res.status(404).json({ error: "Seller profile not found." });
+
+      const listing = await storage.createExchangeCreditListing({
+        orgName,
+        contactName,
+        email,
+        standard,
+        creditType,
+        volumeTonnes: String(volumeTonnes),
+        askingPricePerTonne: String(askingPricePerTonne),
+        projectOrigin,
+        registrySerial: registrySerial || null,
+      });
+
+      const verificationResult = await db.execute(sql`
+        SELECT *
+        FROM seller_inventory_verifications
+        WHERE seller_profile_id = ${seller.id}
+          AND registry_serial = ${registrySerial || ""}
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const inventory = (verificationResult as any).rows?.[0];
+
+      const rules = evaluateListingRules({
+        kybStatus: seller.kyb_status,
+        registrySerial,
+        volumeTonnes: Number(volumeTonnes),
+        askingPricePerTonne: Number(askingPricePerTonne),
+        standard,
+        inventoryVerified: inventory?.verification_status === "verified",
+        riskScore: seller.risk_score,
+      });
+
+      await db.execute(sql`
+        INSERT INTO exchange_listing_review_queue (
+          listing_submission_id,
+          seller_profile_id,
+          decision,
+          reason,
+          rule_hits,
+          auto_decision,
+          priority,
+          decided_at
+        )
+        VALUES (
+          ${listing.id},
+          ${seller.id},
+          ${rules.decision === "approved" ? "approved" : rules.decision === "rejected" ? "rejected" : "pending"},
+          ${rules.reason},
+          ${JSON.stringify(rules.ruleHits)}::jsonb,
+          ${rules.decision !== "manual_review"},
+          ${rules.priority},
+          CASE WHEN ${rules.decision} != 'manual_review' THEN NOW() ELSE NULL END
+        )
+      `);
+
+      await db.execute(sql`
+        UPDATE seller_profiles
+        SET risk_score = ${rules.riskScore}, updated_at = NOW()
+        WHERE id = ${seller.id}
+      `);
+
+      if (rules.decision === "approved") {
+        const approved = await storage.approveCreditListing(listing.id);
+        return res.json({
+          success: true,
+          mode: "auto_approved",
+          listing,
+          approvedListing: approved,
+          ruleHits: rules.ruleHits,
+        });
+      }
+
+      if (rules.decision === "rejected") {
+        await storage.rejectCreditListing(listing.id);
+        await raiseException("listing_submission", listing.id, "listing_auto_rejected", rules.reason, { ruleHits: rules.ruleHits }, "high");
+        return res.status(422).json({
+          success: false,
+          mode: "rejected",
+          listing,
+          reason: rules.reason,
+          ruleHits: rules.ruleHits,
+        });
+      }
+
+      return res.json({
+        success: true,
+        mode: "manual_review",
+        listing,
+        reason: rules.reason,
+        ruleHits: rules.ruleHits,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // RFQ auto-match
+  app.post("/api/exchange/rfq/auto-match", requireExchangeAuth, async (req, res) => {
+    try {
+      const buyerEmail = String((req as any).exchangeEmail || "").toLowerCase();
+      const { rfqId, maxPriceSlippagePct = 8 } = req.body || {};
+      if (!rfqId) return res.status(400).json({ error: "rfqId required." });
+
+      const rfqResult = await db.execute(sql`
+        SELECT * FROM exchange_rfqs WHERE id = ${rfqId} LIMIT 1
+      `);
+      const rfq = (rfqResult as any).rows?.[0];
+      if (!rfq) return res.status(404).json({ error: "RFQ not found." });
+      if (String(rfq.email).toLowerCase() !== buyerEmail) {
+        return res.status(403).json({ error: "You can only auto-match your own RFQ." });
+      }
+
+      const targetPrice = Number(rfq.target_price || 0);
+      const maxPrice = targetPrice > 0 ? targetPrice * (1 + Number(maxPriceSlippagePct) / 100) : null;
+
+      const candidatesResult = await db.execute(sql`
+        SELECT
+          el.*,
+          sp.id AS seller_profile_id,
+          sp.exchange_account_email AS seller_email,
+          sp.kyb_status,
+          sp.onboarding_status,
+          sp.risk_score
+        FROM exchange_listings el
+        JOIN exchange_credit_listings ecl
+          ON ecl.org_name = split_part(el.name, ' — ', 2)
+        JOIN seller_profiles sp
+          ON sp.exchange_account_email = ecl.email
+        WHERE el.status = 'active'
+          AND el.standard = ${rfq.standard}
+          AND sp.kyb_status = 'verified'
+          AND sp.onboarding_status = 'active'
+          ${" "}
+        ORDER BY el.price_per_tonne ASC, sp.risk_score ASC, el.created_at DESC
+        LIMIT 10
+      `);
+
+      const candidates = (candidatesResult as any).rows || [];
+      const viable = candidates.find((c: any) => maxPrice == null || Number(c.price_per_tonne) <= maxPrice);
+
+      if (!viable) {
+        await raiseException("rfq", rfqId, "rfq_no_match", "No viable seller listing found for RFQ.", { rfqId, standard: rfq.standard }, "medium");
+        return res.status(404).json({ error: "No viable listing found." });
+      }
+
+      const confidence = Math.max(
+        60,
+        100
+          - Math.min(25, viable.risk_score || 0)
+          - (targetPrice > 0 ? Math.min(15, Math.round(((Number(viable.price_per_tonne) - targetPrice) / targetPrice) * 100)) : 0)
+      );
+
+      const matchResult = await db.execute(sql`
+        INSERT INTO exchange_rfq_matches (
+          rfq_id,
+          listing_id,
+          seller_profile_id,
+          buyer_email,
+          seller_email,
+          standard,
+          matched_volume_tonnes,
+          matched_price_per_tonne,
+          status,
+          negotiation_summary,
+          confidence
+        )
+        VALUES (
+          ${rfqId},
+          ${viable.id},
+          ${viable.seller_profile_id},
+          ${buyerEmail},
+          ${viable.seller_email},
+          ${rfq.standard},
+          ${Math.min(Number(rfq.volume_tonnes), 999999999)},
+          ${Number(viable.price_per_tonne)},
+          'proposed',
+          ${`Auto-match proposed from active listing ${viable.name}.`},
+          ${confidence}
+        )
+        RETURNING *
+      `);
+
+      return res.json({
+        success: true,
+        match: (matchResult as any).rows?.[0] || null,
+        listing: viable,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Settlement run -> creates payout release workflow row
+  app.post("/api/exchange/settlement/run/:tradeId", requireAdminHeader, async (req, res) => {
+    try {
+      const { tradeId } = req.params;
+      const trade = await storage.getExchangeTradeByTradeId(tradeId);
+      if (!trade) return res.status(404).json({ error: "Trade not found." });
+      if (trade.status !== "completed" && trade.status !== "retired") {
+        return res.status(400).json({ error: "Trade is not settlement-ready." });
+      }
+
+      const listingSeller = await db.execute(sql`
+        SELECT
+          sp.id AS seller_profile_id,
+          sp.exchange_account_email AS seller_email,
+          sp.payout_method,
+          sp.payout_reference
+        FROM seller_profiles sp
+        JOIN exchange_credit_listings ecl
+          ON ecl.email = sp.exchange_account_email
+        WHERE ecl.standard = ${trade.standard}
+        ORDER BY ecl.created_at DESC
+        LIMIT 1
+      `);
+      const seller = (listingSeller as any).rows?.[0];
+      if (!seller) {
+        await raiseException("trade", tradeId, "seller_profile_missing", "Could not resolve seller for settlement.", { tradeId, standard: trade.standard }, "high");
+        return res.status(422).json({ error: "Seller payout target not found." });
+      }
+
+      const fee = Number(trade.feeEur || 0);
+      const gross = Number(trade.grossEur || 0);
+      const sellerNet = Math.max(0, gross - fee);
+
+      const payout = await db.execute(sql`
+        INSERT INTO seller_payouts (
+          trade_id,
+          seller_profile_id,
+          seller_email,
+          gross_eur,
+          fee_eur,
+          seller_net_eur,
+          payout_status,
+          payout_provider,
+          payout_reference
+        )
+        VALUES (
+          ${tradeId},
+          ${seller.seller_profile_id},
+          ${seller.seller_email},
+          ${gross},
+          ${fee},
+          ${sellerNet},
+          'pending_release',
+          'workflow_only',
+          ${seller.payout_reference || null}
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING *
+      `);
+
+      const payoutRow = (payout as any).rows?.[0];
+
+      await db.execute(sql`
+        INSERT INTO exchange_settlement_runs (
+          trade_id,
+          payout_id,
+          seller_email,
+          buyer_email,
+          gross_eur,
+          fee_eur,
+          seller_net_eur,
+          settlement_status,
+          detail,
+          settled_at
+        )
+        VALUES (
+          ${tradeId},
+          ${payoutRow?.id || null},
+          ${seller.seller_email},
+          ${trade.accountEmail},
+          ${gross},
+          ${fee},
+          ${sellerNet},
+          'prepared',
+          ${JSON.stringify({ payoutMethod: seller.payout_method || "bank_transfer" })}::jsonb,
+          NOW()
+        )
+      `);
+
+      return res.json({
+        success: true,
+        tradeId,
+        sellerEmail: seller.seller_email,
+        sellerNetEur: sellerNet,
+        payout: payoutRow || null,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Release payout workflow
+  app.post("/api/exchange/payout/release/:tradeId", requireAdminHeader, async (req, res) => {
+    try {
+      const { tradeId } = req.params;
+      const payoutResult = await db.execute(sql`
+        SELECT * FROM seller_payouts WHERE trade_id = ${tradeId} ORDER BY created_at DESC LIMIT 1
+      `);
+      const payout = (payoutResult as any).rows?.[0];
+      if (!payout) return res.status(404).json({ error: "Payout not found." });
+      if (payout.payout_status === "released") return res.json({ success: true, alreadyReleased: true, payout });
+
+      await db.execute(sql`
+        UPDATE seller_payouts
+        SET payout_status = 'released', released_at = NOW()
+        WHERE id = ${payout.id}
+      `);
+
+      await db.execute(sql`
+        UPDATE exchange_settlement_runs
+        SET settlement_status = 'released', settled_at = NOW()
+        WHERE trade_id = ${tradeId}
+      `);
+
+      return res.json({ success: true, released: true, tradeId, payoutId: payout.id });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Admin autonomy queue
+  app.get("/api/admin/autonomous-marketplace/queue", requireAdminHeader, async (_req, res) => {
+    try {
+      const [reviewQueue, exceptions, payouts, matches] = await Promise.all([
+        db.execute(sql`SELECT * FROM exchange_listing_review_queue ORDER BY decision ASC, priority ASC, created_at DESC LIMIT 100`),
+        db.execute(sql`SELECT * FROM exchange_exception_queue WHERE status = 'open' ORDER BY severity ASC, created_at DESC LIMIT 100`),
+        db.execute(sql`SELECT * FROM seller_payouts ORDER BY created_at DESC LIMIT 100`),
+        db.execute(sql`SELECT * FROM exchange_rfq_matches ORDER BY created_at DESC LIMIT 100`),
+      ]);
+
+      return res.json({
+        reviewQueue: (reviewQueue as any).rows || [],
+        exceptions: (exceptions as any).rows || [],
+        payouts: (payouts as any).rows || [],
+        rfqMatches: (matches as any).rows || [],
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Exception resolution
+  app.post("/api/admin/exceptions/:id/resolve", requireAdminHeader, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const who = String(req.headers["x-admin-key"] ? "admin_key_holder" : "admin");
+      await db.execute(sql`
+        UPDATE exchange_exception_queue
+        SET status = 'resolved', resolved_at = NOW(), resolved_by = ${who}
+        WHERE id = ${id}
+      `);
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+}

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { EnterpriseOpsDashboard } from "@/components/admin/EnterpriseOpsDashboard";
 import { LaunchChecklist } from "@/components/admin/LaunchChecklist";
 import { IncidentBanner } from "@/components/admin/IncidentBanner";
+import { AutonomousMarketplaceAdmin } from "@/components/admin/AutonomousMarketplaceAdmin";
 
 const C = {
   bg: '#05080f',
@@ -60,7 +61,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
@@ -227,7 +228,8 @@ export default function Admin() {
           {[
             { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
             { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
-            { id: 'health', label: 'System Health', count: null }
+            { id: 'health', label: 'System Health', count: null },
+            { id: 'autonomy', label: 'Autonomous Marketplace', count: null }
           ].map(tab => (
             <button
               key={tab.id}
@@ -370,6 +372,17 @@ export default function Admin() {
             )}
           </div>
         )}
+        {/* Panel 4: Autonomous Marketplace */}
+        {activeTab === 'autonomy' && (
+          <div style={{ animation: 'fadeIn .3s ease', color: C.text, fontFamily: F.syne }}>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Autonomous Marketplace</h2>
+              <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Review queue, RFQ matches, payout pipeline, and exception triage.</p>
+            </div>
+            <AutonomousMarketplaceAdmin adminKey={adminKey} />
+          </div>
+        )}
+
       <section style={{ padding: '0 24px 40px', maxWidth: 1400, margin: '0 auto' }}>
         <IncidentBanner status="ok" message="All systems operational. No active incidents." />
         <EnterpriseOpsDashboard adminKey={adminKey} />
