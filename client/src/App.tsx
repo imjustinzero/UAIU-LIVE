@@ -17,6 +17,7 @@ import Legal from "@/pages/Legal";
 import ZStop from "@/pages/ZStop";
 import SellerConnect from "@/pages/SellerConnect";
 import RetireUpload from "@/pages/RetireUpload";
+import VerifyTrade from "@/pages/VerifyTrade";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/feed" component={Feed} />
       <Route path="/live" component={LiveVideo} />
+      <Route path="/x/verify/:hash" component={VerifyTrade} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />
       <Route path="/security" component={Security} />

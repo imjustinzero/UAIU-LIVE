@@ -1788,6 +1788,35 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  app.get('/api/exchange/verify/:hash', async (req, res) => {
+    try {
+      const hash = String(req.params.hash || '').trim();
+      if (!hash) return res.status(400).json({ error: 'Receipt hash required' });
+
+      const result = await db.execute(sql`
+        SELECT trade_id, standard, volume_tonnes, gross_eur, created_at, receipt_hash
+        FROM exchange_trades
+        WHERE receipt_hash = ${hash}
+        LIMIT 1
+      `);
+
+      const row = (result as any).rows?.[0];
+      if (!row) return res.status(404).json({ error: 'Trade not found' });
+
+      res.json({
+        verified: true,
+        tradeId: row.trade_id,
+        standard: row.standard,
+        volumeTonnes: Number(row.volume_tonnes || 0),
+        grossEur: Number(row.gross_eur || 0),
+        settledAt: row.created_at,
+        receiptHash: row.receipt_hash,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
   // Trade recording is handled exclusively by the Stripe webhook handler.
   // The public /api/exchange/trade/record endpoint has been removed for security.
 
@@ -2591,6 +2620,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   }
 
+  app.post('/api/daily/create-room', requireExchangeAuth, async (req, res) => {
+    try {
+      const room = await createDailyRoom();
+      if (!room) return res.status(503).json({ error: 'Live video unavailable' });
+      return res.json({ roomUrl: room.roomUrl, roomName: room.roomName });
+    } catch (err: any) {
+      console.error('[Daily] create-room endpoint error:', err?.message || err);
+      return res.status(500).json({ error: 'Failed to create room' });
+    }
+  });
+
   async function createDailyToken(roomName: string, userName: string): Promise<string | null> {
     if (!DAILY_API_KEY) return null;
     try {
@@ -3218,6 +3258,74 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // ─── AI Exchange Routes ───────────────────────────────────────────
 
+  app.post('/api/ai/parse-rfq', async (req, res) => {
+    try {
+      const text = String(req.body?.text || req.body?.prompt || '').trim();
+      if (!text) return res.status(400).json({ error: 'text required' });
+
+      const standards = [
+        'EU ETS — European Allowances',
+        'Verra VCS — Verified Carbon Standard',
+        'Gold Standard',
+        'CORSIA — Aviation Offsets',
+        'Blue Carbon — Seagrass / Coral',
+        'REDD++ — Forest Conservation',
+        'SwissX B100 — Caribbean Biofuel',
+      ];
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        try {
+          const Anthropic = (await import('@anthropic-ai/sdk')).default;
+          const client = new Anthropic({ apiKey });
+          const response = await client.messages.create({
+            model: 'claude-sonnet-4-5',
+            max_tokens: 600,
+            messages: [{
+              role: 'user',
+              content: `Extract RFQ fields from this text and return ONLY JSON with optional fields: side (buy/sell), standard, volume_tonnes, target_price_eur, deadline, notes. Use one of these standards when possible: ${standards.join(', ')}. Text: "${text}"`
+            }]
+          });
+          const out = response.content[0].type === 'text' ? response.content[0].text : '';
+          const match = out.match(/\{[\s\S]*\}/);
+          if (match) {
+            const rfq = JSON.parse(match[0]);
+            return res.json({ rfq });
+          }
+        } catch (aiErr: any) {
+          console.warn('[AI parse-rfq] Anthropic parse failed, using fallback:', aiErr?.message);
+        }
+      }
+
+      const vol = text.match(/(\d[\d,]*)(?:\s*)(thousand|k)?\s*(?:tonnes?|tons?|t\b)/i);
+      const price = text.match(/(?:under|below|at|target)\s*(?:€|eur|euro)?\s*(\d+(?:\.\d+)?)/i);
+      const deadline = text.match(/(\d{4}-\d{2}-\d{2})/);
+      const inferredStandard =
+        /eu\s*ets/i.test(text) ? 'EU ETS — European Allowances' :
+        /corsia/i.test(text) ? 'CORSIA — Aviation Offsets' :
+        /gold/i.test(text) ? 'Gold Standard' :
+        /blue\s*carbon/i.test(text) ? 'Blue Carbon — Seagrass / Coral' :
+        /redd/i.test(text) ? 'REDD++ — Forest Conservation' :
+        /b100|swissx/i.test(text) ? 'SwissX B100 — Caribbean Biofuel' :
+        /vcs|verra/i.test(text) ? 'Verra VCS — Verified Carbon Standard' :
+        'Verra VCS — Verified Carbon Standard';
+
+      const rfq = {
+        side: /sell/i.test(text) ? 'sell' : 'buy',
+        standard: inferredStandard,
+        volume_tonnes: vol ? parseInt(vol[1].replace(/,/g, '')) * (/thousand|k/i.test(vol[2] || '') ? 1000 : 1) : 5000,
+        target_price_eur: price ? parseFloat(price[1]) : undefined,
+        deadline: deadline ? deadline[1] : undefined,
+        notes: text,
+      };
+
+      res.json({ rfq });
+    } catch (err: any) {
+      console.error('AI parse RFQ error:', err?.message);
+      res.status(500).json({ error: 'Failed to parse RFQ' });
+    }
+  });
+
   app.post('/api/exchange/ai-rfq', requireAuth, async (req, res) => {
     try {
       const { message } = req.body;
@@ -3312,7 +3420,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const { tradeId, receiptHash, complianceEmail } = req.body;
       if (!tradeId || !complianceEmail) return res.status(400).json({ error: 'tradeId and complianceEmail required' });
       const token = 'APPR-' + Math.random().toString(36).slice(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
-      const approvalUrl = `https://uaiu.live/approve/${token}`;
+      const approvalUrl = `https://uaiu.live/x/verify/${encodeURIComponent(String(receiptHash || ''))}`;
       // Send approval email via existing Zoho/Resend
       try {
         const { sendExchangeEmail } = await import('./email-service');
