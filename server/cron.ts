@@ -11,6 +11,8 @@ import {
   isS3Configured,
   uploadToS3,
   pruneS3Backups,
+  validateS3Access,
+  classifyS3Error,
 } from "./backup-storage";
 
 const BACKUP_DIR = "/tmp/uaiu_backups";
@@ -142,9 +144,36 @@ export async function triggerDatabaseBackup(
       let storageProvider = "local";
 
       if (isS3Configured()) {
-        try {
-          console.log(`[Backup S3] Uploading ${filename}...`);
-          const s3Result = await uploadToS3(backupFile, filename);
+        const s3Validation = await validateS3Access();
+        if (!s3Validation.ok) {
+          const detail = s3Validation.detail || "";
+          const message = s3Validation.message || "Bucket validation failed";
+          const code = s3Validation.code || "unknown";
+          console.error(`[Backup S3] Validation failed for bucket ${s3Validation.bucket || "(unset)"}: ${message} [code=${code}] [${detail}]`);
+          uploadStatus = "upload_failed";
+          if (logId) {
+            await db
+              .execute(sql`
+                UPDATE backup_logs
+                SET upload_status = 'upload_failed',
+                    error_message = ${message}
+                WHERE id = ${logId}
+              `)
+              .catch(() => {});
+          }
+
+          await sendBackupFailureAlert({
+            filename,
+            message,
+            code,
+            detail,
+          }).catch((emailErr: any) => {
+            console.error("[Backup S3] Failed to send backup failure alert:", emailErr.message);
+          });
+        } else {
+          try {
+            console.log(`[Backup S3] Uploading ${filename}...`);
+            const s3Result = await uploadToS3(backupFile, filename);
           s3Key = s3Result.key;
           uploadStatus = "uploaded";
           storageProvider = "s3";
@@ -166,33 +195,33 @@ export async function triggerDatabaseBackup(
           console.log(`[Backup S3] Uploaded to ${s3Key}`);
 
           // Prune remote backups
-          await pruneS3Backups(S3_BACKUP_KEEP).catch((e: any) =>
-            console.warn("[Backup S3] Remote prune failed:", e.message)
-          );
-        } catch (s3Err: any) {
-          const errCode = s3Err.Code || s3Err.code || s3Err.name || "unknown";
-          const errDetail = s3Err.$metadata ? `HTTP ${s3Err.$metadata.httpStatusCode}` : "";
-          console.error(`[Backup S3] Upload failed: ${s3Err.message} [code=${errCode}] [${errDetail}]`);
-          uploadStatus = "upload_failed";
-          if (logId) {
-            await db
-              .execute(sql`
-                UPDATE backup_logs
-                SET upload_status = 'upload_failed',
-                    error_message = ${s3Err.message}
-                WHERE id = ${logId}
-              `)
-              .catch(() => {});
-          }
+            await pruneS3Backups(S3_BACKUP_KEEP).catch((e: any) =>
+              console.warn("[Backup S3] Remote prune failed:", e.message)
+            );
+          } catch (s3Err: any) {
+            const parsed = classifyS3Error(s3Err);
+            console.error(`[Backup S3] Upload failed: ${parsed.message} [code=${parsed.code}] [${parsed.detail}]`);
+            uploadStatus = "upload_failed";
+            if (logId) {
+              await db
+                .execute(sql`
+                  UPDATE backup_logs
+                  SET upload_status = 'upload_failed',
+                      error_message = ${parsed.message}
+                  WHERE id = ${logId}
+                `)
+                .catch(() => {});
+            }
 
-          await sendBackupFailureAlert({
-            filename,
-            message: String(s3Err.message || "unknown error"),
-            code:    String(errCode),
-            detail:  errDetail,
-          }).catch((emailErr: any) => {
-            console.error("[Backup S3] Failed to send backup failure alert:", emailErr.message);
-          });
+            await sendBackupFailureAlert({
+              filename,
+              message: parsed.message,
+              code: parsed.code,
+              detail: parsed.detail,
+            }).catch((emailErr: any) => {
+              console.error("[Backup S3] Failed to send backup failure alert:", emailErr.message);
+            });
+          }
         }
       } else {
         console.log(
