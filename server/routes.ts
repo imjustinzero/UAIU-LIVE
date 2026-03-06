@@ -128,7 +128,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
               if (
                 event.type === 'payment_intent.amount_capturable_updated' ||
-                event.type === 'payment_intent.requires_capture'
+                (event.type as string) === 'payment_intent.requires_capture'
               ) {
                 const pi = event.data.object as any;
                 if (pi.metadata?.escrow_type === 'carbon_credit_t1' && pi.status === 'requires_capture') {
@@ -1870,12 +1870,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       });
     } catch (err: any) {
       console.error('[KYC Start]', err);
-      res.status(500).json({ error: err.message || 'KYC session creation failed' });
+      res.status(500).json({ error: safeError(err) });
     }
   });
 
   // GET /api/kyc/status/:session_id — poll to check verification result
-  app.get('/api/kyc/status/:session_id', async (req, res) => {
+  app.get('/api/kyc/status/:session_id', requireExchangeAuth, async (req, res) => {
     try {
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
@@ -1905,7 +1905,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.json({ session_id: req.params.session_id, status: session.status, verified });
     } catch (err: any) {
       console.error('[KYC Status]', err);
-      res.status(500).json({ error: err.message || 'KYC status check failed' });
+      res.status(500).json({ error: safeError(err) });
     }
   });
 
@@ -1917,13 +1917,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
     // PostgreSQL
     try { await db.execute(sql`SELECT 1`); results.postgresql = { status: 'OK' }; }
-    catch (e: any) { results.postgresql = { status: 'FAIL', error: e.message }; }
+    catch (e: any) { console.error('[Health Check] PostgreSQL:', e); results.postgresql = { status: 'FAIL', error: 'Database unreachable' }; }
 
     // Live marketplace
     try {
       const listings = await storage.getExchangeListings();
       results.marketplace = { status: 'OK', live_listings: listings.length };
-    } catch (e: any) { results.marketplace = { status: 'FAIL', error: e.message }; }
+    } catch (e: any) { console.error('[Health Check] Marketplace:', e); results.marketplace = { status: 'FAIL', error: 'Listing fetch failed' }; }
 
     // Stripe
     try {
@@ -1933,7 +1933,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const stripe = new Stripe(sk, { apiVersion: '2024-12-18.acacia' as any });
       await stripe.paymentIntents.list({ limit: 1 });
       results.stripe = { status: 'OK' };
-    } catch (e: any) { results.stripe = { status: 'FAIL', error: e.message }; }
+    } catch (e: any) { console.error('[Health Check] Stripe:', e); results.stripe = { status: 'FAIL', error: 'Stripe connection failed' }; }
 
     // Webhook UUID
     const wuuid = process.env.STRIPE_WEBHOOK_UUID;

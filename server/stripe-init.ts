@@ -13,7 +13,6 @@ export async function initStripe() {
     console.log('🔧 Initializing Stripe schema...');
     await runMigrations({ 
       databaseUrl,
-      schema: 'stripe'
     });
     console.log('✅ Stripe schema ready');
 

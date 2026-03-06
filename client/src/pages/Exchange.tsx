@@ -1071,7 +1071,7 @@ export default function Exchange() {
                 <input className="x-fi" style={{ ...s.fi, flex: 1, maxWidth: 280, fontFamily: F.mono, fontSize: 11 }} placeholder="Search credits..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-credits" />
               </div>
             </div>
-            <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder }}>
+            <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder }}>
               {filteredListings.map(l => {
                 const bs = getBadgeStyle(l.standard, C);
                 const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
@@ -1197,7 +1197,7 @@ export default function Exchange() {
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Citizens <em style={{ fontStyle: 'italic', color: C.gold }}>Portal.</em></h2>
             <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>Five sovereign nations participate in the Carbon Union, generating verified credits from environmental programs that trade on global markets.</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 64 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 64 }}>
               {[
                 { code: 'AG', name: 'Antigua & Barbuda', role: 'Registry HQ' },
                 { code: 'TO', name: 'Tonga', role: 'Pacific Blue Carbon' },
@@ -1283,7 +1283,7 @@ export default function Exchange() {
             </div>
 
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />What Generates Credits</div>
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginTop: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginTop: 20 }}>
               {[
                 { Icon: Waves, title: 'Sargassum Seaweed', text: 'Harvested from Caribbean beaches, converted into SwissX B100 biofuel. 93% lower emissions than diesel.', detail: '1 credit per 90 gallons produced' },
                 { Icon: Leaf, title: 'Agricultural Waste', text: 'Crop residues, manure, and organic waste converted to biogas and regenerative soil products across Kenya and Zambia.', detail: 'Measured per tonne CO₂ averted' },
@@ -1635,7 +1635,7 @@ export default function Exchange() {
           <div className="x-section" style={s.sectionWrap}>
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Trust &amp; Verification</div>
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 56 }}>Every trade.<br /><em style={{ fontStyle: 'italic', color: C.gold }}>On the record.</em></h2>
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
               {[
                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
                 { Icon: Clock, title: 'T+1 Settlement', text: 'Credits transfer to your registry account within one business day of trade execution. Full settlement confirmation with audit trail.' },

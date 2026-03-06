@@ -66,7 +66,7 @@ export function ActionLog() {
                     {log.message}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatTimestamp(log.timestamp)}
+                    {formatTimestamp(new Date(log.timestamp).getTime())}
                   </p>
                 </div>
               ))
