@@ -115,6 +115,9 @@ export default async function runApp(
   // restarts (e.g. during development hot-reload) don't cause EADDRINUSE.
   const shutdown = (signal: string) => {
     log(`${signal} received — closing HTTP server`);
+    // Force-drop all sockets immediately (Socket.IO long-polls would otherwise
+    // hold the port open past our EADDRINUSE retry window).
+    try { (server as any).closeAllConnections?.(); } catch {}
     server.close(() => {
       log('HTTP server closed');
       process.exit(0);

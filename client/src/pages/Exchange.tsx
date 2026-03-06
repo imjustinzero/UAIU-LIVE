@@ -14,7 +14,7 @@ import { AIComplianceCoPilot } from "../components/exchange/ComplianceCoPilot";
 import { AIPricePrediction, DueDiligenceReport } from "../components/exchange/AIPredictionAndDD";
 import { EscrowSettlement } from "../components/exchange/EscrowUI";
 import { TradeTicker, type TickerTrade } from "../components/exchange/TradeTicker";
-import { OrderBook, useETSPrice } from "../components/exchange/OrderBook";
+import { OrderBook } from "../components/exchange/OrderBook";
 import { AIMarketIntelligence, AIRFQAssistant } from "../components/exchange/AIFeatures";
 import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/SupplyFeatures";
 import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
@@ -378,7 +378,6 @@ export default function Exchange() {
   const [termsAccepting, setTermsAccepting] = useState(false);
   const [pendingTradeAction, setPendingTradeAction] = useState<(() => void) | null>(null);
 
-  const [livePrices, setLivePrices] = useState<Record<string, { price: number; changePct: number; up: boolean }>>({});
   const [dbTrades, setDbTrades] = useState<any[]>([]);
   const [dbTradesLoading, setDbTradesLoading] = useState(false);
 
@@ -406,9 +405,6 @@ export default function Exchange() {
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
-  const currentIndexPrice = 67.43;
-  const etsPrice = useETSPrice(currentIndexPrice);
-
   const { data: listings = [] } = useQuery<Listing[]>({ queryKey: ['/api/exchange/listings'] });
 
   function showToast(msg: string) {
@@ -430,31 +426,7 @@ export default function Exchange() {
     return !!(hp && hp.value.length > 0);
   }
 
-  // Live price polling every 30s
-  useEffect(() => {
-    function fetchPrices() {
-      fetch('/api/exchange/prices').then(r => r.json()).then((prices: any[]) => {
-        const map: Record<string, { price: number; changePct: number; up: boolean }> = {};
-        prices.forEach(p => { map[p.symbol] = { price: p.price, changePct: p.changePct, up: p.up }; });
-        setLivePrices(map);
-      }).catch(() => {});
-    }
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch chart data when trade modal opens for a symbol
-  useEffect(() => {
-    if (!showTradeModal) { setChartData([]); return; }
-    const sym = currentListing ? (currentListing.standard === 'VCS' && currentListing.name.includes('Blue') ? 'BLUE CARB' : currentListing.standard === 'VCS' && currentListing.name.includes('B100') ? 'VCS B100' : currentListing.standard === 'GOLD STD' ? 'GOLD STD' : currentListing.standard) : 'EU ETS';
-    if (sym === chartSymbol && chartData.length > 0) return;
-    setChartLoading(true);
-    setChartSymbol(sym);
-    fetch(`/api/exchange/prices/${encodeURIComponent(sym)}/history`).then(r => r.json()).then((data: any[]) => {
-      setChartData(data.map((d: any) => ({ time: d.time, close: d.close })));
-    }).catch(() => {}).finally(() => setChartLoading(false));
-  }, [showTradeModal, currentListing]);
+  // Chart data is not populated — no simulated price feed.
 
   // Fetch DB trades when signed in
   useEffect(() => {
@@ -1053,9 +1025,9 @@ export default function Exchange() {
 
       <div style={{ position: 'fixed', inset: 0, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")`, pointerEvents: 'none', zIndex: 9999, opacity: 0.6 }} />
 
-      <TerminalMode listings={listings.map(l => ({ name: l.name, standard: l.standard, volume: 0, price: l.pricePerTonne, origin: l.origin, status: 'LIVE' }))} trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', side: t.side || 'BUY', standard: t.standard || 'VCS', volume: t.volume_tonnes || 0, price: t.price_eur_per_tonne || 0, time: new Date().toLocaleTimeString() }))} indexPrice={currentIndexPrice} etsPrice={typeof etsPrice === 'number' ? etsPrice : (etsPrice as any)?.price ?? currentIndexPrice * 1.07} />
+      <TerminalMode listings={listings.map(l => ({ name: l.name, standard: l.standard, volume: 0, price: l.sellerProfileId ? l.pricePerTonne : 0, origin: l.origin, status: l.sellerProfileId ? 'LIVE' : 'RFQ' }))} trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', side: t.side || 'BUY', standard: t.standard || 'VCS', volume: t.volume_tonnes || 0, price: t.price_eur_per_tonne || 0, time: new Date().toLocaleTimeString() }))} indexPrice={0} etsPrice={0} />
 
-      <AIComplianceCoPilot isDark={isDark} context={{ currentIndexPrice, etsPrice: typeof etsPrice === 'number' ? etsPrice : currentIndexPrice * 1.07, portfolioTonnes: sessionTrades.reduce((s, t) => s + (t.volume_tonnes || 0), 0), portfolioSpend: sessionTrades.reduce((s, t) => s + (t.gross_eur || 0), 0), accountType: sessionAccount?.accountType, listings: listings.map(l => ({ name: l.name, standard: l.standard, price: l.pricePerTonne, tonnes: 0 })) }} />
+      <AIComplianceCoPilot isDark={isDark} context={{ currentIndexPrice: 0, etsPrice: 0, portfolioTonnes: sessionTrades.reduce((s, t) => s + (t.volume_tonnes || 0), 0), portfolioSpend: sessionTrades.reduce((s, t) => s + (t.gross_eur || 0), 0), accountType: sessionAccount?.accountType, listings: listings.map(l => ({ name: l.name, standard: l.standard, price: l.sellerProfileId ? l.pricePerTonne : 0, tonnes: 0 })) }} />
 
       {escrowTrade && (
         <EscrowSettlement tradeId={escrowTrade.tradeId} amountEur={escrowTrade.amountEur} volumeTonnes={escrowTrade.volumeTonnes} standard={escrowTrade.standard} buyerEmail={sessionAccount?.email || ''} isDark={isDark} onSettled={() => setEscrowTrade(null)} onCancel={() => setEscrowTrade(null)} />
@@ -1070,8 +1042,8 @@ export default function Exchange() {
                 UAIU<sup style={{ color: C.gold, fontSize: 10, verticalAlign: 'super', letterSpacing: '0.2em', fontFamily: F.mono, fontWeight: 400 }}>.LIVE/X</sup>
               </div>
               <div style={{ height: 20, width: 1, background: C.goldborder }} className="x-hide-mobile" />
-              <div className="x-markets-open" style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.green, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="x-pulse" /> <span className="x-hide-tablet">Markets Open</span>
+              <div className="x-markets-open" style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.gold, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="x-hide-tablet">Accepting RFQs</span>
               </div>
             </div>
 
@@ -1173,16 +1145,14 @@ export default function Exchange() {
             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder }}>
               {filteredListings.map(l => {
                 const bs = getBadgeStyle(l.standard, C);
-                const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
-                const livePrice = livePrices[liveKey];
-                const displayPrice = livePrice ? livePrice.price : l.pricePerTonne;
-                const displayPct = livePrice ? Math.abs(livePrice.changePct) : Math.abs(l.changePercent);
-                const up = livePrice ? livePrice.up : l.changeDirection !== 'down';
+                const hasSellerPrice = !!(l.sellerProfileId && l.pricePerTonne > 0);
                 return (
                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                       <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '5px 12px', border: '1px solid', ...bs }}>{l.badgeLabel}</span>
-                      <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
+                      {l.registrySerial && l.registryName && (
+                        <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', color: C.green, display: 'flex', alignItems: 'center', gap: 4 }}>Verified</span>
+                      )}
                     </div>
                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
                     {l.registrySerial && l.registryName && (
@@ -1195,8 +1165,17 @@ export default function Exchange() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
                       <div>
                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Price / tonne</div>
-                        <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{displayPrice.toFixed(2)}</div>
-                        <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {displayPct.toFixed(2)}% today</div>
+                        {hasSellerPrice ? (
+                          <>
+                            <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{l.pricePerTonne.toFixed(2)}</div>
+                            <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 4 }}>Seller price</div>
+                          </>
+                        ) : (
+                          <>
+                            <a href="mailto:desk@uaiu.live" onClick={e => e.stopPropagation()} style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, letterSpacing: '0.08em', textDecoration: 'none', display: 'block', lineHeight: 1.4, borderBottom: `1px solid ${C.goldborder}`, paddingBottom: 4 }}>Contact desk<br />for pricing</a>
+                            <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 4 }}>desk@uaiu.live</div>
+                          </>
+                        )}
                       </div>
                       <div>
                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Standard</div>
@@ -1205,17 +1184,17 @@ export default function Exchange() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Buy Now</button>
+                      <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Enquire / Buy</button>
                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
                     </div>
                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
-                      <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={l.pricePerTonne} isDark={isDark} />
+                      <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={hasSellerPrice ? l.pricePerTonne : 0} isDark={isDark} />
                     </div>
                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
                       <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
                     </div>
                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
-                      <DueDiligenceReport listing={{ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, volume_tonnes: 0, origin: l.origin }} currentIndexPrice={currentIndexPrice} isDark={isDark} />
+                      <DueDiligenceReport listing={{ id: l.id, name: l.name, standard: l.standard, price: hasSellerPrice ? l.pricePerTonne : 0, volume_tonnes: 0, origin: l.origin }} currentIndexPrice={0} isDark={isDark} />
                     </div>
                   </div>
                 );
@@ -1241,7 +1220,7 @@ export default function Exchange() {
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {[
                     { n: '01', title: 'Open Your Account', text: 'Register as a corporate buyer, credit generator, or broker. KYC verification typically completes within 2 business hours. All account types accepted globally.', tag: 'Free · 2hrs' },
-                    { n: '02', title: 'Select Your Credits', text: 'Browse verified listings filtered by standard (EU ETS, VCS, Gold Standard, CORSIA), origin, vintage year, and price. Every credit is pre-verified for compliance.', tag: 'Real-time · Live Pricing' },
+                    { n: '02', title: 'Select Your Credits', text: 'Browse verified listings filtered by standard (EU ETS, VCS, Gold Standard, CORSIA), origin, vintage year, and price. Every credit is pre-verified for compliance.', tag: 'Verified · RFQ Pricing' },
                     { n: '03', title: 'Execute & Settle', text: 'Place your order. Instant price lock. Settlement within T+1. Credits transferred to your registry account with full blockchain provenance trail.', tag: 'T+1 Settlement · 0.75% Fee' },
                     { n: '04', title: 'Report & Retire', text: 'Auto-generate your EU ETS compliance report. Retire credits directly from your dashboard. One-click export for regulatory submission to EU and national authorities.', tag: 'Automated · Audit-Ready' },
                   ].map(step => (
@@ -1646,7 +1625,7 @@ export default function Exchange() {
               <div style={{ marginTop: 48 }}>
                 <AITradeNegotiator
                   rfqData={{ side: rfqSide, standard: rfqStandard, volume_tonnes: rfqVolume ? parseFloat(rfqVolume) : 0, target_price_eur: rfqPrice ? parseFloat(rfqPrice) : undefined, deadline: rfqDeadline }}
-                  currentIndexPrice={currentIndexPrice}
+                  currentIndexPrice={0}
                   isDark={isDark}
                 />
               </div>
@@ -1841,7 +1820,7 @@ export default function Exchange() {
         </div>
 
         <section id="prediction" style={{ borderTop: `1px solid ${C.goldborder}` }}>
-          <AIPricePrediction currentPrice={currentIndexPrice} isDark={isDark} />
+          <AIPricePrediction currentPrice={0} isDark={isDark} />
         </section>
 
         <section id="budget" style={{ borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
