@@ -312,6 +312,25 @@ export const exchangeAccounts = pgTable("exchange_accounts", {
   phone: varchar("phone"),
   accountType: varchar("account_type"),
   annualCo2Exposure: varchar("annual_co2_exposure"),
+  passwordHash: varchar("password_hash"),
+  acceptedTermsAt: timestamp("accepted_terms_at"),
+  kycStatus: varchar("kyc_status").notNull().default('not_started'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const exchangeTrades = pgTable("exchange_trades", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  accountEmail: varchar("account_email").notNull(),
+  tradeId: varchar("trade_id").notNull().unique(),
+  side: varchar("side").notNull(),
+  standard: varchar("standard").notNull(),
+  volumeTonnes: real("volume_tonnes").notNull(),
+  pricePerTonne: real("price_per_tonne").notNull(),
+  grossEur: real("gross_eur").notNull(),
+  feeEur: real("fee_eur").notNull().default(0),
+  receiptHash: varchar("receipt_hash"),
+  stripeSessionId: varchar("stripe_session_id"),
+  status: varchar("status").notNull().default('completed'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -385,6 +404,11 @@ export const insertWebhookFailureSchema = createInsertSchema(webhookFailures).om
   createdAt: true,
 });
 
+export const insertExchangeTradeSchema = createInsertSchema(exchangeTrades).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
 export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
@@ -395,6 +419,8 @@ export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
 export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
 export type WebhookFailure = typeof webhookFailures.$inferSelect;
 export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
+export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
+export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
 
 export interface GameState {
   matchId: string;

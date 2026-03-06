@@ -264,8 +264,45 @@ export default function Exchange() {
   const [sessionAccount, setSessionAccount] = useState<any>(null);
   const [acctModalTab, setAcctModalTab] = useState<'open' | 'signin'>('open');
   const [signinEmail, setSigninEmail] = useState('');
+  const [signinPassword, setSigninPassword] = useState('');
   const [signinLoading, setSigninLoading] = useState(false);
   const [signinError, setSigninError] = useState('');
+  const [signinNeedsPassword, setSigninNeedsPassword] = useState(false);
+  const [signinNewPassword, setSigninNewPassword] = useState('');
+
+  const [acctPassword, setAcctPassword] = useState('');
+  const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
+  const [acctShowKyc, setAcctShowKyc] = useState(false);
+
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsAccepting, setTermsAccepting] = useState(false);
+  const [pendingTradeAction, setPendingTradeAction] = useState<(() => void) | null>(null);
+
+  const [livePrices, setLivePrices] = useState<Record<string, { price: number; changePct: number; up: boolean }>>({});
+  const [dbTrades, setDbTrades] = useState<any[]>([]);
+  const [dbTradesLoading, setDbTradesLoading] = useState(false);
+
+  const [showRetireModal, setShowRetireModal] = useState(false);
+  const [retireTrade, setRetireTrade] = useState<any>(null);
+  const [retireeName, setRetireeName] = useState('');
+  const [retirePurpose, setRetirePurpose] = useState('');
+  const [retireSubmitting, setRetireSubmitting] = useState(false);
+
+  const [chartData, setChartData] = useState<{ time: number; close: number }[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartSymbol, setChartSymbol] = useState('');
+
+  const [instName, setInstName] = useState('');
+  const [instContact, setInstContact] = useState('');
+  const [instEmail, setInstEmail] = useState('');
+  const [instRole, setInstRole] = useState('');
+  const [instVolume, setInstVolume] = useState('');
+  const [instStandard, setInstStandard] = useState('EU ETS — European Allowances');
+  const [instMessage, setInstMessage] = useState('');
+  const [instSubmitting, setInstSubmitting] = useState(false);
+  const [instSuccess, setInstSuccess] = useState(false);
+
+  const [tradeSuccessBanner, setTradeSuccessBanner] = useState<{ show: boolean; tradeId: string } | null>(null);
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
@@ -292,6 +329,66 @@ export default function Exchange() {
     const hp = document.getElementById('_hp_exchange') as HTMLInputElement | null;
     return !!(hp && hp.value.length > 0);
   }
+
+  // Live price polling every 30s
+  useEffect(() => {
+    function fetchPrices() {
+      fetch('/api/exchange/prices').then(r => r.json()).then((prices: any[]) => {
+        const map: Record<string, { price: number; changePct: number; up: boolean }> = {};
+        prices.forEach(p => { map[p.symbol] = { price: p.price, changePct: p.changePct, up: p.up }; });
+        setLivePrices(map);
+      }).catch(() => {});
+    }
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch chart data when trade modal opens for a symbol
+  useEffect(() => {
+    if (!showTradeModal) { setChartData([]); return; }
+    const sym = currentListing ? (currentListing.standard === 'VCS' && currentListing.name.includes('Blue') ? 'BLUE CARB' : currentListing.standard === 'VCS' && currentListing.name.includes('B100') ? 'VCS B100' : currentListing.standard === 'GOLD STD' ? 'GOLD STD' : currentListing.standard) : 'EU ETS';
+    if (sym === chartSymbol && chartData.length > 0) return;
+    setChartLoading(true);
+    setChartSymbol(sym);
+    fetch(`/api/exchange/prices/${encodeURIComponent(sym)}/history`).then(r => r.json()).then((data: any[]) => {
+      setChartData(data.map((d: any) => ({ time: d.time, close: d.close })));
+    }).catch(() => {}).finally(() => setChartLoading(false));
+  }, [showTradeModal, currentListing]);
+
+  // Fetch DB trades when signed in
+  useEffect(() => {
+    if (!sessionAccount?.email) { setDbTrades([]); return; }
+    setDbTradesLoading(true);
+    fetch(`/api/exchange/trades?email=${encodeURIComponent(sessionAccount.email)}`).then(r => r.json()).then((data: any[]) => {
+      setDbTrades(Array.isArray(data) ? data : []);
+    }).catch(() => {}).finally(() => setDbTradesLoading(false));
+  }, [sessionAccount]);
+
+  // Check URL for trade=success (return from Stripe Checkout)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('trade') === 'success') {
+      const id = params.get('id') || '';
+      setTradeSuccessBanner({ show: true, tradeId: id });
+      window.history.replaceState({}, '', '/x');
+      if (sessionAccount?.email) {
+        setTimeout(() => {
+          fetch(`/api/exchange/trades?email=${encodeURIComponent(sessionAccount.email)}`).then(r => r.json()).then((data: any[]) => {
+            setDbTrades(Array.isArray(data) ? data : []);
+          }).catch(() => {});
+        }, 2000);
+      }
+    }
+    if (params.get('kyc') === 'done') {
+      showToast('Identity verification submitted. Confirmation within 24 hours.');
+      window.history.replaceState({}, '', '/x');
+      if (sessionAccount?.email) {
+        fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email, kycStatus: 'pending' }) }).catch(() => {});
+        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+      }
+    }
+  }, []);
 
   // Restore exchange account session from localStorage on mount
   useEffect(() => {
@@ -441,32 +538,35 @@ export default function Exchange() {
     if (botDetected()) { showToast('Submission blocked.'); return; }
     if (!rateOk('trade', 5)) return;
     if (tradeQty < 1) { showToast('Please enter a valid quantity.'); return; }
+
+    if (!sessionAccount?.acceptedTermsAt) {
+      setPendingTradeAction(() => () => handleExecuteTrade(mode));
+      setShowTermsModal(true);
+      return;
+    }
+
     setTradeProcessing(true);
     const tradeId = genTradeId(mode);
     const gross = tradePrice * tradeQty;
     const fee = gross * 0.0075;
-    const payload = JSON.stringify({ tradeId, mode, standard: TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit', priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
+    const standard = currentListing?.name || TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
+    const payload = JSON.stringify({ tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
     const hash = await sha256(payload);
-    const prevHash = lastReceiptHashRef.current;
     lastReceiptHashRef.current = hash;
-    const standard = TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
+
+    if (sessionAccount?.email && mode === 'buy') {
+      try {
+        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email, standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, pricePerTonne: tradePrice, tradeId, side: mode.toUpperCase() }) });
+        const data = await res.json();
+        if (data.url) { window.location.href = data.url; return; }
+      } catch (e) {
+        console.warn('[Exchange] Checkout redirect failed:', e);
+      }
+    }
+
+    const prevHash = hash;
     const trade = { id: tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: prevHash, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
-    // Non-blocking Supabase save
-    dbInsert('trades', {
-      trade_id: tradeId,
-      side: mode,
-      standard,
-      price_eur_per_tonne: tradePrice,
-      volume_tonnes: tradeQty,
-      gross_eur: gross,
-      fee_eur: fee,
-      net_eur: gross + fee,
-      settlement: 'T+1',
-      receipt_hash: hash,
-      prev_receipt_hash: prevHash,
-      verify_url: `uaiu.live/verify/${tradeId}`,
-      status: 'filled',
-    }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+    dbInsert('trades', { trade_id: tradeId, side: mode, standard, price_eur_per_tonne: tradePrice, volume_tonnes: tradeQty, gross_eur: gross, fee_eur: fee, net_eur: gross + fee, settlement: 'T+1', receipt_hash: hash, prev_receipt_hash: prevHash, verify_url: `uaiu.live/verify/${tradeId}`, status: 'filled' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     setTimeout(() => {
       setSessionTrades(prev => [{ ...trade, trade_id: tradeId, side: mode, volume_tonnes: tradeQty, price_eur_per_tonne: tradePrice, gross_eur: gross, receipt_hash: hash }, ...prev]);
       setTradeRefStr(tradeId);
@@ -474,13 +574,77 @@ export default function Exchange() {
       setTradeSuccess(true);
       setTradeProcessing(false);
       if (gross >= 10000) setEscrowTrade({ tradeId, amountEur: gross, volumeTonnes: tradeQty, standard });
-      // Push to trade ticker
       setTickerTrades(prev => [{ id: tradeId, side: mode.toUpperCase(), standard, volume: tradeQty, price: tradePrice, ago: 'just now' }, ...prev].slice(0, 20));
-      // Trigger multi-sig
       setPendingTradeId(tradeId);
       setShowMultiSig(true);
       showToast(mode === 'buy' ? 'Order placed · Receipt hash generated' : 'Credits listed on marketplace');
     }, 1400);
+  }
+
+  async function handleAcceptTerms() {
+    if (!sessionAccount?.email) { setShowTermsModal(false); return; }
+    setTermsAccepting(true);
+    try {
+      const res = await fetch('/api/exchange/account/accept-terms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email }) });
+      const updated = await res.json();
+      const newSession = { ...sessionAccount, acceptedTermsAt: updated.acceptedTermsAt || new Date().toISOString() };
+      setSessionAccount(newSession);
+      localStorage.setItem('x-exchange-account', JSON.stringify(newSession));
+      setShowTermsModal(false);
+      if (pendingTradeAction) { const fn = pendingTradeAction; setPendingTradeAction(null); fn(); }
+    } catch { showToast('Failed to accept terms. Please try again.'); }
+    finally { setTermsAccepting(false); }
+  }
+
+  async function handleRetireSubmit() {
+    if (!retireTrade || !retireeName) { showToast('Please enter your name.'); return; }
+    setRetireSubmitting(true);
+    try {
+      const res = await fetch('/api/exchange/retire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount?.email, tradeId: retireTrade.tradeId, volumeTonnes: retireTrade.volumeTonnes, standard: retireTrade.standard, retireeName, purpose: retirePurpose }) });
+      if (res.ok) {
+        const data = await res.json();
+        setDbTrades(prev => prev.map(t => t.tradeId === retireTrade.tradeId ? { ...t, status: 'retired' } : t));
+        setShowRetireModal(false);
+        setRetireTrade(null);
+        showToast(`Retirement certificate ${data.certificateId} will be emailed to you.`);
+      } else { showToast('Failed to retire credits. Please try again.'); }
+    } catch { showToast('Failed to retire credits. Please try again.'); }
+    finally { setRetireSubmitting(false); }
+  }
+
+  function exportCSV() {
+    const allTrades = [...dbTrades, ...sessionTrades];
+    if (!allTrades.length) { showToast('No trades to export.'); return; }
+    const headers = ['Trade ID', 'Date', 'Side', 'Standard', 'Volume (tCO2)', 'Price (EUR/t)', 'Gross (EUR)', 'Fee (EUR)', 'Status', 'Receipt Hash'];
+    const rows = allTrades.map(t => [
+      t.tradeId || t.trade_id || t.id || '',
+      t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-GB') : new Date(t.ts || Date.now()).toLocaleDateString('en-GB'),
+      t.side || t.mode || 'BUY',
+      t.standard || '',
+      t.volumeTonnes || t.volume_tonnes || 0,
+      (t.pricePerTonne || t.price_eur_per_tonne || 0).toFixed(2),
+      (t.grossEur || t.gross_eur || 0).toFixed(2),
+      (t.feeEur || t.fee_eur || 0).toFixed(2),
+      t.status || 'completed',
+      t.receiptHash || t.receipt_hash || '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `UAIU-trades-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleInstSubmit() {
+    if (!instName || !instContact || !instEmail || !instVolume) { showToast('Please fill in all required fields.'); return; }
+    setInstSubmitting(true);
+    try {
+      await apiRequest('POST', '/api/exchange/rfq', { company: instName, contact: instContact, email: instEmail, side: 'INSTITUTIONAL', standard: instStandard, volumeTonnes: parseInt(instVolume) || 50000, notes: instMessage });
+      setInstSuccess(true);
+      showToast('Institutional inquiry received — desk will contact you within 2 hours.');
+    } catch { showToast('Failed to submit. Please try again.'); }
+    finally { setInstSubmitting(false); }
   }
 
   async function handleAccountSubmit() {
@@ -488,12 +652,13 @@ export default function Exchange() {
     if (!rateOk('account', 3)) return;
     if (!acctFirstName || !acctLastName || !acctEmail || !acctType) { showToast('Please fill in all required fields.'); return; }
     if (!acctEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
+    if (acctPassword && acctPassword.length < 8) { showToast('Password must be at least 8 characters.'); return; }
+    if (acctPassword && acctPassword !== acctConfirmPassword) { showToast('Passwords do not match.'); return; }
     setAcctSubmitting(true);
     try {
-      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2 });
+      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined });
       const data = await res.json();
       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
-      setAcctSuccess(true);
       const newSession = {
         id: data.id,
         email: acctEmail,
@@ -502,25 +667,30 @@ export default function Exchange() {
         company: acctCompany || `${acctFirstName} ${acctLastName}`.trim(),
         accountType: acctType,
         annualCo2: parseInt(acctCo2) || 10000,
+        acceptedTermsAt: null,
+        kycStatus: 'not_started',
       };
       setSessionAccount(newSession);
       localStorage.setItem('x-exchange-account', JSON.stringify(newSession));
-      showToast('Account created — KYC verification begins now');
-      // Non-blocking Supabase save
-      dbInsert('entities', {
-        name: `${acctFirstName} ${acctLastName}`.trim(),
-        contact_name: `${acctFirstName} ${acctLastName}`.trim(),
-        email: acctEmail,
-        phone: acctPhone || null,
-        entity_type: acctType,
-        annual_co2_exposure: acctCo2 || null,
-        status: 'pending_kyc',
-      }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+      setAcctSuccess(true);
+      setAcctShowKyc(true);
+      showToast('Account created — verify your identity to begin trading');
+      dbInsert('entities', { name: `${acctFirstName} ${acctLastName}`.trim(), contact_name: `${acctFirstName} ${acctLastName}`.trim(), email: acctEmail, phone: acctPhone || null, entity_type: acctType, annual_co2_exposure: acctCo2 || null, status: 'pending_kyc' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     } catch {
       showToast('Failed to submit. Please try again.');
     } finally {
       setAcctSubmitting(false);
     }
+  }
+
+  async function handleStartKyc() {
+    if (!sessionAccount?.id || !sessionAccount?.email) return;
+    try {
+      const res = await fetch('/api/kyc/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` }) });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else { showToast('KYC session started — our team will contact you within 24 hours.'); }
+    } catch { showToast('Could not start verification. Please contact info@uaiu.live'); }
   }
 
   async function handleListSubmit() {
@@ -597,32 +767,55 @@ export default function Exchange() {
     setSigninLoading(true);
     setSigninError('');
     try {
-      const res = await fetch(`/api/exchange/account/lookup?email=${encodeURIComponent(signinEmail.trim().toLowerCase())}`);
+      const res = await fetch('/api/exchange/account/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: signinEmail.trim().toLowerCase(), password: signinPassword || undefined }) });
       if (res.ok) {
         const account = await res.json();
+        if (!account.passwordHash && !signinPassword) {
+          setSigninNeedsPassword(true);
+          setSigninLoading(false);
+          return;
+        }
         const sessionData = {
           id: account.id,
           email: account.email,
           firstName: account.firstName || '',
           lastName: account.lastName || '',
-          company: account.company || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+          company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
           accountType: account.accountType || '',
-          annualCo2: account.annualCo2 || 0,
+          annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+          acceptedTermsAt: account.acceptedTermsAt,
+          kycStatus: account.kycStatus || 'not_started',
         };
         setSessionAccount(sessionData);
         localStorage.setItem('x-exchange-account', JSON.stringify(sessionData));
         setShowAccountModal(false);
-        setSigninEmail('');
-        setSigninError('');
+        setSigninEmail(''); setSigninPassword(''); setSigninError(''); setSigninNeedsPassword(false);
         showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
       } else {
-        setSigninError('No account found for that email. Please open a new account.');
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401 && data.error?.includes('Password required')) {
+          setSigninNeedsPassword(true);
+        } else {
+          setSigninError(data.error || 'No account found for that email. Please open a new account.');
+        }
       }
     } catch {
       setSigninError('Connection error. Please try again.');
     } finally {
       setSigninLoading(false);
     }
+  }
+
+  async function handleSetPassword() {
+    if (!signinNewPassword || signinNewPassword.length < 8) { setSigninError('Password must be at least 8 characters.'); return; }
+    setSigninLoading(true);
+    try {
+      await fetch('/api/exchange/account/set-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: signinEmail.trim().toLowerCase(), password: signinNewPassword }) });
+      setSigninPassword(signinNewPassword);
+      setSigninNeedsPassword(false);
+      setSigninNewPassword('');
+      handleSignIn();
+    } catch { setSigninError('Failed to set password.'); setSigninLoading(false); }
   }
 
   function handleSignOut() {
@@ -751,7 +944,7 @@ export default function Exchange() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
               <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
-                {[['marketplace','Markets'],['intelligence','Intel'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
+                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
                   <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
                 ))}
               </div>
@@ -847,12 +1040,16 @@ export default function Exchange() {
             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW, gap: 1, background: C.goldborder }}>
               {filteredListings.map(l => {
                 const bs = getBadgeStyle(l.standard, C);
-                const up = l.changeDirection !== 'down';
+                const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
+                const livePrice = livePrices[liveKey];
+                const displayPrice = livePrice ? livePrice.price : l.pricePerTonne;
+                const displayPct = livePrice ? Math.abs(livePrice.changePct) : Math.abs(l.changePercent);
+                const up = livePrice ? livePrice.up : l.changeDirection !== 'down';
                 return (
                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                       <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '5px 12px', border: '1px solid', ...bs }}>{l.badgeLabel}</span>
-                      <span style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, letterSpacing: '0.1em' }}>Accepting Orders</span>
+                      <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
                     </div>
                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>
@@ -860,8 +1057,8 @@ export default function Exchange() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
                       <div>
                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Price / tonne</div>
-                        <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{l.pricePerTonne.toFixed(2)}</div>
-                        <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {Math.abs(l.changePercent)}% today</div>
+                        <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{displayPrice.toFixed(2)}</div>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {displayPct.toFixed(2)}% today</div>
                       </div>
                       <div>
                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Standard</div>
@@ -1316,6 +1513,63 @@ export default function Exchange() {
           </div>
         </section>
 
+        <section id="institutional" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+          <div className="x-section" style={s.sectionWrap}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'clamp(40px, 6vw, 80px)', alignItems: 'start' }}>
+              <div>
+                <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Bulk Offtake · 50,000+ Tonnes</div>
+                <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(32px,3.5vw,52px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 24 }}>Direct Desk<br /><em style={{ fontStyle: 'italic', color: C.gold }}>Access.</em></h2>
+                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.75, marginBottom: 40 }}>For sovereign funds, aviation majors, and industrial corporates requiring more than 50,000 tCO₂e. Bespoke pricing, dedicated relationship manager, and T+0 settlement available.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {[
+                    ['Bespoke Pricing', 'Volume discount pricing negotiated directly with sellers and our desk team'],
+                    ['Dedicated Relationship Manager', 'Single point of contact for all trade execution, documentation, and registry transfers'],
+                    ['ISDA-Style Confirmation', 'Formal trade confirmation documentation to institutional standards'],
+                    ['T+0 Settlement', 'Same-day settlement available for pre-approved counterparties with existing registry accounts'],
+                    ['Direct Registry Transfer', 'Credits transferred directly to your VERRA, Gold Standard, or EU Registry account'],
+                  ].map(([title, desc], i) => (
+                    <div key={i} style={{ display: 'flex', gap: 20, padding: '20px 0', borderBottom: `1px solid ${C.goldborder}` }}>
+                      <div style={{ width: 32, height: 32, flexShrink: 0, background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.mono, fontSize: 11, color: C.gold }}>{String(i + 1).padStart(2, '0')}</div>
+                      <div>
+                        <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{title}</div>
+                        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, lineHeight: 1.6 }}>{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '36px 40px' }}>
+                {instSuccess ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <div style={{ marginBottom: 20 }}><CheckCircle size={48} color={C.gold} /></div>
+                    <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700, color: C.gold, marginBottom: 12 }}>Request Received</div>
+                    <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Our institutional desk will contact you within 4 business hours. Please ensure your contact details are correct.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Institutional Inquiry</div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 28, lineHeight: 1.6 }}>Our desk responds within 4 business hours</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Institution Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Sovereign Wealth Fund" value={instName} onChange={e => setInstName(e.target.value)} data-testid="input-inst-name" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Contact Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Your full name" value={instContact} onChange={e => setInstContact(e.target.value)} data-testid="input-inst-contact" /></div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@institution.com" value={instEmail} onChange={e => setInstEmail(e.target.value)} data-testid="input-inst-email" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Role / Title</label><input className="x-fi" style={s.fi} type="text" placeholder="Head of Sustainability" value={instRole} onChange={e => setInstRole(e.target.value)} data-testid="input-inst-role" /></div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Volume Required (tonnes) *</label><input className="x-fi" style={s.fi} type="number" placeholder="50,000" value={instVolume} onChange={e => setInstVolume(e.target.value)} data-testid="input-inst-volume" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Preferred Standard</label><select className="x-fi" style={s.fi} value={instStandard} onChange={e => setInstStandard(e.target.value)} data-testid="select-inst-standard"><option>EU ETS — European Allowances</option><option>VCS — Verra Verified</option><option>Gold Standard — Premium</option><option>CORSIA — Aviation</option><option>Blue Carbon — Marine</option></select></div>
+                    </div>
+                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Message / Requirements</label><textarea className="x-fi" style={{ ...s.fi, minHeight: 90, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 } as React.CSSProperties} placeholder="Describe your compliance objectives, timeline, and any specific requirements..." value={instMessage} onChange={e => setInstMessage(e.target.value)} data-testid="textarea-inst-message" /></div>
+                    <button className="x-btn-primary" onClick={handleInstSubmit} disabled={instSubmitting} style={{ width: '100%', padding: '16px 20px', opacity: instSubmitting ? 0.7 : 1 }} data-testid="button-inst-submit">{instSubmitting ? 'Sending inquiry...' : 'Submit to Institutional Desk →'}</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="calculator" style={{ background: C.ink, borderTop: `1px solid ${C.goldborder}` }}>
           <div className="x-section" style={s.sectionWrap}>
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Carbon Accounting</div>
@@ -1335,8 +1589,8 @@ export default function Exchange() {
         </section>
 
         <PortfolioDashboard
-          trades={sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '', prev_receipt_hash: t.prev_receipt_hash || t.prevReceiptHash || '', payment_intent_id: t.payment_intent_id || t.paymentIntentId || '', settled_at: t.settled_at || (t.ts ? new Date(t.ts).toISOString() : '') }))}
-          retirements={[]}
+          trades={[...dbTrades.map(t => ({ trade_id: t.tradeId || '', side: t.side || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volumeTonnes || 0, price_eur_per_tonne: t.pricePerTonne || 0, gross_eur: t.grossEur || 0, receipt_hash: t.receiptHash || '', prev_receipt_hash: '', payment_intent_id: t.stripeSessionId || '', settled_at: t.createdAt ? new Date(t.createdAt).toISOString() : '' })), ...sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '', prev_receipt_hash: t.prev_receipt_hash || t.prevReceiptHash || '', payment_intent_id: t.payment_intent_id || t.paymentIntentId || '', settled_at: t.settled_at || (t.ts ? new Date(t.ts).toISOString() : '') }))]}
+          retirements={dbTrades.filter(t => t.status === 'retired').map(t => ({ trade_id: t.tradeId || '', volume_tonnes: t.volumeTonnes || 0, retired_at: t.createdAt ? new Date(t.createdAt).toISOString() : '' }))}
           accountName={sessionAccount?.company || 'Exchange Account'}
           annualTarget={sessionAccount?.annualCo2 || 10000}
         />
@@ -1504,12 +1758,44 @@ export default function Exchange() {
 
       {showTradeModal && (
         <div className="x-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowTradeModal(false); }}>
-          <div className="x-modal" style={{ maxWidth: 480 }}>
-            <div style={{ padding: '32px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700 }}>{tradeTab === 'buy' ? 'Buy Credits' : 'Sell Credits'}</div>
+          <div className="x-modal" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: C.ink2, zIndex: 2 }}>
+              <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700 }}>{currentListing?.name || (tradeTab === 'buy' ? 'Buy Credits' : 'Sell Credits')}</div>
               <button style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }} onClick={() => setShowTradeModal(false)} data-testid="button-close-trade">&#10005;</button>
             </div>
-            <div style={{ padding: '32px 36px' }}>
+            {chartData.length > 0 && !tradeSuccess && (() => {
+              const prices = chartData.map(d => d.close);
+              const minP = Math.min(...prices), maxP = Math.max(...prices);
+              const W = 448, H = 100;
+              const pts = chartData.map((d, i) => {
+                const x = (i / (chartData.length - 1)) * W;
+                const y = H - ((d.close - minP) / (maxP - minP || 1)) * H;
+                return `${x},${y}`;
+              }).join(' ');
+              const firstP = prices[0], lastP = prices[prices.length - 1];
+              const lineColor = lastP >= firstP ? '#22c55e' : '#ef4444';
+              return (
+                <div style={{ padding: '16px 36px 0', background: C.ink }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', color: C.cream3, marginBottom: 8 }}>90-DAY PRICE HISTORY · {chartSymbol}</div>
+                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+                    <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
+                    <polyline points={`0,${H} ${pts} ${W},${H}`} fill={`url(#chartGrad)`} fillOpacity="0.12" />
+                    <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={lineColor} /><stop offset="100%" stopColor={lineColor} stopOpacity="0" /></linearGradient></defs>
+                    {chartData.length > 0 && (() => {
+                      const lastI = chartData.length - 1;
+                      const lx = W;
+                      const ly = H - ((chartData[lastI].close - minP) / (maxP - minP || 1)) * H;
+                      return <circle cx={lx} cy={ly} r="3" fill={lineColor} />;
+                    })()}
+                  </svg>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 4, marginBottom: 4 }}>
+                    <span>90d ago</span><span style={{ color: lineColor }}>€{lastP.toFixed(2)} now</span>
+                  </div>
+                </div>
+              );
+            })()}
+            {chartLoading && !tradeSuccess && <div style={{ padding: '12px 36px', fontFamily: F.mono, fontSize: 10, color: C.cream4, background: C.ink }}>Loading chart...</div>}
+            <div style={{ padding: '28px 36px' }}>
               {tradeSuccess ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
@@ -1522,12 +1808,12 @@ export default function Exchange() {
                 </div>
               ) : (
                 <>
-                  <div style={{ display: 'flex', borderBottom: `1px solid ${C.goldborder}`, margin: '-32px -36px 28px' }}>
+                  <div style={{ display: 'flex', borderBottom: `1px solid ${C.goldborder}`, margin: '-28px -36px 24px' }}>
                     <button className={`x-mtab${tradeTab === 'buy' ? ' active' : ''}`} onClick={() => setTradeTab('buy')} data-testid="button-trade-tab-buy">Buy Credits</button>
                     <button className={`x-mtab${tradeTab === 'sell' ? ' active' : ''}`} onClick={() => setTradeTab('sell')} data-testid="button-trade-tab-sell">Sell Credits</button>
                   </div>
-                  <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div><div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Current Price</div><div style={{ fontFamily: F.playfair, fontSize: 32, fontWeight: 700, color: C.gold }}>€{parseFloat(tradeTypeValue).toFixed(2)}</div></div>
+                  <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '16px 20px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div><div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Current Price</div><div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold }}>€{parseFloat(tradeTypeValue).toFixed(2)}</div></div>
                     <div style={{ textAlign: 'right' }}><div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3 }}>24h Change</div><div style={{ fontFamily: F.mono, fontSize: 11, color: C.green }}>▲ +2.3% today</div></div>
                   </div>
                   <div style={s.fg}><label style={s.fl as React.CSSProperties}>Credit Type</label>
@@ -1570,28 +1856,69 @@ export default function Exchange() {
 
             {sessionAccount ? (
               /* ── SIGNED-IN PANEL ── */
-              <div style={{ padding: '32px 36px', textAlign: 'center' }}>
-                <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.greenfaint, border: `2px solid ${C.green}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 16px' }}>✓</div>
-                <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.cream3, marginBottom: 6 }}>SIGNED IN</div>
-                <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{sessionAccount.company || `${sessionAccount.firstName || ''} ${sessionAccount.lastName || ''}`.trim() || 'Account'}</div>
-                <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, marginBottom: 4 }}>{sessionAccount.email}</div>
-                <div style={{ display: 'inline-block', fontFamily: F.mono, fontSize: 9, fontWeight: 700, padding: '4px 12px', border: `1px solid ${C.goldborder}`, color: C.gold, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 24 }}>{sessionAccount.accountType || 'Exchange Member'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24, background: C.ink, border: `1px solid ${C.goldborder}`, padding: 20 }}>
+              <div style={{ padding: '28px 36px', maxHeight: '80vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.greenfaint, border: `2px solid ${C.green}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✓</div>
+                  <div>
+                    <div style={{ fontFamily: F.playfair, fontSize: 20, fontWeight: 700 }}>{sessionAccount.company || `${sessionAccount.firstName || ''} ${sessionAccount.lastName || ''}`.trim() || 'Account'}</div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3 }}>{sessionAccount.email}</div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 8px', border: `1px solid ${C.goldborder}`, color: C.gold }}>{sessionAccount.accountType || 'Exchange Member'}</span>
+                      <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 8px', border: `1px solid ${sessionAccount.kycStatus === 'verified' ? C.green : C.goldborder}`, color: sessionAccount.kycStatus === 'verified' ? C.green : C.cream3 }}>KYC: {sessionAccount.kycStatus === 'verified' ? 'VERIFIED' : sessionAccount.kycStatus === 'pending' ? 'PENDING' : 'NOT STARTED'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {sessionAccount.kycStatus !== 'verified' && (
+                  <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '14px 18px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'KYC under review — you will receive confirmation by email.' : 'Complete KYC to unlock trading on the platform.'}</div>
+                    {sessionAccount.kycStatus !== 'pending' && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">Verify Identity →</button>}
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
                   {[
-                    { label: 'Annual CO₂ Target', value: sessionAccount.annualCo2 ? `${Number(sessionAccount.annualCo2).toLocaleString()} t` : '—' },
-                    { label: 'Account Type', value: sessionAccount.accountType || '—' },
-                    { label: 'Account ID', value: sessionAccount.id ? String(sessionAccount.id).slice(0, 8) + '…' : '—' },
-                    { label: 'Session', value: 'Active ●' },
+                    { label: 'CO₂ Target', value: sessionAccount.annualCo2 ? `${Number(sessionAccount.annualCo2).toLocaleString()} t` : '—' },
+                    { label: 'Trades', value: String(dbTrades.length + sessionTrades.length) },
+                    { label: 'Volume Held', value: `${dbTrades.filter(t => t.status !== 'retired' && t.side === 'BUY').reduce((s, t) => s + (t.volumeTonnes || 0), 0).toLocaleString()} tCO₂` },
+                    { label: 'Total Spent', value: `€${dbTrades.reduce((s, t) => s + (t.grossEur || 0), 0).toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` },
                   ].map((stat, i) => (
-                    <div key={i} style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>{stat.label}</div>
-                      <div style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 700, color: i === 3 ? C.green : C.cream }}>{stat.value}</div>
+                    <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '12px 16px' }}>
+                      <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>{stat.label}</div>
+                      <div style={{ fontFamily: F.mono, fontSize: 13, fontWeight: 700, color: C.cream }}>{stat.value}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <button style={{ flex: 1, background: C.gold, color: C.ink, padding: '13px 0', fontFamily: F.syne, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAccountModal(false); scrollTo('dashboard'); }}>View Dashboard →</button>
-                  <button style={{ padding: '13px 20px', background: 'transparent', color: C.red, border: `1px solid rgba(239,68,68,0.3)`, fontFamily: F.mono, fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em' }} onClick={handleSignOut}>Sign Out</button>
+
+                {dbTrades.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700 }}>Trade History</div>
+                      <button onClick={exportCSV} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 12px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', letterSpacing: '0.1em' }} data-testid="button-export-csv">Export CSV</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+                      {[...dbTrades].reverse().map((t, i) => (
+                        <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                              <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', background: t.side === 'BUY' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', color: t.side === 'BUY' ? C.green : C.red, border: `1px solid ${t.side === 'BUY' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>{t.side}</span>
+                              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.cream }}>{t.standard}</span>
+                              <span style={{ fontFamily: F.mono, fontSize: 9, color: t.status === 'retired' ? C.cream3 : t.status === 'completed' ? C.green : C.gold }}>{t.status?.toUpperCase() || 'PENDING'}</span>
+                            </div>
+                            <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3 }}>{t.volumeTonnes?.toLocaleString()} tCO₂ · €{t.grossEur?.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-GB') : '—'}</div>
+                          </div>
+                          {t.status === 'completed' && t.side === 'BUY' && (
+                            <button onClick={() => { setRetireTrade(t); setShowRetireModal(true); }} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-retire-${t.tradeId || i}`}>Retire →</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button style={{ flex: 1, background: C.gold, color: C.ink, padding: '13px 0', fontFamily: F.syne, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer', minWidth: 120 }} onClick={() => { setShowAccountModal(false); scrollTo('marketplace'); }}>Browse Credits →</button>
+                  <button style={{ padding: '13px 20px', background: 'transparent', color: C.red, border: `1px solid rgba(239,68,68,0.3)`, fontFamily: F.mono, fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em' }} onClick={handleSignOut} data-testid="button-sign-out">Sign Out</button>
                 </div>
               </div>
             ) : (
@@ -1606,11 +1933,30 @@ export default function Exchange() {
                 {acctModalTab === 'open' && (
                   <div style={{ padding: '32px 36px' }}>
                     {acctSuccess ? (
-                      <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                        <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
-                        <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Account Created</div>
-                        <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Welcome to UAIU.LIVE/X. Our onboarding team will contact you within 2 business hours to complete KYC verification. You&apos;ll be live and trading today.</div>
-                        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream4, marginTop: 16 }}>Account ID: {acctId}</div>
+                      <div style={{ padding: '20px 0' }}>
+                        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                          <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
+                          <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Account Created</div>
+                          <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Welcome to UAIU.LIVE/X. Complete identity verification to unlock trading.</div>
+                          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream4, marginTop: 10 }}>Account ID: {acctId}</div>
+                        </div>
+                        <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '24px 28px', marginBottom: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ fontFamily: F.playfair, fontSize: 18, fontWeight: 700 }}>KYC Verification</div>
+                            <span style={{ fontFamily: F.mono, fontSize: 9, color: sessionAccount?.kycStatus === 'verified' ? C.green : C.gold, letterSpacing: '0.1em', border: `1px solid ${sessionAccount?.kycStatus === 'verified' ? C.green : C.goldborder}`, padding: '3px 8px' }}>{sessionAccount?.kycStatus === 'verified' ? 'VERIFIED' : sessionAccount?.kycStatus === 'pending' ? 'PENDING' : 'REQUIRED'}</span>
+                          </div>
+                          {sessionAccount?.kycStatus === 'verified' ? (
+                            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green }}>Identity verified. You may trade on the platform.</div>
+                          ) : sessionAccount?.kycStatus === 'pending' ? (
+                            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Verification submitted. You will receive confirmation by email within 24 hours.</div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.6, marginBottom: 16 }}>Complete identity verification via Stripe Identity. Takes 2–3 minutes. Required to execute trades.</div>
+                              <button className="x-btn-primary" onClick={handleStartKyc} data-testid="button-start-kyc" style={{ width: '100%', padding: '14px 20px', textAlign: 'center' }}>Start KYC Verification →</button>
+                            </>
+                          )}
+                        </div>
+                        <button className="x-btn-ghost" onClick={() => setShowAccountModal(false)} style={{ width: '100%', padding: '12px 20px', textAlign: 'center', fontFamily: F.mono, fontSize: 11 }}>Continue Browsing</button>
                       </div>
                     ) : (
                       <>
@@ -1624,6 +1970,9 @@ export default function Exchange() {
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                        <div style={{ height: 1, background: C.goldborder, margin: '8px 0 16px' }} />
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Password (optional — recommended)</label><input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={acctPassword} onChange={e => setAcctPassword(e.target.value)} data-testid="input-acct-password" /></div>
+                        {acctPassword && <div style={s.fg}><label style={s.fl as React.CSSProperties}>Confirm Password</label><input className="x-fi" style={s.fi} type="password" placeholder="Confirm password" value={acctConfirmPassword} onChange={e => setAcctConfirmPassword(e.target.value)} data-testid="input-acct-confirm-password" /></div>}
                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: acctSubmitting ? 0.7 : 1 }} onClick={handleAccountSubmit} disabled={acctSubmitting} data-testid="button-submit-account">{acctSubmitting ? 'Creating Account...' : 'Create Account →'}</button>
                         <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6, letterSpacing: '0.05em' }}>By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
                       </>
@@ -1633,27 +1982,35 @@ export default function Exchange() {
 
                 {acctModalTab === 'signin' && (
                   <div style={{ padding: '32px 36px' }}>
-                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Enter the business email you used when opening your account.</div>
-                    <div style={s.fg}>
-                      <label style={s.fl as React.CSSProperties}>Business Email</label>
-                      <input
-                        className="x-fi"
-                        style={{ ...s.fi, borderColor: signinError ? 'rgba(239,68,68,0.5)' : undefined }}
-                        type="email"
-                        placeholder="compliance@yourcompany.com"
-                        value={signinEmail}
-                        onChange={e => { setSigninEmail(e.target.value); setSigninError(''); }}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSignIn(); }}
-                        autoFocus
-                        data-testid="input-signin-email"
-                      />
-                    </div>
-                    {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
-                    <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading || !signinEmail.trim() ? 0.6 : 1 }} onClick={handleSignIn} disabled={signinLoading || !signinEmail.trim()} data-testid="button-signin-submit">{signinLoading ? 'Looking up account...' : 'Access Account →'}</button>
-                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 16, textAlign: 'center', letterSpacing: '0.05em' }}>
-                      No account?{' '}
-                      <button onClick={() => setAcctModalTab('open')} style={{ background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, textDecoration: 'underline', padding: 0, letterSpacing: '0.05em' }}>Open one free →</button>
-                    </div>
+                    {signinNeedsPassword ? (
+                      <>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>This is your first sign-in with a password. Set one now to secure your account.</div>
+                        <div style={s.fg}>
+                          <label style={s.fl as React.CSSProperties}>Set Password</label>
+                          <input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={signinNewPassword} onChange={e => { setSigninNewPassword(e.target.value); setSigninError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleSetPassword(); }} autoFocus data-testid="input-set-password" />
+                        </div>
+                        {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
+                        <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading ? 0.6 : 1 }} onClick={handleSetPassword} disabled={signinLoading} data-testid="button-set-password-submit">{signinLoading ? 'Setting password...' : 'Set Password & Sign In →'}</button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Enter your credentials to access your account.</div>
+                        <div style={s.fg}>
+                          <label style={s.fl as React.CSSProperties}>Business Email</label>
+                          <input className="x-fi" style={{ ...s.fi, borderColor: signinError ? 'rgba(239,68,68,0.5)' : undefined }} type="email" placeholder="compliance@yourcompany.com" value={signinEmail} onChange={e => { setSigninEmail(e.target.value); setSigninError(''); }} autoFocus data-testid="input-signin-email" />
+                        </div>
+                        <div style={s.fg}>
+                          <label style={s.fl as React.CSSProperties}>Password</label>
+                          <input className="x-fi" style={{ ...s.fi, borderColor: signinError ? 'rgba(239,68,68,0.5)' : undefined }} type="password" placeholder="Your account password" value={signinPassword} onChange={e => { setSigninPassword(e.target.value); setSigninError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleSignIn(); }} data-testid="input-signin-password" />
+                        </div>
+                        {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
+                        <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading || !signinEmail.trim() ? 0.6 : 1 }} onClick={handleSignIn} disabled={signinLoading || !signinEmail.trim()} data-testid="button-signin-submit">{signinLoading ? 'Signing in...' : 'Access Account →'}</button>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 16, textAlign: 'center', letterSpacing: '0.05em' }}>
+                          No account?{' '}
+                          <button onClick={() => setAcctModalTab('open')} style={{ background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, textDecoration: 'underline', padding: 0, letterSpacing: '0.05em' }}>Open one free →</button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </>
@@ -1669,6 +2026,80 @@ export default function Exchange() {
           onApproved={() => { setShowMultiSig(false); showToast('Multi-sig approval complete — trade finalized'); }}
           onSkip={() => setShowMultiSig(false)}
         />
+      )}
+
+      {showTermsModal && (
+        <div className="x-modal-overlay" style={{ zIndex: 9100 }} onClick={e => { if (e.target === e.currentTarget) setShowTermsModal(false); }}>
+          <div className="x-modal" style={{ maxWidth: 600, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 4 }}>Legal Agreement</div>
+                <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700 }}>UAIU Trading Agreement</div>
+              </div>
+              <button style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }} onClick={() => setShowTermsModal(false)}>&#10005;</button>
+            </div>
+            <div style={{ padding: '28px 36px', overflowY: 'auto', flex: 1, fontSize: 13, color: C.cream3, lineHeight: 1.8, fontFamily: 'inherit' }}>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>1. Instrument Definition.</strong> Carbon credits ("Credits") traded on UAIU.LIVE/X are environmental commodities representing verified reductions or removals of one metric tonne of CO₂-equivalent (1 tCO₂e). Credits are not securities and are not regulated by securities regulators. Buyer accepts all risks associated with carbon market price volatility.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>2. Settlement Terms.</strong> Standard settlement is T+1 (one business day following trade execution). Credits are transferred to Buyer's designated registry account. UAIU Holdings Corp. acts as intermediary and accepts no liability for delays attributable to external registries.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>3. Fees.</strong> A platform fee of 0.75% of gross trade value is deducted at point of execution. This fee is non-refundable upon settlement. Additional fees may apply for registry transfer, certificate issuance, or KYC verification services.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>4. Risk Disclosure.</strong> Carbon credit prices are volatile and may decline materially. Past performance is not indicative of future results. Regulatory changes may affect credit validity and market liquidity. Buyer assumes full market risk.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>5. KYC & Compliance.</strong> All account holders must complete identity verification ("KYC") prior to executing trades. UAIU Holdings Corp. reserves the right to restrict or terminate access pending KYC review. Accounts found in violation of AML/CTF regulations will be reported to relevant authorities.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>6. Jurisdiction.</strong> This agreement is governed by the laws of the State of Wyoming, United States, without regard to conflict of law provisions. Any disputes shall be resolved by binding arbitration in Cheyenne, Wyoming.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>7. No Warranty.</strong> Credits are sold "as-is". UAIU Holdings Corp. makes no warranty as to the EU ETS compliance eligibility of specific credit types. Buyers are responsible for confirming applicability of credits to their specific regulatory requirements.</p>
+              <p style={{ color: C.cream4, fontSize: 11, fontFamily: F.mono }}>UAIU Holdings Corp. · Wyoming LLC · Registered 2025 · All rights reserved</p>
+            </div>
+            <div style={{ padding: '20px 36px', borderTop: `1px solid ${C.goldborder}`, display: 'flex', gap: 12, flexShrink: 0 }}>
+              <button className="x-btn-ghost" onClick={() => setShowTermsModal(false)} style={{ flex: 1, padding: '14px', fontFamily: F.mono, fontSize: 11 }}>Decline</button>
+              <button className="x-btn-primary" onClick={handleAcceptTerms} style={{ flex: 2, padding: '14px', fontFamily: F.mono, fontSize: 12, letterSpacing: '0.1em' }} data-testid="button-accept-terms">I Accept These Terms →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRetireModal && retireTrade && (
+        <div className="x-modal-overlay" style={{ zIndex: 9100 }} onClick={e => { if (e.target === e.currentTarget) { setShowRetireModal(false); setRetireTrade(null); } }}>
+          <div className="x-modal" style={{ maxWidth: 440 }}>
+            <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 4 }}>Permanent Retirement</div>
+                <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700 }}>Retire Credits</div>
+              </div>
+              <button style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }} onClick={() => { setShowRetireModal(false); setRetireTrade(null); }}>&#10005;</button>
+            </div>
+            <div style={{ padding: '28px 36px' }}>
+              <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '16px 20px', marginBottom: 24, fontFamily: F.mono }}>
+                <div style={{ fontSize: 10, color: C.cream3, marginBottom: 4 }}>TRADE TO RETIRE</div>
+                <div style={{ fontSize: 13, color: C.cream }}>{retireTrade.standard} · {retireTrade.volumeTonnes || retireTrade.volume_tonnes} tCO₂e</div>
+                <div style={{ fontSize: 11, color: C.cream4 }}>{retireTrade.tradeId}</div>
+              </div>
+              <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '12px 16px', marginBottom: 20, fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.6 }}>
+                ⚠ Retirement is permanent and irreversible. Credits cannot be re-traded after retirement. A certificate will be issued and emailed to you.
+              </div>
+              <div style={s.fg}>
+                <label style={s.fl as React.CSSProperties}>Retiree Name (organization or individual)</label>
+                <input className="x-fi" style={s.fi} type="text" placeholder="e.g. Acme Corp. or John Smith" value={retireeName} onChange={e => setRetireeName(e.target.value)} data-testid="input-retiree-name" />
+              </div>
+              <div style={s.fg}>
+                <label style={s.fl as React.CSSProperties}>Retirement Purpose</label>
+                <input className="x-fi" style={s.fi} type="text" placeholder="e.g. EU ETS compliance 2025, Scope 1 offsetting" value={retirePurpose} onChange={e => setRetirePurpose(e.target.value)} data-testid="input-retire-purpose" />
+              </div>
+              <button className="x-btn-primary" onClick={handleRetireSubmit} disabled={retireSubmitting || !retireeName.trim()} style={{ width: '100%', padding: '14px', opacity: retireSubmitting || !retireeName.trim() ? 0.6 : 1 }} data-testid="button-retire-submit">{retireSubmitting ? 'Processing...' : 'Confirm Retirement & Issue Certificate →'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tradeSuccessBanner?.show && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9050, background: `linear-gradient(135deg, ${C.ink2} 0%, rgba(212,168,67,0.08) 100%)`, borderBottom: `2px solid ${C.gold}`, padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <CheckCircle size={28} color={C.gold} />
+            <div>
+              <div style={{ fontFamily: F.playfair, fontSize: 18, fontWeight: 700, color: C.gold }}>Payment Confirmed — Trade Executing</div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginTop: 2 }}>Trade ID: {tradeSuccessBanner.tradeId} · Your PDF receipt will be emailed within minutes · Settlement T+1</div>
+            </div>
+          </div>
+          <button onClick={() => setTradeSuccessBanner(null)} style={{ background: 'none', border: 'none', color: C.cream3, fontSize: 20, cursor: 'pointer', padding: 4 }}>&#10005;</button>
+        </div>
       )}
 
       {toast.show && (

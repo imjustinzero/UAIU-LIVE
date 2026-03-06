@@ -25,6 +25,7 @@ import { nanoid } from "nanoid";
 import { startCronJobs } from "./cron";
 import { generateTradePDF } from "./pdf-generator";
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+import { getLivePrices, getPriceHistory } from "./exchange-prices";
 
 // Legacy Pong code removed - all games now use GameManager
 
@@ -229,6 +230,63 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   }
                   console.log(`[KYC] Account ${account_id} verified via webhook`);
                 }
+              }
+
+              // Exchange spot trade — checkout.session.completed
+              if (event.type === 'checkout.session.completed') {
+                const cs = event.data.object as any;
+                const meta = cs.metadata || {};
+                const tradeId     = meta.trade_id || cs.id;
+                const standard    = meta.standard || 'Carbon Credit';
+                const volumeT     = parseFloat(meta.volume_tonnes || '0');
+                const pricePerT   = parseFloat(meta.price_per_tonne || '0');
+                const side        = meta.side || 'BUY';
+                const email       = meta.email || cs.customer_email || '';
+                const grossEur    = (cs.amount_total || 0) / 100;
+                const feeEur      = grossEur * 0.0075;
+                const settled_at  = new Date().toISOString();
+                const receiptData = `${tradeId}:${cs.id}:${grossEur}:${settled_at}`;
+                const receiptHash = createHash('sha256').update(receiptData).digest('hex');
+
+                // Store trade record in DB
+                storage.createExchangeTrade({
+                  accountEmail:    email,
+                  tradeId,
+                  side,
+                  standard,
+                  volumeTonnes:    volumeT,
+                  pricePerTonne:   pricePerT,
+                  grossEur,
+                  feeEur,
+                  receiptHash,
+                  stripeSessionId: cs.id,
+                  status:          'completed',
+                }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
+
+                // Generate and email PDF receipt
+                generateTradePDF({
+                  trade_id:            tradeId,
+                  side,
+                  standard,
+                  volume_tonnes:       volumeT,
+                  price_eur_per_tonne: pricePerT,
+                  gross_eur:           grossEur,
+                  fee_eur:             feeEur,
+                  receipt_hash:        receiptHash,
+                  prev_receipt_hash:   '',
+                  payment_intent_id:   cs.payment_intent || '',
+                  stripe_charge_id:    '',
+                  settled_at,
+                  buyer_email:         email,
+                }).then(pdfBuffer => {
+                  const recipients = ['info@uaiu.live'];
+                  if (email && email !== 'info@uaiu.live') recipients.push(email);
+                  const attachment = [{ filename: `UAIU-Trade-${tradeId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
+                  const emailHtml = `<div style="font-family:Arial;background:#0d1220;color:#e8dcc8;padding:28px;border:1px solid #d4a843"><h2 style="color:#d4a843;font-family:Georgia">UAIU.LIVE/X — Trade Confirmed</h2><p>Your trade <strong>${tradeId}</strong> has been executed successfully.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;color:#9b9b7a">Standard:</td><td style="padding:8px;color:#e8dcc8"><strong>${standard}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Volume:</td><td style="padding:8px;color:#e8dcc8"><strong>${volumeT.toLocaleString()} tCO₂e</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Gross:</td><td style="padding:8px;color:#d4a843"><strong>€${grossEur.toLocaleString()}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Settlement:</td><td style="padding:8px;color:#e8dcc8">T+1 (next business day)</td></tr></table><p style="font-size:12px;color:#9b9b7a">Receipt Hash: ${receiptHash.slice(0, 32)}...</p><p style="font-size:12px;color:#9b9b7a">UAIU Exchange · info@uaiu.live</p></div>`;
+                  return sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
+                }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
+
+                console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Gross: €${grossEur}`);
               }
             }
           } catch (autoErr: any) {
@@ -1270,6 +1328,204 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  // ── EXCHANGE: Live price feed ─────────────────────────────────────────────
+  app.get('/api/exchange/prices', (_req, res) => {
+    res.json(getLivePrices());
+  });
+
+  app.get('/api/exchange/prices/:symbol/history', (req, res) => {
+    const sym = decodeURIComponent(req.params.symbol);
+    const history = getPriceHistory(sym);
+    if (!history.length) return res.status(404).json({ error: 'Symbol not found' });
+    res.json(history);
+  });
+
+  // ── EXCHANGE: Account signin ──────────────────────────────────────────────
+  app.post('/api/exchange/account/signin', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email) return res.status(400).json({ error: 'email required' });
+      const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
+      if (!account) return res.status(404).json({ error: 'No account found for that email.' });
+      if (account.passwordHash) {
+        if (!password) return res.status(401).json({ error: 'Password required.' });
+        const ok = await bcrypt.compare(password, account.passwordHash);
+        if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+      }
+      res.json(account);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Set password (first-time for existing passwordless accounts) ─
+  app.post('/api/exchange/account/set-password', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+      if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
+      if (!account) return res.status(404).json({ error: 'Account not found.' });
+      const hash = await bcrypt.hash(password, 12);
+      await storage.updateExchangeAccountPassword(email.trim().toLowerCase(), hash);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Accept terms ────────────────────────────────────────────────
+  app.patch('/api/exchange/account/accept-terms', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'email required' });
+      const account = await storage.updateExchangeAccountTerms(email);
+      res.json(account);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
+  app.post('/api/exchange/spot-checkout', async (req, res) => {
+    try {
+      const { email, standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
+      if (!email || !standard || !volumeTonnes || !pricePerTonne || !tradeId) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      const stripe = initStripe();
+      const gross = parseFloat(pricePerTonne) * parseFloat(volumeTonnes);
+      const fee = gross * 0.0075;
+      const totalCents = Math.round((gross + fee) * 100);
+      const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: `${standard} Carbon Credits — ${volumeTonnes} tonnes`,
+              description: `${side || 'BUY'} order · Trade ID: ${tradeId} · Platform fee (0.75%) included`,
+            },
+            unit_amount: totalCents,
+          },
+          quantity: 1,
+        }],
+        metadata: { trade_id: tradeId, standard, volume_tonnes: String(volumeTonnes), email, side: side || 'BUY', price_per_tonne: String(pricePerTonne) },
+        success_url: `${origin}/x?trade=success&id=${tradeId}`,
+        cancel_url: `${origin}/x`,
+        customer_email: email,
+      });
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error('[Spot Checkout]', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Fetch trade history ─────────────────────────────────────────
+  app.get('/api/exchange/trades', async (req, res) => {
+    try {
+      const { email } = req.query;
+      if (!email) return res.status(400).json({ error: 'email required' });
+      const trades = await storage.getExchangeTradesByEmail(String(email));
+      res.json(trades);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Record trade (called server-side or via webhook) ────────────
+  app.post('/api/exchange/trade/record', async (req, res) => {
+    try {
+      const { accountEmail, tradeId, side, standard, volumeTonnes, pricePerTonne, grossEur, feeEur, receiptHash, stripeSessionId } = req.body;
+      if (!accountEmail || !tradeId || !side || !standard || !volumeTonnes || !pricePerTonne || !grossEur) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      const existing = await storage.getExchangeTradeByTradeId(tradeId);
+      if (existing) return res.json(existing);
+      const trade = await storage.createExchangeTrade({ accountEmail, tradeId, side, standard, volumeTonnes: parseFloat(volumeTonnes), pricePerTonne: parseFloat(pricePerTonne), grossEur: parseFloat(grossEur), feeEur: parseFloat(feeEur || 0), receiptHash, stripeSessionId, status: 'completed' });
+      res.json(trade);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
+  app.post('/api/exchange/retire', async (req, res) => {
+    try {
+      const { email, tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+      if (!email || !tradeId || !volumeTonnes || !standard || !retireeName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      await storage.updateExchangeTradeStatus(tradeId, 'retired');
+      const certId = `UAIU-RET-${Date.now()}`;
+      const certDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const certContent = `${certId}|${retireeName}|${standard}|${volumeTonnes}|${certDate}|${purpose || ''}`;
+      const hash = createHash('sha256').update(certContent).digest('hex');
+      const doc = new PDFDocument({ size: 'A4', margin: 60 });
+      const chunks: Buffer[] = [];
+      doc.on('data', c => chunks.push(c));
+      await new Promise<void>((resolve, reject) => {
+        doc.on('end', resolve);
+        doc.on('error', reject);
+        doc.rect(0, 0, doc.page.width, doc.page.height).fill('#060810');
+        doc.fillColor('#d4a843').fontSize(8).font('Helvetica-Bold').text('UAIU.LIVE/X  ·  CARIBBEAN CARBON EXCHANGE', 60, 50, { align: 'center', width: doc.page.width - 120 });
+        doc.moveDown(1.5);
+        doc.fillColor('#f2ead8').fontSize(28).font('Helvetica-Bold').text('CARBON CREDIT RETIREMENT CERTIFICATE', { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fillColor('#d4a843').fontSize(11).text('PERMANENT RETIREMENT FROM GLOBAL REGISTRY', { align: 'center' });
+        doc.moveDown(2);
+        doc.fillColor('#f2ead8').fontSize(14).text(`Certificate Number: ${certId}`, { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fillColor('rgba(242,234,216,0.6)').fontSize(10).text(`Date of Retirement: ${certDate}`, { align: 'center' });
+        doc.moveDown(2);
+        doc.fillColor('#f2ead8').fontSize(13).text(`This certifies that`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fillColor('#d4a843').fontSize(20).font('Helvetica-Bold').text(retireeName, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fillColor('#f2ead8').fontSize(13).font('Helvetica').text(`has permanently retired`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fillColor('#d4a843').fontSize(24).font('Helvetica-Bold').text(`${parseFloat(volumeTonnes).toLocaleString()} tCO₂e`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fillColor('#f2ead8').fontSize(13).font('Helvetica').text(`of ${standard} carbon credits from global circulation.`, { align: 'center' });
+        if (purpose) {
+          doc.moveDown(1);
+          doc.fillColor('rgba(242,234,216,0.7)').fontSize(11).text(`Purpose: ${purpose}`, { align: 'center' });
+        }
+        doc.moveDown(2.5);
+        doc.fillColor('rgba(212,168,67,0.4)').fontSize(8).font('Helvetica').text(`Tamper-evident SHA-256: ${hash}`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.text(`Trade Reference: ${tradeId}`, { align: 'center' });
+        doc.end();
+      });
+      const pdfBuffer = Buffer.concat(chunks);
+      if (isZohoConfigured()) {
+        sendZohoEmail(email, `Carbon Credit Retirement Certificate — ${certId}`,
+          `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Retirement Certificate</h2><p>Dear ${retireeName},</p><p>Your carbon credit retirement has been permanently recorded. Certificate: <strong>${certId}</strong></p><p>Volume: <strong>${volumeTonnes} tCO₂e</strong> of ${standard}</p><p>Please find your PDF certificate attached.</p></div>`,
+          [{ filename: `UAIU-Retirement-${certId}.pdf`, content: pdfBuffer.toString('base64'), encoding: 'base64', contentType: 'application/pdf' }]
+        ).catch(e => console.error('[Retire Email]', e.message));
+      }
+      res.json({ success: true, certificateId: certId, hash });
+    } catch (e: any) {
+      console.error('[Retire]', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── EXCHANGE: KYC status update ───────────────────────────────────────────
+  app.patch('/api/exchange/account/kyc-status', async (req, res) => {
+    try {
+      const { email, kycStatus } = req.body;
+      if (!email || !kycStatus) return res.status(400).json({ error: 'email and kycStatus required' });
+      await storage.updateExchangeAccountKyc(email, kycStatus);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/exchange/account', requireAuth, async (req, res) => {
     try {
       const body = req.body;
@@ -1285,6 +1541,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (body.phone) accountData.phone = body.phone;
       if (body.accountType) accountData.accountType = body.accountType;
       if (body.annualCo2Exposure) accountData.annualCo2Exposure = body.annualCo2Exposure;
+      if (body.password) {
+        accountData.passwordHash = await bcrypt.hash(body.password, 12);
+      }
       const account = await storage.createExchangeAccount(accountData);
       sendExchangeEmail('Open Account Request', {
         'Name': body.firstName ? `${body.firstName} ${body.lastName || ''}`.trim() : (body.contactName || 'N/A'),
@@ -1670,6 +1929,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     const adminKey = process.env.ADMIN_SECRET_KEY;
     if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
     try {
+      const [submission] = await db.select().from(exchangeCreditListings).where(eq(exchangeCreditListings.id, req.params.id));
       const newListing = await storage.approveCreditListing(req.params.id);
       sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
         'Listing ID':   req.params.id,
@@ -1678,6 +1938,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         'Price EUR/t':  String(newListing.pricePerTonne),
         'Approved At':  new Date().toISOString(),
       }).catch(() => {});
+      if (submission?.email && isZohoConfigured()) {
+        const approveHtml = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Your Credits Are Live</h2><p>Dear ${submission.contactName || 'Seller'},</p><p>Your carbon credit listing has been approved and is now visible to institutional buyers on <strong>UAIU.LIVE/X</strong>.</p><ul><li><strong>Credit Type:</strong> ${submission.creditType}</li><li><strong>Standard:</strong> ${submission.standard}</li><li><strong>Volume:</strong> ${submission.volumeTonnes} tonnes</li><li><strong>Asking Price:</strong> €${submission.askingPricePerTonne}/tonne</li></ul><p>You will be contacted directly when a buyer matches your listing.</p><p style="color:#d4a843;margin-top:24px">UAIU Holdings Corp · info@uaiu.live</p></div>`;
+        sendZohoEmail(submission.email, 'Your Carbon Credits Are Live — UAIU Exchange', approveHtml).catch(() => {});
+      }
       res.json({ success: true, listing: newListing });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

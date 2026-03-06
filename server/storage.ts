@@ -27,6 +27,8 @@ import {
   type InsertExchangeRfq,
   type ExchangeCreditListing,
   type InsertExchangeCreditListing,
+  type ExchangeTrade,
+  type InsertExchangeTrade,
   type WebhookFailure,
   type InsertWebhookFailure,
   users,
@@ -43,6 +45,7 @@ import {
   exchangeAccounts,
   exchangeRfqs,
   exchangeCreditListings,
+  exchangeTrades,
   webhookFailures,
 } from "@shared/schema";
 import { db } from "./db";
@@ -109,6 +112,17 @@ export interface IStorage {
   getPendingCreditListings(): Promise<ExchangeCreditListing[]>;
   approveCreditListing(id: string): Promise<ExchangeListing>;
   rejectCreditListing(id: string): Promise<ExchangeCreditListing>;
+
+  // Exchange trades
+  createExchangeTrade(trade: InsertExchangeTrade): Promise<ExchangeTrade>;
+  getExchangeTradesByEmail(email: string): Promise<ExchangeTrade[]>;
+  updateExchangeTradeStatus(tradeId: string, status: string): Promise<void>;
+  getExchangeTradeByTradeId(tradeId: string): Promise<ExchangeTrade | null>;
+
+  // Exchange account updates
+  updateExchangeAccountTerms(email: string): Promise<ExchangeAccount>;
+  updateExchangeAccountPassword(email: string, passwordHash: string): Promise<void>;
+  updateExchangeAccountKyc(email: string, kycStatus: string): Promise<void>;
 
   // Webhook dead-letter queue
   logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure>;
@@ -648,6 +662,48 @@ export class DbStorage implements IStorage {
       SET retry_count = retry_count + 1, last_attempted_at = NOW()
       WHERE id = ${id}
     `);
+  }
+
+  async createExchangeTrade(trade: InsertExchangeTrade): Promise<ExchangeTrade> {
+    const [result] = await db.insert(exchangeTrades).values(trade).returning();
+    return result;
+  }
+
+  async getExchangeTradesByEmail(email: string): Promise<ExchangeTrade[]> {
+    return db.select().from(exchangeTrades)
+      .where(eq(exchangeTrades.accountEmail, email))
+      .orderBy(desc(exchangeTrades.createdAt));
+  }
+
+  async updateExchangeTradeStatus(tradeId: string, status: string): Promise<void> {
+    await db.update(exchangeTrades)
+      .set({ status })
+      .where(eq(exchangeTrades.tradeId, tradeId));
+  }
+
+  async getExchangeTradeByTradeId(tradeId: string): Promise<ExchangeTrade | null> {
+    const [result] = await db.select().from(exchangeTrades).where(eq(exchangeTrades.tradeId, tradeId));
+    return result ?? null;
+  }
+
+  async updateExchangeAccountTerms(email: string): Promise<ExchangeAccount> {
+    const [result] = await db.update(exchangeAccounts)
+      .set({ acceptedTermsAt: new Date() })
+      .where(eq(exchangeAccounts.email, email))
+      .returning();
+    return result;
+  }
+
+  async updateExchangeAccountPassword(email: string, passwordHash: string): Promise<void> {
+    await db.update(exchangeAccounts)
+      .set({ passwordHash })
+      .where(eq(exchangeAccounts.email, email));
+  }
+
+  async updateExchangeAccountKyc(email: string, kycStatus: string): Promise<void> {
+    await db.update(exchangeAccounts)
+      .set({ kycStatus })
+      .where(eq(exchangeAccounts.email, email));
   }
 }
 
