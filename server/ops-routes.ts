@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import { getOpsState, recordOpsEvent } from './ops-monitoring';
 import { requireAdminHeader } from './exchange-auth';
+import { triggerDatabaseBackup } from './cron';
 
 export function registerOpsRoutes(app: Express) {
   app.get('/api/admin/ops/overview', requireAdminHeader, (_req, res) => {
@@ -23,6 +24,15 @@ export function registerOpsRoutes(app: Express) {
     process.env.TRADING_DISABLED = enabled ? '1' : '0';
     recordOpsEvent('maintenance_mode_changed', { enabled });
     res.json({ success: true, enabled });
+  });
+
+  app.post('/api/admin/backup/trigger', requireAdminHeader, async (_req, res) => {
+    const result = await triggerDatabaseBackup();
+    recordOpsEvent('manual_backup_triggered', { success: result.success });
+    if (result.success) {
+      return res.json({ success: true, file: result.file });
+    }
+    return res.status(500).json({ success: false, error: result.error });
   });
 
   app.get('/api/status/public', (_req, res) => {

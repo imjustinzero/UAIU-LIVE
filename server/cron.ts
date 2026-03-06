@@ -1,10 +1,60 @@
 import type { Express } from "express";
+import { exec } from "child_process";
+import { mkdirSync, readdirSync, statSync, unlinkSync } from "fs";
+import path from "path";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { sendExchangeEmail } from "./email-service";
 
+const BACKUP_DIR = "/tmp/uaiu_backups";
+const BACKUP_KEEP = 7;
+
+export async function triggerDatabaseBackup(): Promise<{ success: boolean; file?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      console.warn("[Backup] DATABASE_URL not set — skipping");
+      return resolve({ success: false, error: "DATABASE_URL not set" });
+    }
+    mkdirSync(BACKUP_DIR, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+    const backupFile = path.join(BACKUP_DIR, `uaiu_${timestamp}.sql`);
+    exec(`pg_dump "${dbUrl}" > "${backupFile}"`, (err) => {
+      if (err) {
+        console.error("[Backup] pg_dump failed:", err.message);
+        return resolve({ success: false, error: err.message });
+      }
+      console.log(`[Backup] ✅ Database backed up → ${backupFile}`);
+      try {
+        const files = readdirSync(BACKUP_DIR)
+          .filter(f => f.startsWith("uaiu_") && f.endsWith(".sql"))
+          .map(f => ({ name: f, time: statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+          .sort((a, b) => b.time - a.time);
+        for (const old of files.slice(BACKUP_KEEP)) {
+          unlinkSync(path.join(BACKUP_DIR, old.name));
+          console.log(`[Backup] Pruned old backup: ${old.name}`);
+        }
+      } catch { /* ignore prune errors */ }
+      resolve({ success: true, file: backupFile });
+    });
+  });
+}
+
 export function startCronJobs(_app: Express): void {
   console.log("[Cron] ✅ Escrow watchdog started — 30-min interval");
+
+  // Daily database backup at startup + every 24h
+  setTimeout(() => {
+    triggerDatabaseBackup().then(r => {
+      if (!r.success) console.warn("[Backup] Scheduled backup failed:", r.error);
+    });
+    setInterval(() => {
+      triggerDatabaseBackup().then(r => {
+        if (!r.success) console.warn("[Backup] Scheduled backup failed:", r.error);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, 5 * 60 * 1000); // first backup 5 min after startup
+
 
   async function checkStuckEscrows(): Promise<void> {
     try {

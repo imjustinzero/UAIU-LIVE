@@ -66,6 +66,10 @@ export default function Admin() {
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [platformStatus, setPlatformStatus] = useState<{ status: 'ok' | 'degraded' | 'incident'; message: string }>({
+    status: 'ok',
+    message: 'All systems operational.',
+  });
   
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -104,14 +108,23 @@ export default function Admin() {
   async function loadData() {
     setLoading(true);
     try {
-      const [lRes, wRes, hRes] = await Promise.all([
+      const [lRes, wRes, hRes, sRes] = await Promise.all([
         fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
+        fetch(`/api/status/public`),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
       if (hRes.ok) setHealthData(await hRes.json());
+      if (sRes.ok) {
+        const sd = await sRes.json();
+        const s: 'ok' | 'degraded' | 'incident' =
+          sd.status === 'operational' ? 'ok'
+          : sd.status === 'maintenance' || sd.status === 'degraded' ? 'degraded'
+          : 'incident';
+        setPlatformStatus({ status: s, message: sd.message || 'Status updated.' });
+      }
     } catch (e: any) {
       toast('Failed to load data', 'err');
     } finally {
@@ -384,7 +397,7 @@ export default function Admin() {
         )}
 
       <section style={{ padding: '0 24px 40px', maxWidth: 1400, margin: '0 auto' }}>
-        <IncidentBanner status="ok" message="All systems operational. No active incidents." />
+        <IncidentBanner status={platformStatus.status} message={platformStatus.message} />
         <EnterpriseOpsDashboard adminKey={adminKey} />
         <LaunchChecklist />
       </section>
