@@ -234,7 +234,10 @@ Without them, the system falls back to local `/tmp` only and logs a warning.
 | `AWS_SECRET_ACCESS_KEY` | **Yes (for S3)** | Corresponding secret key |
 | `AWS_REGION` | Optional | Region, default `us-east-1` |
 | `S3_BACKUP_ENDPOINT` | Optional | Custom endpoint for R2/B2/MinIO |
+| `BACKUP_ALERT_EMAIL` | Optional | Destination for backup upload failure alerts (default `info@uaiu.live`) |
 | `DATABASE_URL` | Always | PostgreSQL connection string |
+
+> **Important:** `S3_BACKUP_BUCKET` must exactly match the real bucket name. For Cloudflare R2, `uaiu-backup` and `uaiu-backups` are different buckets.
 
 ### Provider Quick-Start
 

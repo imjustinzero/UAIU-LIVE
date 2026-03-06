@@ -9,6 +9,7 @@ import { Upload } from "@aws-sdk/lib-storage";
 import { createReadStream, statSync } from "fs";
 
 const BACKUP_PREFIX = "uaiu-backups/";
+let warnedBucketTypo = false;
 
 export interface S3ObjectMeta {
   key: string;
@@ -54,7 +55,14 @@ export function getS3Client(): S3Client | null {
 }
 
 export function getS3BucketName(): string | null {
-  return process.env.S3_BACKUP_BUCKET || null;
+  const bucket = process.env.S3_BACKUP_BUCKET || null;
+  if (!warnedBucketTypo && bucket === "uaiu-backup") {
+    warnedBucketTypo = true;
+    console.warn(
+      "[Backup S3] S3_BACKUP_BUCKET is set to 'uaiu-backup'. If your R2 bucket is 'uaiu-backups', update the secret to avoid upload failures.",
+    );
+  }
+  return bucket;
 }
 
 /**
