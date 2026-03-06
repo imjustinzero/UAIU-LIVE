@@ -1093,6 +1093,11 @@ export default function Exchange() {
                       <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
                     </div>
                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
+                    {l.registrySerial && l.registryName && (
+                      <div style={{ marginBottom: 10 }}>
+                        <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.green, background: C.greenfaint, border: `1px solid ${C.green}`, padding: '4px 10px', display: 'inline-flex', borderRadius: 999 }}>Registry Verified · {l.registryName}</span>
+                      </div>
+                    )}
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>
                     <div style={{ height: 1, background: C.goldborder, marginBottom: 20 }} />
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>

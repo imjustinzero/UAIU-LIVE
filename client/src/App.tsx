@@ -16,6 +16,7 @@ import Status from "@/pages/Status";
 import Legal from "@/pages/Legal";
 import ZStop from "@/pages/ZStop";
 import SellerConnect from "@/pages/SellerConnect";
+import RetireUpload from "@/pages/RetireUpload";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/legal" component={Legal} />
       <Route path="/x/zstop" component={ZStop} />
       <Route path="/x/seller" component={SellerConnect} />
+      <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route component={NotFound} />
     </Switch>
   );

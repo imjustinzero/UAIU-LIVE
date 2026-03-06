@@ -6,6 +6,7 @@ import path from "path";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { sendExchangeEmail } from "./email-service";
+import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import {
   isS3Configured,
   uploadToS3,
@@ -212,6 +213,41 @@ export function startCronJobs(_app: Express): void {
       if (!stripeKey) {
         console.warn("[Cron] Skipping stuck escrow check — STRIPE_SECRET_KEY not set");
         return;
+      }
+
+      // Retirement upload reminder — send once after 24h of no upload
+      try {
+        await db.execute(sql`ALTER TABLE retirement_upload_tokens ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ`).catch(() => {});
+        const dueReminders = await db.execute(sql`
+          SELECT id, trade_id, seller_email, created_at
+          FROM retirement_upload_tokens
+          WHERE used_at IS NULL
+            AND reminder_sent_at IS NULL
+            AND created_at <= NOW() - INTERVAL '24 hours'
+          ORDER BY created_at ASC
+          LIMIT 100
+        `).catch(() => ({ rows: [] as any[] }));
+
+        for (const token of ((dueReminders as any).rows || [])) {
+          try {
+            const tradeIdStr = String(token.trade_id || '');
+            const sellerEmailStr = String(token.seller_email || '');
+            const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Reminder — Retirement Certificate Upload Pending</h2><p>Your retirement certificate upload is still pending for trade <strong>${tradeIdStr}</strong>.</p><p>Please use your original secure link from the initial email. If it has expired, contact <a href="mailto:desk@uaiu.live" style="color:#d4a843">desk@uaiu.live</a> immediately.</p><p style="font-size:11px;color:rgba(242,234,216,0.4)">UAIU.LIVE/X · uaiu.live/x</p></div>`;
+            if (isZohoConfigured() && sellerEmailStr) {
+              await sendZohoEmail(sellerEmailStr, `Reminder: retirement upload due — ${tradeIdStr}`, html);
+            } else {
+              await sendExchangeEmail('Retirement Upload Reminder', {
+                'Trade ID': tradeIdStr,
+                'Seller Email': sellerEmailStr,
+              });
+            }
+            await db.execute(sql`UPDATE retirement_upload_tokens SET reminder_sent_at = NOW() WHERE id = ${String(token.id)}`);
+          } catch (e: any) {
+            console.error('[Cron] Retirement reminder send failed:', e.message);
+          }
+        }
+      } catch (e: any) {
+        console.error('[Cron] Retirement reminder check failed:', e.message);
       }
 
       const { default: Stripe } = await import("stripe");

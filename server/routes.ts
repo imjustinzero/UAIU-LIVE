@@ -3,7 +3,7 @@ import express from "express";
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import rateLimit from "express-rate-limit";
 import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
-import { logSecurityEvent } from "./security-utils";
+import { logSecurityEvent, secureTokenMatch } from "./security-utils";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
@@ -40,10 +40,6 @@ function createRetirementUploadToken(): { token: string; tokenHash: string } {
   return { token, tokenHash };
 }
 
-function secureTokenMatch(rawToken: string, tokenHash: string): boolean {
-  const inputHash = createHash('sha256').update(rawToken).digest('hex');
-  return timingSafeEqual(Buffer.from(inputHash), Buffer.from(tokenHash));
-}
 
 async function sendRetirementUploadRequest(params: {
   tradeId: string;
@@ -420,6 +416,30 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                     payoutAmountEur: grossEur - feeEur,
                     chargeId: String(cs.payment_intent || ''),
                   }).catch((e: any) => console.error('[Seller payout email]', e.message));
+                }
+
+                // Create one-time retirement upload token for seller evidence collection
+                if (sellerEmail && tradeId) {
+                  try {
+                    const uploadToken = nanoid(40);
+                    const uploadTokenHash = createHash('sha256').update(uploadToken).digest('hex');
+                    await db.execute(sql`
+                      INSERT INTO retirement_upload_tokens (trade_id, seller_email, token_hash, created_at)
+                      VALUES (${tradeId}, ${sellerEmail}, ${uploadTokenHash}, NOW())
+                      ON CONFLICT DO NOTHING
+                    `).catch(() => {});
+                    const retireUrl = `https://uaiu.live/retire/${encodeURIComponent(tradeId)}?token=${encodeURIComponent(uploadToken)}`;
+                    if (isZohoConfigured()) {
+                      const regMeta = [
+                        meta.seller_registry_name ? `<li><strong>Registry:</strong> ${meta.seller_registry_name}</li>` : '',
+                        meta.seller_registry_serial ? `<li><strong>Serial:</strong> ${meta.seller_registry_serial}</li>` : '',
+                      ].join('');
+                      const retireHtml = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Upload Retirement Certificate</h2><p>A completed trade now needs retirement evidence.</p><ul><li><strong>Trade ID:</strong> ${tradeId}</li><li><strong>Volume:</strong> ${volumeT.toLocaleString()} tCO₂e ${standard}</li>${regMeta}<li><strong>Window:</strong> Due within 48 hours</li></ul><p><a href="${retireUrl}" style="color:#d4a843">Upload Retirement Certificate →</a></p><p style="font-size:11px;color:rgba(242,234,216,0.4)">This link is one-time use. Contact desk@uaiu.live for assistance.</p></div>`;
+                      sendZohoEmail(sellerEmail, `Retirement certificate upload required — ${tradeId}`, retireHtml).catch(() => {});
+                    }
+                  } catch (tokenErr: any) {
+                    console.error('[Retirement token create]', tokenErr.message);
+                  }
                 }
 
                 // Generate and email PDF receipt
@@ -1762,6 +1782,50 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // Trade recording is handled exclusively by the Stripe webhook handler.
   // The public /api/exchange/trade/record endpoint has been removed for security.
+
+  // ── EXCHANGE: Retirement certificate upload (token-gated, no session required) ─
+  app.post('/api/exchange/retire-upload/:tradeId', upload.single('certificate'), async (req, res) => {
+    try {
+      const tradeId = String(req.params.tradeId || '').trim();
+      const token = String((req as any).body?.token || '').trim();
+      const certFile = (req as any).file as Express.Multer.File | undefined;
+
+      if (!tradeId || !token || !certFile) {
+        return res.status(400).json({ error: 'tradeId, token, and certificate file are required.' });
+      }
+
+      const tokenRows = await db.execute(sql`
+        SELECT id, token_hash, used_at, seller_email
+        FROM retirement_upload_tokens
+        WHERE trade_id = ${tradeId}
+        ORDER BY created_at DESC
+        LIMIT 20
+      `);
+
+      const match = (tokenRows as any).rows?.find((r: any) => !r.used_at && secureTokenMatch(token, String(r.token_hash || '')));
+      if (!match) {
+        return res.status(401).json({ error: 'Invalid or expired upload token.' });
+      }
+
+      const confirmedAt = new Date().toISOString();
+      await db.execute(sql`
+        INSERT INTO trade_retirement_certificates (trade_id, uploaded_by, certificate_filename, upload_url, uploaded_at)
+        VALUES (${tradeId}, ${String(match.seller_email || '')}, ${certFile.originalname}, ${certFile.path}, NOW())
+      `).catch(() => {});
+
+      await db.execute(sql`UPDATE retirement_upload_tokens SET used_at = NOW() WHERE id = ${String(match.id)}`);
+      await db.execute(sql`
+        UPDATE exchange_trades
+        SET retirement_status = ${`Confirmed — ${confirmedAt}`}
+        WHERE trade_id = ${tradeId}
+      `).catch(() => {});
+
+      return res.json({ success: true, message: 'Retirement certificate uploaded successfully.' });
+    } catch (e: any) {
+      console.error('[Retire upload]', e.message);
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
 
   // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
   app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
