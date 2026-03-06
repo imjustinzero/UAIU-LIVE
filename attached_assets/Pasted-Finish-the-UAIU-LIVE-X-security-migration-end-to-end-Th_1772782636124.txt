@@ -1,0 +1,47 @@
+Finish the UAIU.LIVE/X security migration end-to-end. The client already expects X-Exchange-Token and /api/exchange/account/verify-token, but the server is not fully aligned.
+
+Implement and wire all of the following in the live repo:
+
+1. Create DB-backed exchange_sessions table and exchange_security_log table.
+2. Add DB-backed sessions table for general platform auth, replacing in-memory session middleware.
+3. In exchange signin, issue nanoid(32) token with 24h expiry and return { account, token }.
+4. Add POST /api/exchange/account/verify-token that validates X-Exchange-Token and returns the authenticated account.
+5. Create requireExchangeAuth middleware using X-Exchange-Token and attach req.exchangeEmail.
+6. Protect these routes with requireExchangeAuth and remove trust in body/query email:
+   - GET /api/exchange/trades
+   - POST /api/exchange/spot-checkout
+   - POST /api/exchange/retire
+   - PATCH /api/exchange/account/accept-terms
+   - PATCH /api/exchange/account/kyc-status
+7. In protected routes, use req.exchangeEmail only.
+8. In /api/exchange/spot-checkout:
+   - require verified KYC
+   - load authoritative price from DB listing
+   - ignore client pricing
+   - reject if no active listing found
+   - log suspicious price mismatches
+9. In /api/exchange/retire:
+   - require verified KYC
+   - verify trade exists
+   - verify trade belongs to req.exchangeEmail
+   - verify trade status is completed and not already retired
+10. Delete public /api/exchange/trade/record route. Trade recording must happen only in webhook flow.
+11. Add express-rate-limit:
+   - signin 5/15m per IP
+   - account creation 3/hour per IP
+   - spot-checkout 20/min per token
+12. Add failedLoginAttempts and lockedUntil to exchange_accounts.
+13. On 5 failed signins, lock for 15 minutes.
+14. Sanitize all 500-level errors with a safeError helper.
+15. Move all admin routes from query param admin_key to X-Admin-Key header using timingSafeEqual.
+16. Reduce admin health-check output to boolean service status only.
+17. Add exchange_security_log writes for:
+   signin_success, signin_fail, signin_lockout, suspicious_price, trade_executed, trade_retire, kyc_started, kyc_verified, terms_accepted, password_changed
+18. Add DB constraints to exchange_trades:
+   positive volume, positive gross, positive price, unique trade_id
+19. Make webhook trade creation idempotent with onConflictDoNothing.
+20. Add helmet/CSP and security headers in server/app.ts.
+21. Audit exchange components for dangerouslySetInnerHTML and sanitize any AI-rendered HTML.
+22. Make sure the current Exchange.tsx token flow works cleanly after all changes.
+23. Run typecheck/build and fix all errors introduced by the migration.
+24. Commit everything in one security-hardening commit.
