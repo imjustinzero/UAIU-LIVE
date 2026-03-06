@@ -378,13 +378,11 @@ export default function Play() {
                   </Badge>
                   
                   <h1 className="text-6xl md:text-8xl font-display font-black bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent leading-tight">
-                    Win Real Cash
-                    <br />
-                    Playing Games
+                    Executive Break Room
                   </h1>
                   
                   <p className="text-xl md:text-3xl text-muted-foreground max-w-3xl mx-auto font-medium">
-                    Challenge players worldwide in 6 arcade classics. Every match is pay-to-play. Winners earn credits, losers learn.
+                    Play live against others around the world.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
@@ -556,9 +554,9 @@ export default function Play() {
                   <div className="grid md:grid-cols-3 gap-6 mt-8">
                     <Card className="p-6 text-center hover-elevate">
                       <Trophy className="w-12 h-12 mx-auto mb-4 text-primary" />
-                      <h3 className="font-bold text-lg mb-2">Win Real Cash</h3>
+                      <h3 className="font-bold text-lg mb-2">Compete Globally</h3>
                       <p className="text-sm text-muted-foreground">
-                        Winners earn 1.6x their bet. Request payouts anytime.
+                        Challenge players from around the world and climb the leaderboard.
                       </p>
                     </Card>
                     <Card className="p-6 text-center hover-elevate">
