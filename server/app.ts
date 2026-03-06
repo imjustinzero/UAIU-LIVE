@@ -110,11 +110,43 @@ export default async function runApp(
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+
+  // Graceful shutdown — release the port cleanly on SIGTERM/SIGINT so rapid
+  // restarts (e.g. during development hot-reload) don't cause EADDRINUSE.
+  const shutdown = (signal: string) => {
+    log(`${signal} received — closing HTTP server`);
+    server.close(() => {
+      log('HTTP server closed');
+      process.exit(0);
+    });
+    // Force-exit after 5 s if connections are still open
+    setTimeout(() => process.exit(1), 5000).unref();
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT',  () => shutdown('SIGINT'));
+
+  // Retry listen on EADDRINUSE — the previous process may not have vacated the
+  // port yet when tsx/nodemon restarts quickly.
+  const MAX_RETRIES = 10;
+  const RETRY_DELAY_MS = 500;
+  let retries = 0;
+
+  const tryListen = () => {
+    server.listen({ port, host: '0.0.0.0', reusePort: true }, () => {
+      log(`serving on port ${port}`);
+    });
+  };
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE' && retries < MAX_RETRIES) {
+      retries++;
+      log(`Port ${port} in use — retry ${retries}/${MAX_RETRIES} in ${RETRY_DELAY_MS}ms`);
+      server.close();
+      setTimeout(tryListen, RETRY_DELAY_MS);
+    } else {
+      throw err;
+    }
   });
+
+  tryListen();
 }
