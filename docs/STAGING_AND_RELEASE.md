@@ -1,26 +1,39 @@
-# Staging and Release Plan
+# Release Plan
 
 ## Goal
-Create a separate staging deployment with the same env shape as production.
+Gate every production release through a pre-flight checklist before enabling live trading. Single deployment — no second environment needed.
 
-## Required env groups
-- APP_ENV=staging | production
-- DATABASE_URL
-- ADMIN_KEY
-- STRIPE_SECRET_KEY
-- STRIPE_WEBHOOK_SECRET
-- STRIPE_WEBHOOK_UUID
-- ANTHROPIC_API_KEY
-- DAILY_API_KEY
-- ZOHO_SMTP_USER / PASS
+## Release process
 
-## Rules
-1. Every release hits staging first.
-2. Run: typecheck, build, smoke tests, webhook replay, buyer flow, seller flow.
-3. Promote the same commit to production.
-4. Keep a rollback commit and release note.
+1. Merge changes to main.
+2. Run pre-flight checks:
+   - `npx tsc --noEmit` — zero errors required
+   - `npm run build` — clean build required
+   - Smoke test: signin, spot-checkout (KYC gate), retire (ownership check), admin gate
+   - Webhook replay test against Stripe test account
+3. If any check fails, set `TRADING_DISABLED=1` via the Admin ops maintenance-mode toggle to block new trades while fixing.
+4. Once all checks pass, redeploy and set `TRADING_DISABLED=0`.
 
 ## Fast rollback
-- redeploy previous known-good commit
-- set TRADING_DISABLED=1 if needed
-- replay safe webhooks after recovery
+- Toggle `TRADING_DISABLED=1` via `POST /api/admin/ops/maintenance-mode` — immediately blocks new trades without a redeploy.
+- Redeploy the last known-good commit from Replit deployment history.
+- Validate auth, checkout, webhook, admin, and retire paths before re-enabling.
+
+## Webhook replay
+- Identify failed event IDs in the Admin webhook dead-letter queue.
+- Replay via Stripe Dashboard or Stripe CLI.
+- `onConflictDoNothing` constraints prevent duplicate trade rows on replay.
+
+## Environment variables (all in Replit Secrets)
+```
+ADMIN_SECRET_KEY=
+DATABASE_URL=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_WEBHOOK_UUID=
+ANTHROPIC_API_KEY=
+DAILY_API_KEY=
+ZOHO_SMTP_USER=
+ZOHO_SMTP_PASS=
+TRADING_DISABLED=0
+```
