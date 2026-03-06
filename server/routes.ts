@@ -317,6 +317,54 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
                 console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Gross: €${grossEur}`);
               }
+
+              // Stripe Connect - account.updated (onboarding complete / requirements changed)
+              if (event.type === 'account.updated') {
+                const acct = event.data.object as any;
+                const accountId = acct.id;
+                const detailsSubmitted = !!acct.details_submitted;
+                const payoutsEnabled = !!acct.payouts_enabled;
+                if (accountId) {
+                  await db.execute(sql`
+                    UPDATE seller_profiles
+                    SET connect_onboarding_complete = ${detailsSubmitted && payoutsEnabled},
+                        connect_details_submitted = ${detailsSubmitted},
+                        updated_at = NOW()
+                    WHERE stripe_connect_account_id = ${accountId}
+                  `).catch((e: any) => console.error('[Connect account.updated]', e.message));
+                  console.log('[Connect] account.updated - ' + accountId + ' ready=' + (detailsSubmitted && payoutsEnabled));
+                }
+              }
+
+              // Stripe Connect - transfer.paid
+              if ((event.type as string) === 'transfer.paid') {
+                const transfer = event.data.object as any;
+                await db.execute(sql`
+                  UPDATE seller_payouts
+                  SET payout_status = 'paid', released_at = NOW()
+                  WHERE payout_reference = ${transfer.id} OR stripe_transfer_id = ${transfer.id}
+                `).catch((e: any) => console.error('[Connect transfer.paid]', e.message));
+                console.log('[Connect] transfer.paid - ' + transfer.id);
+              }
+
+              // Stripe Connect - transfer.failed
+              if ((event.type as string) === 'transfer.failed') {
+                const transfer = event.data.object as any;
+                const reason = transfer.failure_message || 'Transfer failed';
+                await db.execute(sql`
+                  UPDATE seller_payouts
+                  SET payout_status = 'failed', failure_reason = ${reason}
+                  WHERE payout_reference = ${transfer.id} OR stripe_transfer_id = ${transfer.id}
+                `).catch((e: any) => console.error('[Connect transfer.failed]', e.message));
+                await db.execute(sql`
+                  INSERT INTO exchange_exception_queue
+                    (entity_type, entity_id, severity, status, code, message, detail)
+                  VALUES ('transfer', ${transfer.id}, 'high', 'open', 'transfer_failed',
+                    ${reason}, ${JSON.stringify({ transferId: transfer.id })}::jsonb)
+                `).catch((e: any) => console.error('[Connect transfer.failed exception]', e.message));
+                console.log('[Connect] transfer.failed - ' + transfer.id + ': ' + reason);
+              }
+
             }
           } catch (autoErr: any) {
             // ── FIX 8: Dead-letter queue — log unhandled webhook errors ────

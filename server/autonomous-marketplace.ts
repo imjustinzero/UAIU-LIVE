@@ -3,6 +3,13 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
 import { requireAdminHeader, requireExchangeAuth, safeError } from "./exchange-auth";
+import {
+  createConnectAccount,
+  createOnboardingLink,
+  getConnectAccountStatus,
+  createTransfer,
+  getBaseUrl,
+} from "./stripe-connect";
 
 type RuleEval = {
   decision: "approved" | "manual_review" | "rejected";
@@ -619,30 +626,201 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
     }
   });
 
-  // Release payout workflow
+  // Stripe Connect — start or resume onboarding
+  app.post("/api/seller/connect/onboard", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const baseUrl = getBaseUrl(req);
+
+      const profileResult = await db.execute(sql`
+        SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const profile = (profileResult as any).rows?.[0];
+      if (!profile) {
+        return res.status(404).json({ error: "Seller profile not found. Complete seller onboarding first." });
+      }
+
+      let connectAccountId = profile.stripe_connect_account_id;
+
+      if (!connectAccountId) {
+        const country = profile.country || "US";
+        connectAccountId = await createConnectAccount(email, country);
+        await db.execute(sql`
+          UPDATE seller_profiles
+          SET stripe_connect_account_id = ${connectAccountId}, updated_at = NOW()
+          WHERE id = ${profile.id}
+        `);
+      }
+
+      const onboardingUrl = await createOnboardingLink(connectAccountId, baseUrl);
+      return res.json({ success: true, onboardingUrl, connectAccountId });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Stripe Connect — get current account status
+  app.get("/api/seller/connect/status", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+
+      const profileResult = await db.execute(sql`
+        SELECT sp.*,
+          (SELECT json_agg(p ORDER BY p.created_at DESC)
+           FROM seller_payouts p WHERE p.seller_email = ${email}
+          ) AS payout_history
+        FROM seller_profiles sp
+        WHERE sp.exchange_account_email = ${email}
+        LIMIT 1
+      `);
+      const profile = (profileResult as any).rows?.[0];
+      if (!profile) {
+        return res.json({ hasProfile: false });
+      }
+
+      let connectStatus = null;
+      if (profile.stripe_connect_account_id) {
+        try {
+          connectStatus = await getConnectAccountStatus(profile.stripe_connect_account_id);
+          if (connectStatus.ready && !profile.connect_onboarding_complete) {
+            await db.execute(sql`
+              UPDATE seller_profiles
+              SET connect_onboarding_complete = true,
+                  connect_details_submitted = true,
+                  updated_at = NOW()
+              WHERE id = ${profile.id}
+            `);
+            profile.connect_onboarding_complete = true;
+          }
+        } catch {
+          connectStatus = { error: "Could not retrieve Stripe account status." };
+        }
+      }
+
+      return res.json({
+        hasProfile: true,
+        sellerProfileId: profile.id,
+        onboardingStatus: profile.onboarding_status,
+        connectAccountId: profile.stripe_connect_account_id || null,
+        connectOnboardingComplete: profile.connect_onboarding_complete,
+        connectDetailsSubmitted: profile.connect_details_submitted,
+        connectStatus,
+        payoutHistory: profile.payout_history || [],
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Stripe Connect — refresh onboarding link for incomplete accounts
+  app.post("/api/seller/connect/refresh-link", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const baseUrl = getBaseUrl(req);
+
+      const profileResult = await db.execute(sql`
+        SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const profile = (profileResult as any).rows?.[0];
+      if (!profile?.stripe_connect_account_id) {
+        return res.status(404).json({ error: "No Connect account found. Start onboarding first." });
+      }
+      const onboardingUrl = await createOnboardingLink(profile.stripe_connect_account_id, baseUrl);
+      return res.json({ success: true, onboardingUrl });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // Release payout — routes through Stripe Connect transfer when account is ready
   app.post("/api/exchange/payout/release/:tradeId", requireAdminHeader, async (req, res) => {
     try {
       const { tradeId } = req.params;
       const payoutResult = await db.execute(sql`
-        SELECT * FROM seller_payouts WHERE trade_id = ${tradeId} ORDER BY created_at DESC LIMIT 1
+        SELECT sp.*, prof.stripe_connect_account_id, prof.connect_onboarding_complete
+        FROM seller_payouts sp
+        LEFT JOIN seller_profiles prof ON prof.id = sp.seller_profile_id
+        WHERE sp.trade_id = ${tradeId}
+        ORDER BY sp.created_at DESC LIMIT 1
       `);
       const payout = (payoutResult as any).rows?.[0];
       if (!payout) return res.status(404).json({ error: "Payout not found." });
-      if (payout.payout_status === "released") return res.json({ success: true, alreadyReleased: true, payout });
+      if (payout.payout_status === "paid" || payout.payout_status === "released") {
+        return res.json({ success: true, alreadyReleased: true, payout });
+      }
+
+      const connectAccountId: string | null = payout.stripe_connect_account_id || null;
+      const connectReady: boolean = payout.connect_onboarding_complete === true;
+
+      // ── Path A: Stripe Connect transfer ─────────────────────────────────
+      if (connectAccountId && connectReady) {
+        try {
+          const transfer = await createTransfer(
+            Number(payout.seller_net_eur),
+            connectAccountId,
+            tradeId,
+            String(payout.seller_email)
+          );
+          await db.execute(sql`
+            UPDATE seller_payouts
+            SET payout_status = 'paid',
+                payout_provider = 'stripe_connect',
+                payout_reference = ${transfer.id},
+                stripe_transfer_id = ${transfer.id},
+                connect_account_id = ${connectAccountId},
+                released_at = NOW()
+            WHERE id = ${payout.id}
+          `);
+          await db.execute(sql`
+            UPDATE exchange_settlement_runs
+            SET settlement_status = 'released', settled_at = NOW()
+            WHERE trade_id = ${tradeId}
+          `);
+          return res.json({
+            success: true,
+            method: "stripe_connect",
+            transferId: transfer.id,
+            tradeId,
+            payoutId: payout.id,
+            sellerNet: payout.seller_net_eur,
+          });
+        } catch (transferErr: any) {
+          const errMsg = transferErr?.message || "Transfer failed";
+          await db.execute(sql`
+            UPDATE seller_payouts
+            SET payout_status = 'failed',
+                failure_reason = ${errMsg},
+                updated_at = NOW()
+            WHERE id = ${payout.id}
+          `);
+          await raiseException("trade", tradeId, "transfer_failed", `Stripe transfer failed: ${errMsg}`, { tradeId, payoutId: payout.id, connectAccountId }, "high");
+          return res.status(502).json({ error: "Stripe transfer failed. Added to exception queue.", detail: errMsg });
+        }
+      }
+
+      // ── Path B: No connect account or onboarding incomplete — queue exception
+      const reason = !connectAccountId
+        ? "No Stripe Connect account linked. Seller must complete payout onboarding."
+        : "Stripe Connect onboarding incomplete. Seller must finish verification.";
 
       await db.execute(sql`
         UPDATE seller_payouts
-        SET payout_status = 'released', released_at = NOW()
+        SET payout_status = 'pending_connect',
+            failure_reason = ${reason}
         WHERE id = ${payout.id}
       `);
-
-      await db.execute(sql`
-        UPDATE exchange_settlement_runs
-        SET settlement_status = 'released', settled_at = NOW()
-        WHERE trade_id = ${tradeId}
-      `);
-
-      return res.json({ success: true, released: true, tradeId, payoutId: payout.id });
+      await raiseException(
+        "trade",
+        tradeId,
+        "connect_account_incomplete",
+        reason,
+        { tradeId, sellerEmail: payout.seller_email, connectAccountId },
+        "medium"
+      );
+      return res.status(422).json({
+        error: reason,
+        action: "Seller must complete Stripe Connect onboarding at /x/seller before payout can be released.",
+      });
     } catch (e: any) {
       return res.status(500).json({ error: safeError(e) });
     }
@@ -651,11 +829,22 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
   // Admin autonomy queue
   app.get("/api/admin/autonomous-marketplace/queue", requireAdminHeader, async (_req, res) => {
     try {
-      const [reviewQueue, exceptions, payouts, matches] = await Promise.all([
+      const [reviewQueue, exceptions, payouts, matches, sellerProfiles] = await Promise.all([
         db.execute(sql`SELECT * FROM exchange_listing_review_queue ORDER BY decision ASC, priority ASC, created_at DESC LIMIT 100`),
         db.execute(sql`SELECT * FROM exchange_exception_queue WHERE status = 'open' ORDER BY severity ASC, created_at DESC LIMIT 100`),
-        db.execute(sql`SELECT * FROM seller_payouts ORDER BY created_at DESC LIMIT 100`),
+        db.execute(sql`
+          SELECT sp.*, prof.stripe_connect_account_id, prof.connect_onboarding_complete, prof.legal_entity_name
+          FROM seller_payouts sp
+          LEFT JOIN seller_profiles prof ON prof.id = sp.seller_profile_id
+          ORDER BY sp.created_at DESC LIMIT 100
+        `),
         db.execute(sql`SELECT * FROM exchange_rfq_matches ORDER BY created_at DESC LIMIT 100`),
+        db.execute(sql`
+          SELECT id, exchange_account_email, legal_entity_name, onboarding_status,
+                 kyb_status, stripe_connect_account_id, connect_onboarding_complete,
+                 connect_details_submitted, created_at, updated_at
+          FROM seller_profiles ORDER BY created_at DESC LIMIT 100
+        `),
       ]);
 
       return res.json({
@@ -663,6 +852,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         exceptions: (exceptions as any).rows || [],
         payouts: (payouts as any).rows || [],
         rfqMatches: (matches as any).rows || [],
+        sellerProfiles: (sellerProfiles as any).rows || [],
       });
     } catch (e: any) {
       return res.status(500).json({ error: safeError(e) });

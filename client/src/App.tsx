@@ -15,6 +15,7 @@ import Security from "@/pages/Security";
 import Status from "@/pages/Status";
 import Legal from "@/pages/Legal";
 import ZStop from "@/pages/ZStop";
+import SellerConnect from "@/pages/SellerConnect";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/status" component={Status} />
       <Route path="/legal" component={Legal} />
       <Route path="/x/zstop" component={ZStop} />
+      <Route path="/x/seller" component={SellerConnect} />
       <Route component={NotFound} />
     </Switch>
   );
