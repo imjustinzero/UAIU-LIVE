@@ -287,6 +287,9 @@ export function VoiceRFQ({ onParsed, isDark = true }: VoiceRFQProps) {
                 fontFamily: 'JetBrains Mono, monospace' }}>
                 "{transcript}"
               </p>
+              <p style={{ margin: '8px 0 0', fontSize: '9px', color: 'rgba(212,168,67,0.4)', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.03em', lineHeight: 1.5 }}>
+                AI-generated analysis is for informational purposes only and does not constitute financial, legal, or compliance advice.
+              </p>
             </div>
           )}
           {state === 'error' && (

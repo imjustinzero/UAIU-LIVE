@@ -414,6 +414,12 @@ export function AITradeNegotiator({
           fontFamily: 'JetBrains Mono, monospace' }}>
           {result.market_context}
         </p>
+        <p style={{ margin: '12px 0 0', fontSize: '9px', lineHeight: 1.5,
+          color: 'rgba(212,168,67,0.35)', fontFamily: 'JetBrains Mono, monospace',
+          letterSpacing: '0.03em', paddingTop: 10,
+          borderTop: '1px solid rgba(212,168,67,0.1)' }}>
+          AI-generated analysis is for informational purposes only and does not constitute financial, legal, or compliance advice.
+        </p>
       </div>
 
       {/* Action buttons */}

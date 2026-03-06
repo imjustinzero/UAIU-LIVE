@@ -189,6 +189,98 @@ function genTradeId(mode: string): string {
   return `UAIU-${mode.toUpperCase()}-${Date.now().toString().slice(-6)}`;
 }
 
+function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
+  exchangeHeaders: () => Record<string, string>;
+  sessionAccount: any;
+  C: Record<string, string>;
+  F: Record<string, string>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<'idle'|'uploading'|'done'|'error'>('idle');
+  const [proofDoc, setProofDoc] = useState<any>(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!sessionAccount) return;
+    const token = sessionStorage.getItem('x-exchange-token');
+    if (!token) return;
+    fetch('/api/seller/registry-proof', { headers: { 'X-Exchange-Token': token } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.hasProof) setProofDoc(data.document); setChecked(true); })
+      .catch(() => setChecked(true));
+  }, [sessionAccount]);
+
+  if (!sessionAccount || !checked) return null;
+
+  if (proofDoc) {
+    const statusColor = proofDoc.verification_status === 'verified' ? C.green : proofDoc.verification_status === 'rejected' ? '#ef4444' : C.gold;
+    return (
+      <div style={{ marginTop: 24, padding: '16px 20px', background: C.ink, border: `1px solid ${C.goldborder}` }}>
+        <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.gold, marginBottom: 8 }}>Registry Ownership Proof</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 9, padding: '3px 10px', border: `1px solid ${statusColor}`, color: statusColor, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{proofDoc.verification_status}</span>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>{proofDoc.file_name}</span>
+        </div>
+        {proofDoc.verification_status === 'rejected' && (
+          <div style={{ marginTop: 8, fontFamily: F.mono, fontSize: 10, color: '#ef4444' }}>Proof rejected. Please upload a new document.</div>
+        )}
+      </div>
+    );
+  }
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setStatus('uploading');
+    try {
+      const token = sessionStorage.getItem('x-exchange-token');
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/seller/registry-proof', {
+        method: 'POST',
+        headers: token ? { 'X-Exchange-Token': token } : {},
+        body: formData,
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Upload failed'); }
+      setStatus('done');
+      setFile(null);
+    } catch (e: any) {
+      setStatus('error');
+      setTimeout(() => setStatus('idle'), 4000);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 24, padding: '20px', background: C.ink, border: `1px solid ${C.goldborder}` }} data-testid="section-registry-proof">
+      <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.gold, marginBottom: 6 }}>Registry Ownership Proof — Required</div>
+      <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, lineHeight: 1.6, marginBottom: 14 }}>
+        Upload a screenshot or official document from your registry account (Verra, Gold Standard, etc.) showing your name and registry account ID. Required before your listing can be approved.
+      </div>
+      {status === 'done' ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <span style={{ color: C.green, fontSize: 16 }}>✓</span>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: C.green }}>Proof submitted — pending admin verification</span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ flex: 1, cursor: 'pointer', padding: '10px 14px', border: `1px solid ${C.goldborder}`, background: 'transparent', fontFamily: F.mono, fontSize: 10, color: file ? C.cream : C.cream3, display: 'block', minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} data-testid="label-registry-proof-file">
+            {file ? file.name : 'Choose file (PDF, PNG, JPG)'}
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={e => setFile(e.target.files?.[0] || null)} data-testid="input-registry-proof" />
+          </label>
+          <button
+            onClick={handleUpload}
+            disabled={!file || status === 'uploading'}
+            style={{ padding: '10px 18px', background: file ? C.gold : 'transparent', border: `1px solid ${file ? C.gold : C.goldborder}`, color: file ? C.ink : C.cream3, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.1em', cursor: file ? 'pointer' : 'not-allowed', fontWeight: 700, opacity: status === 'uploading' ? 0.7 : 1 }}
+            data-testid="button-upload-registry-proof"
+          >
+            {status === 'uploading' ? 'Uploading...' : 'Upload Proof →'}
+          </button>
+          {status === 'error' && <span style={{ fontFamily: F.mono, fontSize: 10, color: '#ef4444' }}>Upload failed. Try again.</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Exchange() {
   const cursorRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
@@ -1369,6 +1461,7 @@ export default function Exchange() {
                     <VisionVerification onReport={(report) => setListSerial(prev => prev)} />
                     <button style={{ ...s.formSubmit as React.CSSProperties, opacity: listSubmitting ? 0.7 : 1 }} onClick={handleListSubmit} disabled={listSubmitting} data-testid="button-list-submit">{listSubmitting ? 'Submitting...' : 'Submit for Verification →'}</button>
                     <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>48-hour AI-assisted verification · Human reviewed · UAIU Holdings Corp. Wyoming</div>
+                    <RegistryProofUpload exchangeHeaders={exchangeHeaders} sessionAccount={sessionAccount} C={C} F={F} />
                   </div>
                 )}
               </div>

@@ -2341,9 +2341,106 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  // ── Seller: upload registry ownership proof ──────────────────────────────────
+  app.post('/api/seller/registry-proof', requireExchangeAuth, upload.single('file'), async (req, res) => {
+    try {
+      const email = (req as any).exchangeEmail as string;
+      if (!email) return res.status(401).json({ error: 'Unauthorized' });
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+      // Find seller profile by exchange account email
+      const profileRows = await db.execute(sql`
+        SELECT id FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const profile = (profileRows as any).rows?.[0];
+      if (!profile) return res.status(404).json({ error: 'No seller profile found. Submit a listing first.' });
+
+      const sellerProfileId = String(profile.id);
+      const fileName = req.file.originalname;
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      const docRows = await db.execute(sql`
+        INSERT INTO seller_documents (seller_profile_id, document_type, file_name, file_url, verification_status)
+        VALUES (${sellerProfileId}, 'registry_ownership_proof', ${fileName}, ${fileUrl}, 'pending')
+        RETURNING id
+      `);
+      const docId = (docRows as any).rows?.[0]?.id || '';
+
+      await logSecurityEvent({ email, eventType: 'registry_proof_uploaded', req, detail: { sellerProfileId, docId, fileName } });
+
+      res.json({ success: true, documentId: docId, status: 'pending' });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── Admin: get seller registry proof by seller_profile_id ───────────────────
+  app.get('/api/admin/seller-proof/:profileId', requireAdminHeader, async (req, res) => {
+    try {
+      const docRows = await db.execute(sql`
+        SELECT id, file_name, file_url, verification_status, created_at
+        FROM seller_documents
+        WHERE seller_profile_id = ${req.params.profileId}
+          AND document_type = 'registry_ownership_proof'
+          AND verification_status != 'rejected'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const doc = (docRows as any).rows?.[0];
+      res.json({ hasProof: !!doc, document: doc || null });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── Seller: get registry proof status ───────────────────────────────────────
+  app.get('/api/seller/registry-proof', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = (req as any).exchangeEmail as string;
+      if (!email) return res.status(401).json({ error: 'Unauthorized' });
+
+      const profileRows = await db.execute(sql`
+        SELECT id FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
+      `);
+      const profile = (profileRows as any).rows?.[0];
+      if (!profile) return res.json({ hasProof: false });
+
+      const docRows = await db.execute(sql`
+        SELECT id, file_name, verification_status, created_at
+        FROM seller_documents
+        WHERE seller_profile_id = ${String(profile.id)}
+          AND document_type = 'registry_ownership_proof'
+          AND verification_status != 'rejected'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const doc = (docRows as any).rows?.[0];
+      res.json({ hasProof: !!doc, document: doc || null });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
   app.post('/api/admin/listings/:id/approve', requireAdminHeader, async (req, res) => {
     try {
       const [submission] = await db.select().from(exchangeCreditListings).where(eq(exchangeCreditListings.id, req.params.id));
+
+      // Gate: seller must have uploaded registry ownership proof
+      const submissionAny = submission as any;
+      if (submissionAny?.sellerProfileId || submissionAny?.seller_profile_id) {
+        const profileId = submissionAny?.sellerProfileId || submissionAny?.seller_profile_id;
+        const proofRows = await db.execute(sql`
+          SELECT id FROM seller_documents
+          WHERE seller_profile_id = ${String(profileId)}
+            AND document_type = 'registry_ownership_proof'
+            AND verification_status != 'rejected'
+          LIMIT 1
+        `);
+        if (!((proofRows as any).rows?.length)) {
+          return res.status(409).json({ error: 'Registry ownership proof required before approval. Seller must upload proof of registry account ownership.' });
+        }
+      }
+
       const newListing = await storage.approveCreditListing(req.params.id);
       sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
         'Listing ID':   req.params.id,

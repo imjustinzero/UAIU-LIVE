@@ -234,6 +234,12 @@ export function CarbonBudgetTracker({
           </div>
         </div>
       )}
+
+      <div style={{ padding: '16px 24px', borderTop: `1px solid ${C.goldborder}` }}>
+        <p style={{ margin: 0, fontFamily: F.mono, fontSize: 9, color: C.cream4, letterSpacing: '0.03em', lineHeight: 1.6 }}>
+          AI-generated analysis is for informational purposes only and does not constitute financial, legal, or compliance advice.
+        </p>
+      </div>
     </div>
   );
 }

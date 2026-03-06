@@ -52,6 +52,50 @@ function Badge({ label, variant = 'muted' }: { label: string; variant?: 'green' 
   );
 }
 
+function RegistryProofStatus({ listing, adminKey, adminHeaders }: {
+  listing: any;
+  adminKey: string;
+  adminHeaders: (k: string) => Record<string, string>;
+}) {
+  const [proof, setProof] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const profileId = listing.sellerProfileId || listing.seller_profile_id;
+    if (!profileId) { setLoading(false); return; }
+    fetch(`/api/admin/seller-proof/${profileId}`, { headers: adminHeaders(adminKey) })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setProof(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [listing.id]);
+
+  if (loading) return null;
+
+  const profileId = listing.sellerProfileId || listing.seller_profile_id;
+  if (!profileId) return null;
+
+  const hasProof = proof?.hasProof;
+  const doc = proof?.document;
+  const statusColor = !hasProof ? C.red : doc?.verification_status === 'verified' ? C.green : C.yellow;
+
+  return (
+    <div style={{ padding: '12px 20px', borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase', fontFamily: F.mono }}>Registry Proof</span>
+      {!hasProof ? (
+        <span style={{ fontSize: '11px', color: C.red, fontFamily: F.mono, fontWeight: 600 }}>No proof uploaded — cannot approve</span>
+      ) : (
+        <>
+          <span style={{ fontSize: '10px', padding: '2px 8px', border: `1px solid ${statusColor}`, color: statusColor, fontFamily: F.mono, textTransform: 'uppercase' }}>{doc?.verification_status || 'pending'}</span>
+          <span style={{ fontSize: '11px', color: C.muted, fontFamily: F.mono }}>{doc?.file_name}</span>
+          {doc?.file_url && (
+            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: C.gold, fontFamily: F.mono, textDecoration: 'none' }}>View Document →</a>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const [location, setLocation] = useLocation();
   const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -140,6 +184,11 @@ export default function Admin() {
   async function approveListing(id: string) {
     try {
       const r = await fetch(`/api/admin/listings/${id}/approve`, { method: 'POST', headers: adminHeaders(adminKey) });
+      if (r.status === 409) {
+        const body = await r.json();
+        toast(body.error || 'Registry ownership proof required before approval.', 'err');
+        return;
+      }
       if (!r.ok) throw new Error('Approve failed');
       toast('Listing approved and published');
       setPendingListings(prev => prev.filter(l => l.id !== id));
@@ -310,6 +359,7 @@ export default function Admin() {
                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Registry</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registryName || l.registry_name || '—'}</span></div>
                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Vintage Year</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.vintageYear || l.vintage_year || '—'}</span></div>
                   </div>
+                  <RegistryProofStatus listing={l} adminKey={adminKey} adminHeaders={adminHeaders} />
                 </div>
               ))
             )}

@@ -377,6 +377,13 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
             </div>
           )}
 
+          {/* AI disclaimer */}
+          <div style={{ padding: '6px 14px', borderTop: '1px solid rgba(212,168,67,0.08)' }}>
+            <p style={{ margin: 0, fontSize: '9px', fontFamily: 'JetBrains Mono, monospace', color: 'rgba(242,234,216,0.2)', letterSpacing: '0.03em', lineHeight: 1.5 }}>
+              AI-generated analysis is for informational purposes only and does not constitute financial, legal, or compliance advice.
+            </p>
+          </div>
+
           {/* Input */}
           <div style={{
             padding: '10px 12px', flexShrink: 0,
