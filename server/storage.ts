@@ -96,8 +96,8 @@ export interface IStorage {
   // Exchange
   getExchangeListings(standard?: string): Promise<ExchangeListing[]>;
   seedExchangeListings(listings: InsertExchangeListing[]): Promise<void>;
-  createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
   getExchangeAccountByEmail(email: string): Promise<ExchangeAccount | null>;
+  createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
   createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq>;
   createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing>;
 }
@@ -529,15 +529,6 @@ export class DbStorage implements IStorage {
     return result;
   }
 
-  async getExchangeAccountByEmail(email: string): Promise<ExchangeAccount | null> {
-    const [result] = await db
-      .select()
-      .from(exchangeAccounts)
-      .where(eq(exchangeAccounts.email, email.toLowerCase().trim()))
-      .limit(1);
-    return result ?? null;
-  }
-
   async createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq> {
     const [result] = await db.insert(exchangeRfqs).values(rfq).returning();
     return result;
@@ -546,6 +537,14 @@ export class DbStorage implements IStorage {
   async createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing> {
     const [result] = await db.insert(exchangeCreditListings).values(listing).returning();
     return result;
+  }
+
+  async getExchangeAccountByEmail(email: string): Promise<ExchangeAccount | null> {
+    const trimmed = email.toLowerCase().trim();
+    const [account] = await db.select().from(exchangeAccounts)
+      .where(eq(exchangeAccounts.email, trimmed))
+      .limit(1);
+    return account || null;
   }
 }
 

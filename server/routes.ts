@@ -11,6 +11,7 @@ import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
 import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
+import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -26,7 +27,15 @@ import { nanoid } from "nanoid";
 // Legacy Pong functions removed - all game logic now in GameManager
 
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
-  // Initialize Stripe and get webhook UUID
+  // Persist webhook UUID across server restarts via STRIPE_WEBHOOK_UUID secret
+  let webhookUuid = process.env.STRIPE_WEBHOOK_UUID;
+  if (!webhookUuid) {
+    webhookUuid = nanoid(32);
+    process.env.STRIPE_WEBHOOK_UUID = webhookUuid;
+    console.log(`⚠️  STRIPE_WEBHOOK_UUID not set. Generated: ${webhookUuid}`);
+    console.log(`⚠️  Add STRIPE_WEBHOOK_UUID = ${webhookUuid} to Replit Secrets to persist it.`);
+  }
+
   const stripeInit = await initStripe();
 
   // Register Stripe webhook route BEFORE express.json()
@@ -37,22 +46,116 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       express.raw({ type: 'application/json' }),
       async (req, res) => {
         const signature = req.headers['stripe-signature'];
+        if (!signature) return res.status(400).json({ error: 'Missing stripe-signature' });
 
-        if (!signature) {
-          return res.status(400).json({ error: 'Missing stripe-signature' });
+        // Validate UUID matches persisted value — blocks spoofed webhook calls
+        const { uuid } = req.params;
+        if (uuid !== process.env.STRIPE_WEBHOOK_UUID) {
+          console.error('[Webhook] UUID mismatch — rejected');
+          return res.status(403).json({ error: 'Invalid webhook endpoint' });
         }
 
         try {
           const sig = Array.isArray(signature) ? signature[0] : signature;
-
           if (!Buffer.isBuffer(req.body)) {
-            const errorMsg = 'STRIPE WEBHOOK ERROR: req.body is not a Buffer';
-            console.error(errorMsg);
+            console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer');
             return res.status(500).json({ error: 'Webhook processing error' });
           }
 
-          const { uuid } = req.params;
           await WebhookHandlers.processWebhook(req.body as Buffer, sig, uuid);
+
+          // ── AUTO ESCROW RELEASE ─────────────────────────────────────────
+          // When a PaymentIntent is authorized (requires_capture), auto-capture
+          // it for UAIU escrow trades so no manual /api/escrow/release call needed.
+          try {
+            const stripeKey = process.env.STRIPE_SECRET_KEY;
+            const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+            if (stripeKey && webhookSecret) {
+              const { default: Stripe } = await import('stripe');
+              const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+              const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+
+              if (
+                event.type === 'payment_intent.amount_capturable_updated' ||
+                event.type === 'payment_intent.requires_capture'
+              ) {
+                const pi = event.data.object as any;
+                if (pi.metadata?.escrow_type === 'carbon_credit_t1' && pi.status === 'requires_capture') {
+                  const trade_id = pi.metadata?.trade_id || 'unknown';
+                  console.log(`[Escrow Auto-Release] Capturing trade ${trade_id} — PI: ${pi.id}`);
+
+                  const captured    = await stripe.paymentIntents.capture(pi.id);
+                  const gross       = captured.amount / 100;
+                  const uaiu_fee    = gross * 0.0075;
+                  const seller_net  = gross - uaiu_fee;
+
+                  // Write to PostgreSQL (always available — no Supabase dependency)
+                  await db.execute(sql`
+                    INSERT INTO escrow_settlements_log
+                      (trade_id, payment_intent_id, amount_eur, uaiu_fee_eur,
+                       seller_net_eur, status, settled_at, stripe_charge_id)
+                    VALUES
+                      (${trade_id}, ${pi.id}, ${gross}, ${uaiu_fee},
+                       ${seller_net}, 'auto_settled', NOW(), ${captured.latest_charge as string})
+                    ON CONFLICT (payment_intent_id) DO UPDATE
+                      SET status = 'auto_settled', settled_at = NOW()
+                  `).catch((e: any) => console.error('[Escrow PG log]', e.message));
+
+                  // Also update Supabase if available
+                  await (req.app.locals.supabase as any)
+                    ?.from('escrow_settlements')
+                    .update({
+                      status:           'auto_settled',
+                      settled_at:       new Date().toISOString(),
+                      uaiu_fee_eur:     uaiu_fee,
+                      seller_net_eur:   seller_net,
+                      stripe_charge_id: captured.latest_charge,
+                    })
+                    .eq('payment_intent_id', pi.id)
+                    .catch((e: any) => console.error('[Escrow Supabase]', e.message));
+
+                  // Fire settlement email
+                  sendExchangeEmail(`Trade ${trade_id} — Auto-Settled`, {
+                    'Trade ID':          trade_id,
+                    'Gross':             `€${gross.toLocaleString()}`,
+                    'UAIU Fee (0.75%)':  `€${uaiu_fee.toFixed(2)}`,
+                    'Net to Seller':     `€${seller_net.toFixed(2)}`,
+                    'Stripe Charge':     captured.latest_charge as string,
+                    'Settled At':        new Date().toISOString(),
+                  }).catch((e: any) => console.error('[Escrow Email]', e.message));
+
+                  console.log(`[Escrow Auto-Release] ✅ Trade ${trade_id} settled. Gross: €${gross}`);
+                }
+              }
+
+              // KYC auto-confirm on Stripe Identity verified
+              if (event.type === 'identity.verification_session.verified') {
+                const session = event.data.object as any;
+                const account_id = session.metadata?.account_id;
+                const email      = session.metadata?.email;
+                if (account_id) {
+                  await db.execute(sql`
+                    UPDATE exchange_accounts
+                    SET kyc_status = 'verified', kyc_verified_at = NOW()
+                    WHERE id = ${account_id}
+                  `).catch((e: any) => console.error('[KYC webhook update]', e.message));
+
+                  if (email) {
+                    sendExchangeEmail('KYC Verified — Account Active', {
+                      'Account ID':  account_id,
+                      'Email':       email,
+                      'Status':      'VERIFIED — Trading enabled',
+                      'Verified At': new Date().toISOString(),
+                    }).catch((e: any) => console.error('[KYC email]', e.message));
+                  }
+                  console.log(`[KYC] Account ${account_id} verified via webhook`);
+                }
+              }
+            }
+          } catch (autoErr: any) {
+            // Non-fatal — do not fail the webhook response
+            console.error('[Webhook Auto-Handler]', autoErr.message);
+          }
 
           res.status(200).json({ received: true });
         } catch (error: any) {
@@ -61,7 +164,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         }
       }
     );
-    console.log('✅ Stripe webhook endpoint registered at /api/stripe/webhook/:uuid');
+    console.log(`✅ Stripe webhook registered at /api/stripe/webhook/${webhookUuid}`);
+    console.log(`   → Set this URL in Stripe Dashboard → Developers → Webhooks`);
   }
 
   // NOW apply JSON middleware for all other routes
@@ -1082,44 +1186,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.get('/api/exchange/account/lookup', async (req, res) => {
-    try {
-      const email = req.query.email;
-      if (!email || typeof email !== 'string' || !email.trim()) {
-        return res.status(400).json({ message: 'Email query parameter is required' });
-      }
-      const trimmed = email.trim().toLowerCase();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmed)) {
-        return res.status(400).json({ message: 'Invalid email format' });
-      }
-      const account = await storage.getExchangeAccountByEmail(trimmed);
-      if (!account) {
-        return res.status(404).json({ message: 'No account found' });
-      }
-      const fullName = [account.firstName, account.lastName].filter(Boolean).join(' ') || account.contactName || 'N/A';
-      sendExchangeEmail('Exchange Account Sign-In', {
-        'Name': fullName,
-        'Email': account.email,
-        'Company': account.orgName || 'N/A',
-        'Account Type': account.accountType || account.role || 'N/A',
-        'Signed In At': new Date().toUTCString(),
-      }).catch(err => console.error('Sign-in email error:', err));
-      return res.json({
-        id: account.id,
-        email: account.email,
-        firstName: (account as any).firstName || '',
-        lastName: (account as any).lastName || '',
-        company: (account as any).company || (account as any).orgName || '',
-        accountType: (account as any).accountType || (account as any).role || '',
-        annualCo2: (account as any).annualCo2Exposure || 0,
-      });
-    } catch (error) {
-      console.error('Account lookup error:', error);
-      return res.status(500).json({ message: 'Server error during lookup' });
-    }
-  });
-
   app.post('/api/exchange/rfq', async (req, res) => {
     try {
       const body = req.body;
@@ -1170,23 +1236,324 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!parsed.success) {
         return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
       }
+
+      // 1. Save submission record to exchangeCreditListings
       const listing = await storage.createExchangeCreditListing(parsed.data);
-      sendExchangeEmail('List Credits Submission', {
-        'Organization': parsed.data.orgName,
-        'Contact Name': parsed.data.contactName,
-        'Email': parsed.data.email,
-        'Standard': parsed.data.standard,
-        'Credit Type': parsed.data.creditType,
-        'Volume (Tonnes)': parsed.data.volumeTonnes,
-        'Asking Price (EUR/tonne)': parsed.data.askingPricePerTonne,
-        'Project Origin': parsed.data.projectOrigin,
-        'Registry Serial': parsed.data.registrySerial || 'Not provided',
+
+      // 2. Auto-publish directly to live marketplace (exchangeListings table)
+      const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
+      const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
+
+      const standardMap: Record<string, string> = {
+        'EU ETS — European Union Allowances': 'EU ETS',
+        'VCS — Verified Carbon Standard':     'VCS',
+        'Gold Standard':                       'GOLD STD',
+        'CORSIA — Aviation Offsets':           'CORSIA',
+        'Blue Carbon / VCS':                   'VCS',
+        'Other':                               'VCS',
+      };
+      const badge = standardMap[parsed.data.standard] || 'VCS';
+
+      await storage.seedExchangeListings([{
+        standard:          badge,
+        badgeLabel:        badge,
+        name:              `${parsed.data.creditType} — ${parsed.data.orgName}`,
+        origin:            parsed.data.projectOrigin,
+        pricePerTonne:     priceNum,
+        changePercent:     0,
+        changeDirection:   'up',
+        status:            'active',
+        isAcceptingOrders: true,
+      }]);
+
+      // 3. Notify info@uaiu.live
+      sendExchangeEmail('New Credit Listing — LIVE on Marketplace', {
+        'Organization':        parsed.data.orgName,
+        'Contact':             parsed.data.contactName,
+        'Email':               parsed.data.email,
+        'Standard':            parsed.data.standard,
+        'Credit Type':         parsed.data.creditType,
+        'Volume (Tonnes)':     String(volumeNum),
+        'Asking Price EUR/t':  String(priceNum),
+        'Project Origin':      parsed.data.projectOrigin,
+        'Registry Serial':     parsed.data.registrySerial || 'Not provided',
+        'Status':              'AUTO-PUBLISHED TO LIVE MARKETPLACE',
+        'Submission ID':       listing.id,
       }).catch(err => console.error('Exchange email error:', err));
-      res.json({ success: true, id: listing.id });
+
+      res.json({
+        success:   true,
+        id:        listing.id,
+        published: true,
+        message:   'Listing is now live on the marketplace.',
+      });
     } catch (error) {
       console.error('Exchange list credits error:', error);
       res.status(500).json({ message: 'Failed to submit credit listing' });
     }
+  });
+
+  // ── PARTNER API — Swiss X REDD UK Limited live inventory push ─────────────
+  // POST /api/partner/listings
+  // Authenticated by PARTNER_API_KEY secret. Alki's team calls this to push
+  // live credit inventory directly into the marketplace in real time.
+  app.post('/api/partner/listings', async (req, res) => {
+    try {
+      const { api_key, listings } = req.body;
+      const validKey = process.env.PARTNER_API_KEY;
+      if (!validKey) return res.status(500).json({ error: 'PARTNER_API_KEY not configured in Replit Secrets' });
+      if (!api_key || api_key !== validKey) return res.status(401).json({ error: 'Invalid API key' });
+      if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
+      if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
+
+      const inserted: string[] = [];
+      const errors: string[]   = [];
+
+      for (const item of listings) {
+        try {
+          if (!item.name || !item.standard || !item.pricePerTonne) {
+            errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
+            continue;
+          }
+          await storage.seedExchangeListings([{
+            standard:          item.standard,
+            badgeLabel:        item.badgeLabel || item.standard,
+            name:              item.name,
+            origin:            item.origin || 'Caribbean Basin',
+            pricePerTonne:     parseFloat(item.pricePerTonne),
+            changePercent:     parseFloat(item.changePercent) || 0,
+            changeDirection:   item.changeDirection || 'up',
+            status:            'active',
+            isAcceptingOrders: true,
+          }]);
+          inserted.push(item.name);
+        } catch (itemErr: any) {
+          errors.push(`Failed: ${item.name} — ${itemErr.message}`);
+        }
+      }
+
+      sendExchangeEmail('Partner Inventory Push — Marketplace Updated', {
+        'Partner':          'Swiss X REDD UK Limited',
+        'Listings Pushed':  String(inserted.length),
+        'Errors':           errors.length > 0 ? errors.join('; ') : 'None',
+        'Timestamp':        new Date().toISOString(),
+      }).catch((e: any) => console.error('[Partner Email]', e.message));
+
+      res.json({
+        success:  true,
+        inserted: inserted.length,
+        listings: inserted,
+        errors:   errors.length > 0 ? errors : undefined,
+        message:  `${inserted.length} listing(s) are now live on marketplace.`,
+      });
+    } catch (err: any) {
+      console.error('[Partner API]', err);
+      res.status(500).json({ error: 'Partner listing push failed' });
+    }
+  });
+
+  // ── SELLER DASHBOARD ─────────────────────────────────────────────────────
+  // GET /api/seller/dashboard?email=seller@company.com
+  app.get('/api/seller/dashboard', async (req, res) => {
+    try {
+      const { email } = req.query;
+      if (!email || typeof email !== 'string') return res.status(400).json({ error: 'email query param required' });
+      const e = email.trim().toLowerCase();
+
+      const listings = await db.select().from(exchangeCreditListings)
+        .where(sql`LOWER(${exchangeCreditListings.email}) = ${e}`)
+        .orderBy(desc(exchangeCreditListings.createdAt))
+        .limit(50)
+        .catch(() => []);
+
+      const rfqs = await db.select().from(exchangeRfqs)
+        .orderBy(desc(exchangeRfqs.createdAt))
+        .limit(20)
+        .catch(() => []);
+
+      const escrows = await (req.app.locals.supabase as any)
+        ?.from('escrow_settlements')
+        .select('trade_id, amount_eur, uaiu_fee_eur, seller_net_eur, status, created_at, settled_at')
+        .order('created_at', { ascending: false })
+        .limit(20)
+        .catch(() => ({ data: [] }));
+
+      res.json({
+        email,
+        listings,
+        rfqs,
+        escrows:  escrows?.data || [],
+        summary: {
+          total_listings:  listings.length,
+          total_rfqs:      rfqs.length,
+          settled_trades:  (escrows?.data || []).filter((s: any) => s.status?.includes('settled')).length,
+        },
+      });
+    } catch (err: any) {
+      console.error('[Seller Dashboard]', err);
+      res.status(500).json({ error: 'Dashboard load failed' });
+    }
+  });
+
+  // DELETE /api/seller/listing/:id — remove own listing by email ownership
+  app.delete('/api/seller/listing/:id', async (req, res) => {
+    try {
+      const { id }    = req.params;
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Seller email required in body' });
+      await db.delete(exchangeCreditListings)
+        .where(sql`id = ${id} AND LOWER(${exchangeCreditListings.email}) = ${email.trim().toLowerCase()}`);
+      res.json({ success: true, message: 'Listing removed.' });
+    } catch (err: any) {
+      console.error('[Delete Listing]', err);
+      res.status(500).json({ error: 'Failed to remove listing' });
+    }
+  });
+
+  // ── KYC — Stripe Identity ─────────────────────────────────────────────────
+  // POST /api/kyc/start  — create a verification session, return URL for buyer
+  app.post('/api/kyc/start', async (req, res) => {
+    try {
+      const { account_id, email, return_url } = req.body;
+      if (!account_id || !email) return res.status(400).json({ error: 'account_id and email required' });
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      const session = await stripe.identity.verificationSessions.create({
+        type: 'document',
+        metadata: { account_id: String(account_id), email: email.trim().toLowerCase(), platform: 'uaiu_exchange' },
+        options: { document: { allowed_types: ['driving_license', 'passport', 'id_card'], require_matching_selfie: true } },
+        return_url: return_url || 'https://uaiu.live/x?kyc=complete',
+      });
+
+      await db.execute(sql`
+        UPDATE exchange_accounts
+        SET kyc_session_id = ${session.id}, kyc_status = 'pending'
+        WHERE id = ${account_id}
+      `).catch((e: any) => console.error('[KYC update]', e.message));
+
+      res.json({
+        success:          true,
+        session_id:       session.id,
+        verification_url: session.url,
+        status:           'pending',
+        message:          'Direct buyer to verification_url to complete identity check.',
+      });
+    } catch (err: any) {
+      console.error('[KYC Start]', err);
+      res.status(500).json({ error: err.message || 'KYC session creation failed' });
+    }
+  });
+
+  // GET /api/kyc/status/:session_id — poll to check verification result
+  app.get('/api/kyc/status/:session_id', async (req, res) => {
+    try {
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+      const { default: Stripe } = await import('stripe');
+      const stripe  = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+      const session = await stripe.identity.verificationSessions.retrieve(req.params.session_id);
+      const verified = session.status === 'verified';
+
+      if (verified) {
+        await db.execute(sql`
+          UPDATE exchange_accounts
+          SET kyc_status = 'verified', kyc_verified_at = NOW()
+          WHERE kyc_session_id = ${req.params.session_id}
+        `).catch((e: any) => console.error('[KYC verified update]', e.message));
+
+        const email = session.metadata?.email;
+        if (email) {
+          sendExchangeEmail('KYC Verified — Account Active', {
+            'Account ID':  session.metadata?.account_id || 'N/A',
+            'Email':       email,
+            'Status':      'VERIFIED — Trading enabled',
+            'Verified At': new Date().toISOString(),
+          }).catch((e: any) => console.error('[KYC email]', e.message));
+        }
+      }
+
+      res.json({ session_id: req.params.session_id, status: session.status, verified });
+    } catch (err: any) {
+      console.error('[KYC Status]', err);
+      res.status(500).json({ error: err.message || 'KYC status check failed' });
+    }
+  });
+
+  // ── HEALTH CHECK — full system test ──────────────────────────────────────
+  // GET /api/admin/health-check?admin_key=YOUR_ADMIN_SECRET_KEY
+  app.get('/api/admin/health-check', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+
+    const results: Record<string, any> = {};
+
+    // PostgreSQL
+    try { await db.execute(sql`SELECT 1`); results.postgresql = { status: 'OK' }; }
+    catch (e: any) { results.postgresql = { status: 'FAIL', error: e.message }; }
+
+    // Live marketplace
+    try {
+      const listings = await storage.getExchangeListings();
+      results.marketplace = { status: 'OK', live_listings: listings.length };
+    } catch (e: any) { results.marketplace = { status: 'FAIL', error: e.message }; }
+
+    // Stripe
+    try {
+      const sk = process.env.STRIPE_SECRET_KEY;
+      if (!sk) throw new Error('STRIPE_SECRET_KEY not set');
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(sk, { apiVersion: '2024-12-18.acacia' as any });
+      await stripe.paymentIntents.list({ limit: 1 });
+      results.stripe = { status: 'OK' };
+    } catch (e: any) { results.stripe = { status: 'FAIL', error: e.message }; }
+
+    // Webhook UUID
+    const wuuid = process.env.STRIPE_WEBHOOK_UUID;
+    results.stripe_webhook = {
+      status:   wuuid ? 'OK' : 'WARN — Add STRIPE_WEBHOOK_UUID to Replit Secrets',
+      endpoint: wuuid ? `/api/stripe/webhook/${wuuid}` : 'not configured',
+      webhook_secret_set: !!process.env.STRIPE_WEBHOOK_SECRET,
+    };
+
+    // Email
+    results.email = {
+      status:      process.env.ZOHO_SMTP_USER ? 'OK — Zoho configured' : 'WARN — ZOHO_SMTP_USER not set',
+      destination: 'info@uaiu.live',
+    };
+
+    // Partner API
+    results.partner_api = {
+      status:   process.env.PARTNER_API_KEY ? 'OK — Key set' : 'WARN — Add PARTNER_API_KEY to Replit Secrets',
+      endpoint: 'POST /api/partner/listings',
+    };
+
+    // KYC
+    results.kyc = {
+      status:   process.env.STRIPE_SECRET_KEY ? 'OK — Stripe Identity ready' : 'FAIL — Stripe key missing',
+      endpoint: 'POST /api/kyc/start',
+    };
+
+    // Supabase
+    try {
+      const sb = res.app.locals.supabase;
+      if (!sb) throw new Error('Not attached');
+      await sb.from('escrow_settlements').select('count').limit(1);
+      results.supabase = { status: 'OK' };
+    } catch (e: any) { results.supabase = { status: 'WARN — Supabase unavailable (PostgreSQL fallback active)' }; }
+
+    const allOk = Object.values(results).every((r: any) => r.status === 'OK');
+    res.json({
+      platform:   'UAIU.LIVE/X',
+      timestamp:  new Date().toISOString(),
+      ready:      allOk,
+      systems:    results,
+      next_steps: allOk
+        ? '✅ All systems operational. Safe to onboard Swiss X REDD UK Limited.'
+        : '❌ Fix FAIL items above before going live to Alki\'s network.',
+    });
   });
 
   // ==================== END EXCHANGE ROUTES ====================
