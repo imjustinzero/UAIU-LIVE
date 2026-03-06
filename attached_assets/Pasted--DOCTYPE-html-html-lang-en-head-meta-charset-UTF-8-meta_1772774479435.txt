@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>UAIU Admin</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#05080f;--surface:#0d1a2e;--surface2:#111f35;--border:#1e3050;
+    --gold:#d4a843;--gold2:#f0c060;--red:#ef4444;--green:#22c55e;
+    --blue:#3b82f6;--yellow:#eab308;--text:#e2e8f0;--muted:#64748b;
+    --radius:8px;--font:'Segoe UI',system-ui,sans-serif;
+  }
+  html{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+  body{min-height:100vh;display:flex;flex-direction:column}
+
+/* ── PIN GATE ── */
+#pin-gate{
+position:fixed;inset:0;background:var(–bg);
+display:flex;align-items:center;justify-content:center;z-index:9999;
+}
+.pin-box{
+background:var(–surface);border:1px solid var(–border);
+border-radius:16px;padding:48px 40px;width:340px;text-align:center;
+}
+.pin-box h1{font-size:22px;color:var(–gold);margin-bottom:6px}
+.pin-box p{font-size:13px;color:var(–muted);margin-bottom:28px}
+.pin-box input{
+width:100%;padding:12px 16px;background:#0a1525;border:1px solid var(–border);
+border-radius:var(–radius);color:var(–text);font-size:15px;
+letter-spacing:4px;text-align:center;outline:none;
+transition:border-color .2s;
+}
+.pin-box input:focus{border-color:var(–gold)}
+#pin-error{color:var(–red);font-size:12px;margin-top:8px;min-height:18px}
+.btn{
+display:inline-flex;align-items:center;gap:8px;
+padding:10px 20px;border:none;border-radius:var(–radius);
+font-size:13px;font-weight:600;cursor:pointer;
+transition:opacity .2s,transform .15s;
+}
+.btn:hover{opacity:.88;transform:translateY(-1px)}
+.btn:active{transform:none}
+.btn-gold{background:var(–gold);color:#05080f}
+.btn-green{background:var(–green);color:#fff}
+.btn-red{background:var(–red);color:#fff}
+.btn-blue{background:var(–blue);color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(–border);color:var(–muted)}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.pin-submit{width:100%;margin-top:18px;padding:13px}
+
+/* ── LAYOUT ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+header{
+background:var(–surface);border-bottom:1px solid var(–border);
+padding:16px 32px;display:flex;align-items:center;gap:16px;
+}
+header h1{font-size:18px;color:var(–gold);letter-spacing:.5px}
+header span{font-size:12px;color:var(–muted);margin-left:auto}
+.badge{
+display:inline-block;padding:2px 8px;border-radius:20px;
+font-size:11px;font-weight:700;letter-spacing:.5px;
+}
+.badge-green{background:rgba(34,197,94,.15);color:var(–green);border:1px solid rgba(34,197,94,.3)}
+.badge-red{background:rgba(239,68,68,.15);color:var(–red);border:1px solid rgba(239,68,68,.3)}
+.badge-yellow{background:rgba(234,179,8,.15);color:var(–yellow);border:1px solid rgba(234,179,8,.3)}
+.badge-blue{background:rgba(59,130,246,.15);color:var(–blue);border:1px solid rgba(59,130,246,.3)}
+.badge-muted{background:rgba(100,116,139,.15);color:var(–muted);border:1px solid rgba(100,116,139,.3)}
+
+main{flex:1;padding:32px;max-width:1200px;margin:0 auto;width:100%}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:4px;margin-bottom:28px;border-bottom:1px solid var(–border);padding-bottom:0}
+.tab{
+padding:10px 20px;font-size:13px;font-weight:600;
+border:none;background:transparent;color:var(–muted);
+cursor:pointer;border-bottom:2px solid transparent;
+margin-bottom:-1px;transition:color .2s,border-color .2s;
+}
+.tab.active{color:var(–gold);border-bottom-color:var(–gold)}
+.tab:hover:not(.active){color:var(–text)}
+.tab-count{
+display:inline-block;margin-left:6px;padding:1px 7px;
+background:var(–border);border-radius:10px;font-size:11px;color:var(–muted);
+}
+.tab.active .tab-count{background:rgba(212,168,67,.2);color:var(–gold)}
+
+.panel{display:none}
+.panel.active{display:block}
+
+/* ── SECTION HEADER ── */
+.section-header{
+display:flex;align-items:center;justify-content:space-between;
+margin-bottom:20px;flex-wrap:wrap;gap:12px;
+}
+.section-header h2{font-size:16px;font-weight:700;color:var(–text)}
+.section-header p{font-size:12px;color:var(–muted);margin-top:2px}
+
+/* ── CARDS ── */
+.card{
+background:var(–surface);border:1px solid var(–border);
+border-radius:var(–radius);overflow:hidden;margin-bottom:14px;
+}
+.card-header{
+padding:16px 20px;display:flex;align-items:flex-start;
+justify-content:space-between;gap:12px;
+border-bottom:1px solid var(–border);
+}
+.card-body{padding:16px 20px}
+.card-title{font-size:14px;font-weight:700;color:var(–text);margin-bottom:4px}
+.card-sub{font-size:12px;color:var(–muted)}
+.card-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+
+/* ── GRID ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+.kv{display:flex;flex-direction:column;gap:2px}
+.kv-label{font-size:10px;color:var(–muted);letter-spacing:.5px;text-transform:uppercase}
+.kv-value{font-size:13px;color:var(–text);word-break:break-all}
+
+/* ── HEALTH ── */
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.health-card{
+background:var(–surface2);border:1px solid var(–border);
+border-radius:var(–radius);padding:16px 18px;
+}
+.health-card-name{font-size:11px;color:var(–muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.health-card-status{font-size:13px;font-weight:600}
+.health-card-detail{font-size:11px;color:var(–muted);margin-top:4px;word-break:break-all}
+.health-ok{color:var(–green)}
+.health-fail{color:var(–red)}
+.health-warn{color:var(–yellow)}
+
+.big-status{
+display:flex;align-items:center;gap:16px;
+background:var(–surface2);border:1px solid var(–border);
+border-radius:var(–radius);padding:20px 24px;margin-bottom:20px;
+}
+.big-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+
+/* ── EMPTY + LOADING ── */
+.empty{
+text-align:center;padding:60px 20px;color:var(–muted);
+font-size:14px;background:var(–surface);
+border:1px solid var(–border);border-radius:var(–radius);
+}
+.spinner{
+width:20px;height:20px;border:2px solid var(–border);
+border-top-color:var(–gold);border-radius:50%;
+animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+#toast{
+position:fixed;bottom:24px;right:24px;
+background:var(–surface2);border:1px solid var(–border);
+border-radius:var(–radius);padding:12px 18px;
+font-size:13px;color:var(–text);z-index:10000;
+transform:translateY(80px);opacity:0;transition:.3s;pointer-events:none;
+max-width:320px;
+}
+#toast.show{transform:none;opacity:1}
+#toast.ok{border-left:3px solid var(–green)}
+#toast.err{border-left:3px solid var(–red)}
+
+/* ── MODAL (rejection reason) ── */
+.modal-overlay{
+position:fixed;inset:0;background:rgba(0,0,0,.7);
+display:none;align-items:center;justify-content:center;z-index:9998;
+}
+.modal-overlay.open{display:flex}
+.modal{
+background:var(–surface);border:1px solid var(–border);
+border-radius:12px;padding:32px;width:460px;max-width:calc(100vw - 40px);
+}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal textarea{
+width:100%;padding:10px 12px;background:#0a1525;
+border:1px solid var(–border);border-radius:var(–radius);
+color:var(–text);font-size:13px;resize:vertical;min-height:90px;outline:none;
+font-family:var(–font);
+}
+.modal textarea:focus{border-color:var(–gold)}
+.modal-btns{display:flex;gap:10px;margin-top:16px;justify-content:flex-end}
+
+/* ── MONO ── */
+.mono{font-family:‘Courier New’,monospace;font-size:11px;color:var(–gold)}
+</style>
+
+</head>
+<body>
+
+<!-- PIN GATE -->
+
+<div id="pin-gate">
+  <div class="pin-box">
+    <h1>⚡ UAIU Admin</h1>
+    <p>Enter your admin key to continue</p>
+    <input id="pin-input" type="password" placeholder="••••••••" autocomplete="off"/>
+    <div id="pin-error"></div>
+    <button class="btn btn-gold pin-submit btn" onclick="submitPin()">Unlock Dashboard</button>
+  </div>
+</div>
+
+<!-- MODAL -->
+
+<div class="modal-overlay" id="reject-modal">
+  <div class="modal">
+    <h3>Reject Listing</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+      An email will be sent to the seller explaining the rejection.
+    </p>
+    <textarea id="reject-reason" placeholder="Reason for rejection (sent to seller)…">Your listing did not meet our current marketplace requirements.</textarea>
+    <div class="modal-btns">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-red btn-sm" id="confirm-reject-btn" onclick="confirmReject()">Send Rejection</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+
+<div id="app">
+  <header>
+    <div>
+      <h1>⚡ UAIU Admin Dashboard</h1>
+    </div>
+    <span id="header-time"></span>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('listings')">
+        Pending Listings <span class="tab-count" id="count-listings">—</span>
+      </button>
+      <button class="tab" onclick="switchTab('webhooks')">
+        Webhook Failures <span class="tab-count" id="count-webhooks">—</span>
+      </button>
+      <button class="tab" onclick="switchTab('health')">
+        System Health
+      </button>
+    </div>
+
+```
+<!-- ── PANEL 1: PENDING LISTINGS ── -->
+<div class="panel active" id="panel-listings">
+  <div class="section-header">
+    <div>
+      <h2>Pending Seller Listings</h2>
+      <p>New submissions saved as <code style="color:var(--yellow)">pending</code> — approve to publish, reject to email seller.</p>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="loadListings()">↻ Refresh</button>
+  </div>
+  <div id="listings-container"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── PANEL 2: WEBHOOK FAILURES ── -->
+<div class="panel" id="panel-webhooks">
+  <div class="section-header">
+    <div>
+      <h2>Webhook Dead-Letter Queue</h2>
+      <p>Unhandled webhook exceptions. Retry re-attempts Stripe capture if PI is still capturable.</p>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="loadWebhooks()">↻ Refresh</button>
+  </div>
+  <div id="webhooks-container"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── PANEL 3: HEALTH ── -->
+<div class="panel" id="panel-health">
+  <div class="section-header">
+    <div>
+      <h2>System Health Check</h2>
+      <p>Live validation of all platform services including Stripe startup gate.</p>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="loadHealth()">↻ Refresh</button>
+  </div>
+  <div id="health-container"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+```
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+let ADMIN_KEY = '';
+let rejectTarget = null;
+
+// ── PIN Logic ─────────────────────────────────────────────────────────
+(function() {
+  // Support ?key= in URL
+  const urlKey = new URLSearchParams(location.search).get('key');
+  if (urlKey) { ADMIN_KEY = urlKey; unlock(); }
+
+  document.getElementById('pin-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitPin();
+  });
+})();
+
+function submitPin() {
+  const val = document.getElementById('pin-input').value.trim();
+  if (!val) { document.getElementById('pin-error').textContent = 'Please enter your admin key.'; return; }
+  ADMIN_KEY = val;
+  // Validate by hitting health endpoint
+  fetch(`/api/admin/health-check?admin_key=${encodeURIComponent(ADMIN_KEY)}`)
+    .then(r => {
+      if (r.status === 403) throw new Error('Invalid admin key.');
+      return r.json();
+    })
+    .then(() => unlock())
+    .catch(e => {
+      document.getElementById('pin-error').textContent = e.message;
+      ADMIN_KEY = '';
+    });
+}
+
+function unlock() {
+  document.getElementById('pin-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  updateTime();
+  setInterval(updateTime, 30000);
+  loadListings();
+}
+
+function updateTime() {
+  document.getElementById('header-time').textContent =
+    'Last updated: ' + new Date().toLocaleTimeString();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.closest('.tab').classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'listings') loadListings();
+  if (name === 'webhooks') loadWebhooks();
+  if (name === 'health')   loadHealth();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
+
+// ── API helpers ───────────────────────────────────────────────────────
+function api(path, opts = {}) {
+  const sep = path.includes('?') ? '&' : '?';
+  return fetch(`${path}${sep}admin_key=${encodeURIComponent(ADMIN_KEY)}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  }).then(async r => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  });
+}
+
+// ── LISTINGS ──────────────────────────────────────────────────────────
+async function loadListings() {
+  const el = document.getElementById('listings-container');
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const listings = await api('/api/admin/listings/pending');
+    document.getElementById('count-listings').textContent = listings.length;
+    if (!listings.length) {
+      el.innerHTML = '<div class="empty">✅ No pending listings — all clear.</div>';
+      return;
+    }
+    el.innerHTML = listings.map(l => renderListing(l)).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderListing(l) {
+  const priceNum  = parseFloat(l.asking_price_per_tonne || l.askingPricePerTonne) || 0;
+  const volNum    = parseFloat(l.volume_tonnes || l.volumeTonnes) || 0;
+  const totalEur  = priceNum * volNum;
+  const dateStr   = l.created_at || l.createdAt
+    ? new Date(l.created_at || l.createdAt).toLocaleDateString() : '—';
+
+  return `
+  <div class="card" id="listing-${l.id}">
+    <div class="card-header">
+      <div>
+        <div class="card-title">${esc(l.org_name || l.orgName || '—')} — ${esc(l.credit_type || l.creditType || '—')}</div>
+        <div class="card-sub">Submitted ${dateStr} · ID: <span class="mono">${l.id}</span></div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-green btn-sm" onclick="approveL('${l.id}')">✓ Approve</button>
+        <button class="btn btn-red btn-sm" onclick="openRejectModal('${l.id}')">✗ Reject</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="grid-3">
+        <div class="kv"><span class="kv-label">Standard</span><span class="kv-value">${esc(l.standard || '—')}</span></div>
+        <div class="kv"><span class="kv-label">Volume</span><span class="kv-value">${volNum.toLocaleString()} t CO₂</span></div>
+        <div class="kv"><span class="kv-label">Ask Price</span><span class="kv-value">€${priceNum.toFixed(2)}/t</span></div>
+        <div class="kv"><span class="kv-label">Total Value</span><span class="kv-value">€${totalEur.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+        <div class="kv"><span class="kv-label">Project Origin</span><span class="kv-value">${esc(l.project_origin || l.projectOrigin || '—')}</span></div>
+        <div class="kv"><span class="kv-label">Registry Serial</span><span class="kv-value mono">${esc(l.registry_serial || l.registrySerial || 'Not provided')}</span></div>
+        <div class="kv"><span class="kv-label">Contact</span><span class="kv-value">${esc(l.contact_name || l.contactName || '—')}</span></div>
+        <div class="kv"><span class="kv-label">Seller Email</span><span class="kv-value">${esc(l.email || '—')}</span></div>
+        <div class="kv"><span class="kv-label">Status</span><span class="kv-value"><span class="badge badge-yellow">PENDING</span></span></div>
+      </div>
+      ${l.additional_notes || l.additionalNotes ? `<div style="margin-top:12px;padding:10px 14px;background:#0a1525;border-radius:6px;font-size:12px;color:var(--muted)">${esc(l.additional_notes || l.additionalNotes)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+async function approveL(id) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await api(`/api/admin/listings/${id}/approve`, { method: 'POST', body: JSON.stringify({}) });
+    toast(`✅ Listing approved and live — ${res.listing?.name || id}`, 'ok');
+    document.getElementById(`listing-${id}`)?.remove();
+    const rem = document.querySelectorAll('[id^="listing-"]').length;
+    document.getElementById('count-listings').textContent = rem;
+    if (!rem) document.getElementById('listings-container').innerHTML =
+      '<div class="empty">✅ No pending listings — all clear.</div>';
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = '✓ Approve';
+  }
+}
+
+function openRejectModal(id) {
+  rejectTarget = id;
+  document.getElementById('reject-modal').classList.add('open');
+  document.getElementById('reject-reason').focus();
+}
+function closeModal() {
+  rejectTarget = null;
+  document.getElementById('reject-modal').classList.remove('open');
+}
+async function confirmReject() {
+  if (!rejectTarget) return;
+  const reason = document.getElementById('reject-reason').value.trim();
+  const btn = document.getElementById('confirm-reject-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await api(`/api/admin/listings/${rejectTarget}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    toast('Listing rejected — seller notified via email.', 'ok');
+    document.getElementById(`listing-${rejectTarget}`)?.remove();
+    const rem = document.querySelectorAll('[id^="listing-"]').length;
+    document.getElementById('count-listings').textContent = rem;
+    if (!rem) document.getElementById('listings-container').innerHTML =
+      '<div class="empty">✅ No pending listings — all clear.</div>';
+    closeModal();
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send Rejection';
+  }
+}
+
+// ── WEBHOOKS ──────────────────────────────────────────────────────────
+async function loadWebhooks() {
+  const el = document.getElementById('webhooks-container');
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const failures = await api('/api/admin/webhooks/failures');
+    document.getElementById('count-webhooks').textContent = failures.length;
+    if (!failures.length) {
+      el.innerHTML = '<div class="empty">✅ No unresolved webhook failures.</div>';
+      return;
+    }
+    el.innerHTML = failures.map(f => renderWebhookFailure(f)).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderWebhookFailure(f) {
+  const dateStr = f.created_at || f.createdAt
+    ? new Date(f.created_at || f.createdAt).toLocaleString() : '—';
+  const retries = f.retry_count || f.retryCount || 0;
+  const evType  = f.event_type || f.eventType || 'unknown';
+  const tradeId = f.trade_id || f.tradeId || '—';
+  const piId    = f.payment_intent_id || f.paymentIntentId || null;
+
+  return `
+  <div class="card" id="wh-${f.id}">
+    <div class="card-header">
+      <div>
+        <div class="card-title"><span class="mono">${esc(evType)}</span></div>
+        <div class="card-sub">Failed ${dateStr} · ${retries} retry attempt${retries===1?'':'s'}</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-blue btn-sm" onclick="retryWebhook('${f.id}')">↻ Retry</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="grid-2" style="margin-bottom:12px">
+        <div class="kv"><span class="kv-label">Trade ID</span><span class="kv-value mono">${esc(tradeId)}</span></div>
+        <div class="kv"><span class="kv-label">Payment Intent ID</span><span class="kv-value mono">${piId ? esc(piId) : '—'}</span></div>
+        <div class="kv"><span class="kv-label">Event ID</span><span class="kv-value mono">${esc(f.event_id || f.eventId || '—')}</span></div>
+        <div class="kv"><span class="kv-label">Retry Count</span><span class="kv-value">${retries}</span></div>
+      </div>
+      <div style="background:#0a1525;border-radius:6px;padding:10px 14px">
+        <div class="kv-label" style="margin-bottom:4px">Error Message</div>
+        <div style="font-size:12px;color:var(--red);font-family:'Courier New',monospace;word-break:break-all">${esc(f.error_message || f.errorMessage || 'No message')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function retryWebhook(id) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await api(`/api/admin/webhooks/retry/${id}`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.action === 'captured') {
+      toast(`✅ Captured! Gross: €${res.gross_eur?.toLocaleString()}`, 'ok');
+    } else {
+      toast('Resolved (no capture needed).', 'ok');
+    }
+    document.getElementById(`wh-${id}`)?.remove();
+    const rem = document.querySelectorAll('[id^="wh-"]').length;
+    document.getElementById('count-webhooks').textContent = rem;
+    if (!rem) document.getElementById('webhooks-container').innerHTML =
+      '<div class="empty">✅ No unresolved webhook failures.</div>';
+  } catch(e) {
+    toast('Retry failed: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = '↻ Retry';
+  }
+}
+
+// ── HEALTH ────────────────────────────────────────────────────────────
+async function loadHealth() {
+  const el = document.getElementById('health-container');
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const data = await api('/api/admin/health-check');
+    el.innerHTML = renderHealth(data);
+  } catch(e) {
+    el.innerHTML = `<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderHealth(data) {
+  const overallOk = data.ready;
+  const ts = data.timestamp ? new Date(data.timestamp).toLocaleString() : '—';
+
+  const bigStatus = `
+  <div class="big-status">
+    <div class="big-dot" style="background:${overallOk ? 'var(--green)' : 'var(--red)'}; box-shadow:0 0 10px ${overallOk ? 'rgba(34,197,94,.5)' : 'rgba(239,68,68,.5)'}"></div>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:${overallOk ? 'var(--green)' : 'var(--red)'}">
+        ${overallOk ? '✅ All Systems Operational' : '❌ Issues Detected'}
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(data.next_steps || '')} · Checked ${ts}</div>
+    </div>
+  </div>`;
+
+  const systems = data.systems || {};
+
+  // Special rendering for stripe_startup
+  function cardClass(key, s) {
+    const st = (s.status || '').toLowerCase();
+    if (st.startsWith('ok')) return 'health-ok';
+    if (st.startsWith('fail')) return 'health-fail';
+    return 'health-warn';
+  }
+
+  function extraDetail(key, s) {
+    if (key === 'stripe_startup') {
+      return `<div class="health-card-detail">Validated: ${s.validated_at || '—'} · Escrow gate: <strong>${s.escrow_gate || '—'}</strong></div>`;
+    }
+    if (key === 'stripe_webhook') {
+      return `<div class="health-card-detail">Endpoint: <span class="mono">${s.endpoint || '—'}</span> · Secret set: ${s.webhook_secret_set ? 'yes' : 'no'}</div>`;
+    }
+    if (key === 'marketplace') {
+      return `<div class="health-card-detail">Live listings: ${s.live_listings ?? '—'}</div>`;
+    }
+    if (s.error) return `<div class="health-card-detail" style="color:var(--red)">${esc(s.error)}</div>`;
+    return '';
+  }
+
+  const cards = Object.entries(systems).map(([key, s]) => `
+    <div class="health-card">
+      <div class="health-card-name">${key.replace(/_/g,' ')}</div>
+      <div class="health-card-status ${cardClass(key, s)}">${esc(s.status || '—')}</div>
+      ${extraDetail(key, s)}
+    </div>`).join('');
+
+  return bigStatus + `<div class="health-grid">${cards}</div>`;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modal on overlay click
+document.getElementById('reject-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+
+</body>
+</html>

@@ -2,56 +2,98 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 
 const C = {
-  ink: '#060810', ink2: '#0d1220', ink3: '#141e30',
-  gold: '#d4a843', gold2: '#f0c96a', goldfaint: 'rgba(212,168,67,0.12)',
-  goldborder: 'rgba(212,168,67,0.22)', cream: '#f2ead8',
-  cream2: 'rgba(242,234,216,0.7)', cream3: 'rgba(242,234,216,0.35)',
-  green: '#22c55e', red: '#ef4444', orange: '#f97316',
+  bg: '#05080f',
+  surface: '#0d1a2e',
+  surface2: '#111f35',
+  border: '#1e3050',
+  gold: '#d4a843',
+  gold2: '#f0c060',
+  red: '#ef4444',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  yellow: '#eab308',
+  text: '#e2e8f0',
+  muted: '#64748b',
 };
-const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif", playfair: "'Playfair Display', serif" };
 
-function Badge({ label, color }: { label: string; color: string }) {
+const F = {
+  mono: "'JetBrains Mono', monospace",
+  syne: "'Syne', sans-serif",
+  playfair: "'Playfair Display', serif"
+};
+
+function Badge({ label, variant = 'muted' }: { label: string; variant?: 'green' | 'red' | 'yellow' | 'blue' | 'muted' }) {
+  const styles: Record<string, React.CSSProperties> = {
+    green: { background: 'rgba(34,197,94,.15)', color: C.green, border: '1px solid rgba(34,197,94,.3)' },
+    red: { background: 'rgba(239,68,68,.15)', color: C.red, border: '1px solid rgba(239,68,68,.3)' },
+    yellow: { background: 'rgba(234,179,8,.15)', color: C.yellow, border: '1px solid rgba(234,179,8,.3)' },
+    blue: { background: 'rgba(59,130,246,.15)', color: C.blue, border: '1px solid rgba(59,130,246,.3)' },
+    muted: { background: 'rgba(100,116,139,.15)', color: C.muted, border: '1px solid rgba(100,116,139,.3)' },
+  };
+
   return (
-    <span style={{ background: `${color}22`, border: `1px solid ${color}55`, color, fontFamily: F.mono, fontSize: 10, padding: '2px 8px', letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>
+    <span style={{ 
+      display: 'inline-block', 
+      padding: '2px 8px', 
+      borderRadius: '20px', 
+      fontSize: '11px', 
+      fontFamily: F.mono,
+      fontWeight: 700, 
+      letterSpacing: '.5px',
+      ...styles[variant]
+    }}>
       {label}
     </span>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 40 }}>
-      <div style={{ fontFamily: F.syne, fontSize: 16, fontWeight: 700, color: C.gold, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16, borderBottom: `1px solid ${C.goldborder}`, paddingBottom: 10 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export default function Admin() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const urlKey = params.get('key') || '';
 
   const [adminKey, setAdminKey] = useState(urlKey);
   const [keyInput, setKeyInput] = useState('');
-  const [authed, setAuthed] = useState(!!urlKey);
-
+  const [authed, setAuthed] = useState(false);
+  const [authError, setAuthError] = useState('');
+  
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
-  const [toasts, setToasts] = useState<{ id: number; msg: string; ok: boolean }[]>([]);
+  
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('Your listing did not meet our current marketplace requirements.');
+  
+  const [toasts, setToasts] = useState<{ id: number; msg: string; type: 'ok' | 'err' }[]>([]);
 
-  function toast(msg: string, ok = true) {
+  function toast(msg: string, type: 'ok' | 'err' = 'ok') {
     const id = Date.now();
-    setToasts(prev => [...prev, { id, msg, ok }]);
+    setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   }
 
-  async function loadAll() {
+  async function validateAndUnlock(key: string) {
+    if (!key) return;
+    try {
+      const r = await fetch(`/api/admin/health-check?admin_key=${encodeURIComponent(key)}`);
+      if (r.status === 403) throw new Error('Invalid admin key.');
+      setAdminKey(key);
+      setAuthed(true);
+      setAuthError('');
+    } catch (e: any) {
+      setAuthError(e.message);
+      setAdminKey('');
+    }
+  }
+
+  useEffect(() => {
+    if (urlKey) validateAndUnlock(urlKey);
+  }, [urlKey]);
+
+  async function loadData() {
     setLoading(true);
     try {
       const [lRes, wRes, hRes] = await Promise.all([
@@ -59,86 +101,78 @@ export default function Admin() {
         fetch(`/api/admin/webhooks/failures?admin_key=${encodeURIComponent(adminKey)}`),
         fetch(`/api/admin/health-check?admin_key=${encodeURIComponent(adminKey)}`),
       ]);
-      if (lRes.status === 403 || wRes.status === 403 || hRes.status === 403) {
-        setAuthed(false);
-        toast('Invalid admin key', false);
-        return;
-      }
-      setPendingListings(await lRes.json());
-      setWebhookFailures(await wRes.json());
-      setHealthData(await hRes.json());
+      if (lRes.ok) setPendingListings(await lRes.json());
+      if (wRes.ok) setWebhookFailures(await wRes.json());
+      if (hRes.ok) setHealthData(await hRes.json());
     } catch (e: any) {
-      toast('Load failed: ' + e.message, false);
+      toast('Failed to load data', 'err');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { if (authed && adminKey) loadAll(); }, [authed]);
+  useEffect(() => {
+    if (authed) loadData();
+  }, [authed]);
 
   async function approveListing(id: string) {
     try {
       const r = await fetch(`/api/admin/listings/${id}/approve?admin_key=${encodeURIComponent(adminKey)}`, { method: 'POST' });
-      const d = await r.json();
-      if (!r.ok) { toast(d.error || 'Approve failed', false); return; }
-      toast('Listing approved and published to marketplace');
+      if (!r.ok) throw new Error('Approve failed');
+      toast('Listing approved and published');
       setPendingListings(prev => prev.filter(l => l.id !== id));
-    } catch (e: any) { toast(e.message, false); }
+    } catch (e: any) { toast(e.message, 'err'); }
   }
 
-  async function rejectListing(id: string) {
-    const reason = rejectReasons[id] || '';
+  async function confirmReject() {
+    if (!rejectId) return;
     try {
-      const r = await fetch(`/api/admin/listings/${id}/reject?admin_key=${encodeURIComponent(adminKey)}`, {
+      const r = await fetch(`/api/admin/listings/${rejectId}/reject?admin_key=${encodeURIComponent(adminKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: rejectReason }),
       });
-      const d = await r.json();
-      if (!r.ok) { toast(d.error || 'Reject failed', false); return; }
-      toast('Listing rejected — seller notified');
-      setPendingListings(prev => prev.filter(l => l.id !== id));
-    } catch (e: any) { toast(e.message, false); }
+      if (!r.ok) throw new Error('Reject failed');
+      toast('Listing rejected and seller notified');
+      setPendingListings(prev => prev.filter(l => l.id !== rejectId));
+      setShowRejectModal(false);
+      setRejectId(null);
+    } catch (e: any) { toast(e.message, 'err'); }
   }
 
   async function retryWebhook(id: string) {
     try {
       const r = await fetch(`/api/admin/webhooks/retry/${id}?admin_key=${encodeURIComponent(adminKey)}`, { method: 'POST' });
       const d = await r.json();
-      if (!r.ok) { toast(d.error || 'Retry failed', false); return; }
+      if (!r.ok) throw new Error(d.error || 'Retry failed');
       toast(`Retry complete: ${d.action}`);
       setWebhookFailures(prev => prev.filter(f => f.id !== id));
-    } catch (e: any) { toast(e.message, false); }
+    } catch (e: any) { toast(e.message, 'err'); }
   }
-
-  const cardStyle: React.CSSProperties = { background: C.ink2, border: `1px solid ${C.goldborder}`, padding: 20, marginBottom: 16 };
-  const labelStyle: React.CSSProperties = { fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3, display: 'block', marginBottom: 4 };
-  const valStyle: React.CSSProperties = { fontFamily: F.mono, fontSize: 12, color: C.cream, marginBottom: 12 };
-  const btnGreen: React.CSSProperties = { background: `${C.green}22`, border: `1px solid ${C.green}55`, color: C.green, fontFamily: F.mono, fontSize: 11, padding: '7px 18px', cursor: 'pointer', letterSpacing: '0.08em' };
-  const btnRed: React.CSSProperties = { background: `${C.red}22`, border: `1px solid ${C.red}55`, color: C.red, fontFamily: F.mono, fontSize: 11, padding: '7px 18px', cursor: 'pointer', letterSpacing: '0.08em' };
-  const btnGold: React.CSSProperties = { background: C.goldfaint, border: `1px solid ${C.goldborder}`, color: C.gold, fontFamily: F.mono, fontSize: 11, padding: '7px 18px', cursor: 'pointer', letterSpacing: '0.08em' };
 
   if (!authed) {
     return (
-      <div style={{ background: C.ink, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: 40, maxWidth: 400, width: '100%' }}>
-          <div style={{ fontFamily: F.playfair, fontSize: 24, color: C.gold, marginBottom: 8 }}>UAIU Admin</div>
-          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, marginBottom: 24 }}>Enter your admin key to continue</div>
+      <div id="pin-gate" style={{ position: 'fixed', inset: 0, background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '48px 40px', width: '340px', textAlign: 'center' }}>
+          <h1 style={{ fontSize: '22px', color: C.gold, marginBottom: '6px', fontFamily: F.playfair }}>⚡ UAIU Admin</h1>
+          <p style={{ fontSize: '13px', color: C.muted, marginBottom: '28px', fontFamily: F.syne }}>Enter your admin key to continue</p>
           <input
             data-testid="input-admin-key"
             type="password"
+            placeholder="••••••••"
             value={keyInput}
             onChange={e => setKeyInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { setAdminKey(keyInput); setAuthed(true); } }}
-            placeholder="Admin key..."
-            style={{ width: '100%', background: C.ink3, border: `1px solid ${C.goldborder}`, color: C.cream, fontFamily: F.mono, fontSize: 13, padding: '12px 14px', outline: 'none', boxSizing: 'border-box', marginBottom: 14 }}
+            onKeyDown={e => { if (e.key === 'Enter') validateAndUnlock(keyInput); }}
+            style={{ width: '100%', padding: '12px 16px', background: '#0a1525', border: `1px solid ${C.border}`, borderRadius: '8px', color: C.text, fontSize: '15px', letterSpacing: '4px', textAlign: 'center', outline: 'none' }}
           />
+          <div style={{ color: C.red, fontSize: '12px', marginTop: '8px', minHeight: '18px', fontFamily: F.mono }}>{authError}</div>
           <button
-            data-testid="button-admin-login"
-            onClick={() => { setAdminKey(keyInput); setAuthed(true); }}
-            style={{ ...btnGold, width: '100%', padding: '12px 0' }}
+            data-testid="button-admin-unlock"
+            className="btn btn-gold"
+            onClick={() => validateAndUnlock(keyInput)}
+            style={{ width: '100%', marginTop: '18px', padding: '13px', background: C.gold, color: C.bg, border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
           >
-            Enter Dashboard
+            Unlock Dashboard
           </button>
         </div>
       </div>
@@ -146,171 +180,197 @@ export default function Admin() {
   }
 
   return (
-    <div style={{ background: C.ink, minHeight: '100vh', fontFamily: F.mono, color: C.cream }}>
-      {/* Toast notifications */}
-      <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg, color: C.text }}>
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998 }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '32px', width: '460px', maxWidth: 'calc(100vw - 40px)' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', fontFamily: F.syne }}>Reject Listing</h3>
+            <p style={{ fontSize: '13px', color: C.muted, marginBottom: '12px' }}>An email will be sent to the seller explaining the rejection.</p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection (sent to seller)..."
+              style={{ width: '100%', padding: '10px 12px', background: '#0a1525', border: `1px solid ${C.border}`, borderRadius: '8px', color: C.text, fontSize: '13px', resize: 'vertical', minHeight: '90px', outline: 'none', fontFamily: 'inherit' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: '16px', justifyContent: 'flex-end' }}>
+              <button data-testid="button-cancel-reject" onClick={() => setShowRejectModal(false)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
+              <button data-testid="button-confirm-reject" onClick={confirmReject} style={{ background: C.red, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Send Rejection</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toasts */}
+      <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 10000, display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {toasts.map(t => (
-          <div key={t.id} style={{ background: t.ok ? `${C.green}22` : `${C.red}22`, border: `1px solid ${t.ok ? C.green : C.red}55`, color: t.ok ? C.green : C.red, padding: '10px 16px', fontFamily: F.mono, fontSize: 12, maxWidth: 320 }}>
+          <div key={t.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderLeft: `3px solid ${t.type === 'ok' ? C.green : C.red}`, borderRadius: '8px', padding: '12px 18px', fontSize: '13px', color: C.text, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
             {t.msg}
           </div>
         ))}
       </div>
 
-      {/* Header */}
-      <div style={{ background: C.ink2, borderBottom: `1px solid ${C.goldborder}`, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div>
-          <span style={{ fontFamily: F.playfair, fontSize: 20, color: C.gold }}>UAIU</span>
-          <span style={{ fontFamily: F.syne, fontSize: 13, color: C.cream3, marginLeft: 12, letterSpacing: '0.12em' }}>ADMIN DASHBOARD</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {loading && <span style={{ fontSize: 11, color: C.cream3 }}>Loading...</span>}
-          <button data-testid="button-admin-refresh" onClick={loadAll} style={btnGold}>Refresh</button>
-          <a href="/x" style={{ ...btnGold, textDecoration: 'none', display: 'inline-block' }}>Back to Exchange</a>
-        </div>
-      </div>
+      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <h1 style={{ fontSize: '18px', color: C.gold, letterSpacing: '.5px', fontFamily: F.playfair }}>⚡ UAIU Admin Dashboard</h1>
+        <span style={{ fontSize: '12px', color: C.muted, marginLeft: 'auto', fontFamily: F.mono }}>Last updated: {new Date().toLocaleTimeString()}</span>
+      </header>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
+      <main style={{ flex: 1, padding: '32px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', borderBottom: `1px solid ${C.border}` }}>
+          {[
+            { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
+            { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
+            { id: 'health', label: 'System Health', count: null }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              data-testid={`button-tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: '10px 20px', fontSize: '13px', fontWeight: 600, border: 'none', background: 'transparent', 
+                color: activeTab === tab.id ? C.gold : C.muted, cursor: 'pointer',
+                borderBottom: `2px solid ${activeTab === tab.id ? C.gold : 'transparent'}`,
+                marginBottom: '-1px', transition: 'color .2s, border-color .2s',
+                fontFamily: F.syne
+              }}
+            >
+              {tab.label}
+              {tab.count !== null && (
+                <span style={{ 
+                  display: 'inline-block', marginLeft: '6px', padding: '1px 7px', 
+                  background: activeTab === tab.id ? 'rgba(212,168,67,.2)' : C.border, 
+                  borderRadius: '10px', fontSize: '11px', color: activeTab === tab.id ? C.gold : C.muted,
+                  fontFamily: F.mono
+                }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
-        {/* Section 1: Pending Listings */}
-        <Section title={`Pending Listings (${pendingListings.length})`}>
-          {pendingListings.length === 0 ? (
-            <div style={{ color: C.cream3, fontSize: 12, padding: '20px 0' }}>No listings pending review.</div>
-          ) : (
-            pendingListings.map(l => (
-              <div key={l.id} data-testid={`card-listing-${l.id}`} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: F.playfair, fontSize: 16, color: C.cream, marginBottom: 8 }}>
-                      {l.orgName || l.org_name || 'Unknown Org'}
+        {/* Panel 1: Listings */}
+        {activeTab === 'listings' && (
+          <div style={{ animation: 'fadeIn .3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Pending Seller Listings</h2>
+                <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>New submissions saved as <code style={{ color: C.yellow }}>pending</code> — approve to publish, reject to email seller.</p>
+              </div>
+              <button data-testid="button-refresh-listings" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+            </div>
+            
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+            ) : pendingListings.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No listings pending review.</div>
+            ) : (
+              pendingListings.map(l => (
+                <div key={l.id} data-testid={`card-listing-${l.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+                  <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', borderBottom: `1px solid ${C.border}` }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.syne }}>{l.orgName || l.org_name}</div>
+                      <div style={{ fontSize: '12px', color: C.muted }}>{l.creditType || l.credit_type} • {l.standard}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                      <Badge label={l.creditType || l.credit_type || 'Credit'} color={C.gold} />
-                      <Badge label={l.standard || '—'} color={C.cream2} />
-                      <Badge label={`${Number(l.annualVolume || l.annual_volume || 0).toLocaleString()} t/yr`} color={C.green} />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '4px 24px' }}>
-                      {[
-                        ['Email', l.email],
-                        ['Asking Price', `€${l.askingPricePerTonne || l.asking_price_per_tonne || '—'}/t`],
-                        ['Origin', l.projectOrigin || l.project_origin || '—'],
-                        ['Registry Serial', l.registrySerial || l.registry_serial || '—'],
-                        ['Submitted', l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '—'],
-                        ['Status', l.status || 'pending'],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <span style={labelStyle}>{k}</span>
-                          <span style={valStyle}>{v}</span>
-                        </div>
-                      ))}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button data-testid={`button-approve-${l.id}`} onClick={() => approveListing(l.id)} style={{ background: C.green, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Approve</button>
+                      <button data-testid={`button-reject-${l.id}`} onClick={() => { setRejectId(l.id); setShowRejectModal(true); }} style={{ background: C.red, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Reject</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 }}>
-                    <button data-testid={`button-approve-${l.id}`} onClick={() => approveListing(l.id)} style={btnGreen}>
-                      Approve & Publish
-                    </button>
-                    <input
-                      data-testid={`input-reject-reason-${l.id}`}
-                      placeholder="Rejection reason (optional)..."
-                      value={rejectReasons[l.id] || ''}
-                      onChange={e => setRejectReasons(prev => ({ ...prev, [l.id]: e.target.value }))}
-                      style={{ background: C.ink3, border: `1px solid ${C.goldborder}`, color: C.cream, fontFamily: F.mono, fontSize: 10, padding: '6px 10px', outline: 'none' }}
-                    />
-                    <button data-testid={`button-reject-${l.id}`} onClick={() => rejectListing(l.id)} style={btnRed}>
-                      Reject
-                    </button>
+                  <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Email</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.email}</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Origin</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.projectOrigin || l.project_origin}</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Volume</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.annualVolume || l.annual_volume} t/yr</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Price</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>€{l.askingPricePerTonne || l.asking_price_per_tonne}/t</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Serial</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registrySerial || l.registry_serial}</span></div>
                   </div>
                 </div>
-              </div>
-            ))
-          )}
-        </Section>
+              ))
+            )}
+          </div>
+        )}
 
-        {/* Section 2: Webhook Dead-Letter Queue */}
-        <Section title={`Failed Webhooks — Dead-Letter Queue (${webhookFailures.length})`}>
-          {webhookFailures.length === 0 ? (
-            <div style={{ color: C.cream3, fontSize: 12, padding: '20px 0' }}>No unresolved webhook failures.</div>
-          ) : (
-            webhookFailures.map(f => (
-              <div key={f.id} data-testid={`card-webhook-${f.id}`} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                      <Badge label={f.eventType || f.event_type || '—'} color={C.orange} />
-                      <Badge label={`Retries: ${f.retryCount ?? f.retry_count ?? 0}`} color={C.cream3} />
+        {/* Panel 2: Webhooks */}
+        {activeTab === 'webhooks' && (
+          <div style={{ animation: 'fadeIn .3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Webhook Dead-Letter Queue</h2>
+                <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Unhandled webhook exceptions. Retry re-attempts Stripe capture.</p>
+              </div>
+              <button data-testid="button-refresh-webhooks" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+            ) : webhookFailures.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No webhook failures recorded.</div>
+            ) : (
+              webhookFailures.map(f => (
+                <div key={f.id} data-testid={`card-webhook-${f.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+                  <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', borderBottom: `1px solid ${C.border}` }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.mono, color: C.gold }}>{f.eventType || f.event_type}</div>
+                      <div style={{ fontSize: '12px', color: C.muted }}>Trade ID: {f.tradeId || f.trade_id || '—'}</div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '4px 24px' }}>
-                      {[
-                        ['Trade ID', f.tradeId || f.trade_id || '—'],
-                        ['Payment Intent', (f.paymentIntentId || f.payment_intent_id || '—').slice(0, 28)],
-                        ['Event ID', (f.eventId || f.event_id || '—').slice(0, 28)],
-                        ['Last Attempted', f.lastAttemptedAt || f.last_attempted_at ? new Date(f.lastAttemptedAt || f.last_attempted_at).toLocaleString() : '—'],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <span style={labelStyle}>{k}</span>
-                          <span style={valStyle}>{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {(f.errorMessage || f.error_message) && (
-                      <div style={{ background: `${C.red}11`, border: `1px solid ${C.red}33`, padding: '8px 12px', marginTop: 10 }}>
-                        <span style={{ ...labelStyle, color: C.red, marginBottom: 4 }}>Error</span>
-                        <span style={{ fontFamily: F.mono, fontSize: 10, color: `${C.red}cc` }}>{(f.errorMessage || f.error_message || '').slice(0, 200)}</span>
-                      </div>
-                    )}
+                    <button data-testid={`button-retry-webhook-${f.id}`} onClick={() => retryWebhook(f.id)} style={{ background: C.gold, color: C.bg, border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Retry</button>
                   </div>
-                  <div>
-                    <button data-testid={`button-retry-${f.id}`} onClick={() => retryWebhook(f.id)} style={btnGold}>
-                      Retry
-                    </button>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Error Message</span><div style={{ fontSize: '12px', color: C.red, background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '4px', marginTop: '4px', fontFamily: F.mono }}>{f.errorMessage || f.error_message}</div></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '12px' }}>
+                      <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Payment Intent</span><span style={{ fontSize: '12px', color: C.text, fontFamily: F.mono }}>{f.paymentIntentId || f.payment_intent_id}</span></div>
+                      <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Retry Count</span><span style={{ fontSize: '12px', color: C.text, fontFamily: F.mono }}>{f.retryCount ?? f.retry_count}</span></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
-          )}
-        </Section>
+              ))
+            )}
+          </div>
+        )}
 
-        {/* Section 3: System Health Check */}
-        <Section title="System Health">
-          {!healthData ? (
-            <div style={{ color: C.cream3, fontSize: 12, padding: '20px 0' }}>Loading health data...</div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <Badge
-                  label={healthData.ready ? 'ALL SYSTEMS OK' : 'DEGRADED'}
-                  color={healthData.ready ? C.green : C.red}
-                />
-                <span style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>{healthData.timestamp}</span>
+        {/* Panel 3: Health */}
+        {activeTab === 'health' && (
+          <div style={{ animation: 'fadeIn .3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>System Health Check</h2>
+                <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Live validation of all platform services including Stripe startup gate.</p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {Object.entries(healthData.systems || {}).map(([key, val]: [string, any]) => {
-                  const status = typeof val === 'string' ? val : val?.status || '—';
-                  const ok = status.startsWith('OK');
-                  const warn = status.startsWith('WARN');
-                  const color = ok ? C.green : warn ? C.orange : C.red;
+              <button data-testid="button-refresh-health" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}><div style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+            ) : healthData && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
+                {Object.entries(healthData.systems || {}).map(([name, val]: [string, any]) => {
+                  const statusText = typeof val === 'string' ? val : (val as any).status || 'Unknown';
+                  const isOk = statusText.startsWith('OK');
+                  const isFail = statusText.startsWith('FAIL');
+                  const isWarn = statusText.startsWith('WARN');
+                  
                   return (
-                    <div key={key} data-testid={`health-${key}`} style={{ background: C.ink3, border: `1px solid ${C.goldborder}`, padding: '12px 16px' }}>
-                      <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', color: C.cream3, textTransform: 'uppercase', marginBottom: 6 }}>{key.replace(/_/g, ' ')}</div>
-                      <div style={{ color, fontFamily: F.mono, fontSize: 11, marginBottom: 4 }}>{status}</div>
-                      {typeof val === 'object' && Object.entries(val).filter(([k]) => k !== 'status').map(([k, v]) => (
-                        <div key={k} style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 2 }}>
-                          {k}: {String(v)}
-                        </div>
-                      ))}
+                    <div key={name} data-testid={`status-${name}`} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '16px 18px' }}>
+                      <div style={{ fontSize: '11px', color: C.muted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: '6px' }}>{name.replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: isOk ? C.green : isFail ? C.red : isWarn ? C.yellow : C.text }}>{statusText}</div>
+                      {typeof val === 'object' && (val as any).validated_at && (
+                        <div style={{ fontSize: '11px', color: C.muted, marginTop: '4px' }}>Validated: {new Date((val as any).validated_at).toLocaleTimeString()}</div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              {healthData.next_steps && (
-                <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '12px 16px', marginTop: 16, fontFamily: F.mono, fontSize: 12, color: C.cream }}>
-                  {healthData.next_steps}
-                </div>
-              )}
-            </div>
-          )}
-        </Section>
+            )}
+          </div>
+        )}
+      </main>
 
-      </div>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+      `}</style>
     </div>
   );
 }
+
+
