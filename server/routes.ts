@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import express from "express";
+import { createHash } from "crypto";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
@@ -143,6 +144,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                     }).catch((e: any) => console.error('[Escrow Email]', e.message));
 
                     // ── FIX 4: Auto-generate and email PDF audit pack ────────
+                    const receiptData = `${trade_id}:${pi.id}:${charge_id}:${gross}:${settled_at}`;
+                    const receiptHash = createHash('sha256').update(receiptData).digest('hex');
                     generateTradePDF({
                       trade_id,
                       side:                'BUY',
@@ -151,7 +154,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                       price_eur_per_tonne: gross / (parseFloat(pi.metadata?.volume_tonnes || '1') || 1),
                       gross_eur:           gross,
                       fee_eur:             uaiu_fee,
-                      receipt_hash:        '',
+                      receipt_hash:        receiptHash,
                       prev_receipt_hash:   '',
                       payment_intent_id:   pi.id,
                       stripe_charge_id:    charge_id,
@@ -1267,7 +1270,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/account', async (req, res) => {
+  app.post('/api/exchange/account', requireAuth, async (req, res) => {
     try {
       const body = req.body;
       if (!body.email) {
@@ -1298,7 +1301,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/rfq', async (req, res) => {
+  app.post('/api/exchange/rfq', requireAuth, async (req, res) => {
     try {
       const body = req.body;
       if (!body.company || !body.contact || !body.email || !body.side || !body.standard || !body.volumeTonnes) {
@@ -1342,7 +1345,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/list-credits', async (req, res) => {
+  app.post('/api/exchange/list-credits', requireAuth, async (req, res) => {
     try {
       const parsed = insertExchangeCreditListingSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1440,12 +1443,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── SELLER DASHBOARD ─────────────────────────────────────────────────────
-  // GET /api/seller/dashboard?email=seller@company.com
-  app.get('/api/seller/dashboard', async (req, res) => {
+  // GET /api/seller/dashboard — authenticated seller view of their own data
+  app.get('/api/seller/dashboard', requireAuth, async (req, res) => {
     try {
-      const { email } = req.query;
-      if (!email || typeof email !== 'string') return res.status(400).json({ error: 'email query param required' });
-      const e = email.trim().toLowerCase();
+      const sessionUser = await storage.getUser((req.session as any).userId);
+      if (!sessionUser) return res.status(401).json({ error: 'User not found' });
+      const e = sessionUser.email.trim().toLowerCase();
 
       const listings = await db.select().from(exchangeCreditListings)
         .where(sql`LOWER(${exchangeCreditListings.email}) = ${e}`)
@@ -1482,14 +1485,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  // DELETE /api/seller/listing/:id — remove own listing by email ownership
-  app.delete('/api/seller/listing/:id', async (req, res) => {
+  // DELETE /api/seller/listing/:id — remove own listing (auth required, ownership verified)
+  app.delete('/api/seller/listing/:id', requireAuth, async (req, res) => {
     try {
-      const { id }    = req.params;
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ error: 'Seller email required in body' });
+      const { id } = req.params;
+      const sessionUser = await storage.getUser((req.session as any).userId);
+      if (!sessionUser) return res.status(401).json({ error: 'User not found' });
+      const email = sessionUser.email.trim().toLowerCase();
       await db.delete(exchangeCreditListings)
-        .where(sql`id = ${id} AND LOWER(${exchangeCreditListings.email}) = ${email.trim().toLowerCase()}`);
+        .where(sql`id = ${id} AND LOWER(${exchangeCreditListings.email}) = ${email}`);
       res.json({ success: true, message: 'Listing removed.' });
     } catch (err: any) {
       console.error('[Delete Listing]', err);
@@ -1499,7 +1503,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // ── KYC — Stripe Identity ─────────────────────────────────────────────────
   // POST /api/kyc/start  — create a verification session, return URL for buyer
-  app.post('/api/kyc/start', async (req, res) => {
+  app.post('/api/kyc/start', requireAuth, async (req, res) => {
     try {
       const { account_id, email, return_url } = req.body;
       if (!account_id || !email) return res.status(400).json({ error: 'account_id and email required' });
@@ -1964,14 +1968,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           ? Math.floor(data.betAmount) 
           : 1;
 
-        if (user.credits < betAmount) {
+        // Atomic credit deduction — only succeeds if user has enough credits
+        const deducted = await storage.deductCredits(userId, betAmount);
+        if (!deducted) {
           socket.emit('error', { message: `Not enough credits. You need ${betAmount} credits to join.` });
-          socket.emit('creditsUpdated', user.credits);
+          const freshUser = await storage.getUser(userId);
+          socket.emit('creditsUpdated', freshUser?.credits ?? 0);
           return;
         }
-
-        // Deduct bet amount entry fee upfront
-        await storage.updateUserCredits(userId, user.credits - betAmount);
         socket.emit('creditsUpdated', user.credits - betAmount);
 
         const gameType = data.gameType || 'pong';
@@ -2037,24 +2041,24 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           return;
         }
 
-        // Validate user has enough credits
-        if (user.credits < targetBetAmount) {
+        // Atomic credit deduction — only succeeds if user has enough credits
+        const deducted = await storage.deductCredits(userId, targetBetAmount);
+        if (!deducted) {
           socket.emit('error', { message: `Not enough credits. You need ${targetBetAmount} credits.` });
-          socket.emit('creditsUpdated', user.credits);
+          const freshUser = await storage.getUser(userId);
+          socket.emit('creditsUpdated', freshUser?.credits ?? 0);
           return;
         }
-
-        // Deduct bet amount upfront
-        await storage.updateUserCredits(userId, user.credits - targetBetAmount);
         socket.emit('creditsUpdated', user.credits - targetBetAmount);
 
         // Join the match with socket ID
         const success = gameManager.joinSpecificMatch(userId, data.targetUserId, user.name, socket.id, io);
         
-        // Always refund if join fails (race condition or match already started)
+        // Refund if join fails (race condition or match already started)
         if (!success) {
-          await storage.updateUserCredits(userId, user.credits);
-          socket.emit('creditsUpdated', user.credits);
+          const freshUser = await storage.getUser(userId);
+          await storage.updateUserCredits(userId, (freshUser?.credits ?? 0) + targetBetAmount);
+          socket.emit('creditsUpdated', (freshUser?.credits ?? 0) + targetBetAmount);
           socket.emit('error', { message: 'Match request no longer available' });
         }
       } catch (error) {
@@ -2424,13 +2428,20 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         }
       });
 
-      // GameManager handles game cleanup automatically
+      // Forfeit any active game match with a 5-second grace period
+      if (userId && !isUserOnline(userId)) {
+        setTimeout(async () => {
+          if (!isUserOnline(userId)) {
+            await gameManager.forfeitMatch(userId, io);
+          }
+        }, 5000);
+      }
     });
   });
 
   // ─── AI Exchange Routes ───────────────────────────────────────────
 
-  app.post('/api/exchange/ai-rfq', async (req, res) => {
+  app.post('/api/exchange/ai-rfq', requireAuth, async (req, res) => {
     try {
       const { message } = req.body;
       if (!message) return res.status(400).json({ error: 'message required' });
@@ -2459,7 +2470,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/ai-intelligence', async (req, res) => {
+  app.post('/api/exchange/ai-intelligence', requireAuth, async (req, res) => {
     try {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
@@ -2490,7 +2501,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/ai-vision', async (req, res) => {
+  app.post('/api/exchange/ai-vision', requireAuth, async (req, res) => {
     try {
       const { imageBase64, mimeType } = req.body;
       if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
@@ -2519,7 +2530,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/multisig-approval', async (req, res) => {
+  app.post('/api/exchange/multisig-approval', requireAuth, async (req, res) => {
     try {
       const { tradeId, receiptHash, complianceEmail } = req.body;
       if (!tradeId || !complianceEmail) return res.status(400).json({ error: 'tradeId and complianceEmail required' });

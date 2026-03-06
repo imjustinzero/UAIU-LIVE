@@ -466,7 +466,7 @@ export default function Exchange() {
       prev_receipt_hash: prevHash,
       verify_url: `uaiu.live/verify/${tradeId}`,
       status: 'filled',
-    }).catch(() => {});
+    }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     setTimeout(() => {
       setSessionTrades(prev => [{ ...trade, trade_id: tradeId, side: mode, volume_tonnes: tradeQty, price_eur_per_tonne: tradePrice, gross_eur: gross, receipt_hash: hash }, ...prev]);
       setTradeRefStr(tradeId);
@@ -515,7 +515,7 @@ export default function Exchange() {
         entity_type: acctType,
         annual_co2_exposure: acctCo2 || null,
         status: 'pending_kyc',
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     } catch {
       showToast('Failed to submit. Please try again.');
     } finally {
@@ -545,7 +545,7 @@ export default function Exchange() {
         origin: listOrigin,
         registry_ref: listSerial || null,
         status: 'pending_verification',
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     } catch {
       showToast('Failed to submit. Please try again.');
     } finally {
@@ -584,7 +584,7 @@ export default function Exchange() {
         deadline: rfqDeadline || null,
         notes: rfqNotes || null,
         status: 'new',
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     } catch {
       showToast('Failed to submit RFQ. Please try again.');
     } finally {

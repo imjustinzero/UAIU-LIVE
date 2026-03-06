@@ -40,6 +40,7 @@ export default function Play() {
   const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [matchmaking, setMatchmaking] = useState(false);
@@ -109,14 +110,29 @@ export default function Play() {
 
       newSocket.on('connect', () => {
         console.log('✅ Socket connected successfully!', newSocket.id);
+        setSocketConnected(true);
       });
-      
+
       newSocket.on('connect_error', (error) => {
         console.error('❌ Socket connection error:', error);
+        setSocketConnected(false);
+        toast({
+          title: 'Connection Error',
+          description: 'Could not connect to the game server. Please check your connection.',
+          variant: 'destructive',
+        });
       });
       
       newSocket.on('disconnect', (reason) => {
         console.log('Socket disconnected:', reason);
+        setSocketConnected(false);
+        if (reason !== 'io client disconnect') {
+          toast({
+            title: 'Disconnected',
+            description: 'Lost connection to the game server. Reconnecting...',
+            variant: 'destructive',
+          });
+        }
       });
 
       newSocket.on('matchFound', (data?: { matchId?: string; gameType?: string }) => {
@@ -870,13 +886,18 @@ export default function Play() {
                         onClick={handleJoinMatchmaking}
                         size="lg"
                         className="w-full h-16 text-2xl font-bold"
-                        disabled={user.credits < betAmount}
+                        disabled={user.credits < betAmount || !socketConnected}
                         data-testid="button-play"
                       >
                         <Zap className="w-6 h-6 mr-2" />
-                        PLAY {availableGames.find(g => g.id === selectedGame)?.name.toUpperCase() || 'NOW'}
+                        {socketConnected ? `PLAY ${availableGames.find(g => g.id === selectedGame)?.name.toUpperCase() || 'NOW'}` : 'CONNECTING...'}
                       </Button>
-                      {user.credits < betAmount && (
+                      {!socketConnected && (
+                        <p className="text-sm text-destructive">
+                          Not connected to the game server. Please wait or refresh the page.
+                        </p>
+                      )}
+                      {socketConnected && user.credits < betAmount && (
                         <p className="text-sm text-destructive">
                           Insufficient credits. You need {betAmount} credits to play!
                         </p>

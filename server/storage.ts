@@ -57,6 +57,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(userId: string, updates: Partial<User>): Promise<void>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
+  deductCredits(userId: string, amount: number): Promise<boolean>;
   updateUserStats(userId: string, stats: { wins?: number; losses?: number; matchesPlayed?: number; totalEarnings?: number }): Promise<void>;
   getLeaderboard(limit: number): Promise<User[]>;
   
@@ -152,6 +153,14 @@ export class DbStorage implements IStorage {
     await db.update(users)
       .set({ credits })
       .where(eq(users.id, userId));
+  }
+
+  async deductCredits(userId: string, amount: number): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ credits: sql`${users.credits} - ${amount}` })
+      .where(and(eq(users.id, userId), sql`${users.credits} >= ${amount}`))
+      .returning({ credits: users.credits });
+    return result.length > 0;
   }
 
   async updateUserStats(userId: string, stats: { 

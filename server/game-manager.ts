@@ -559,6 +559,16 @@ export class GameManager {
     this.activeMatches.delete(matchId);
   }
 
+  async forfeitMatch(userId: string, io: SocketIOServer): Promise<void> {
+    const matchId = this.playerToMatchMap.get(userId);
+    if (!matchId) return;
+    const match = this.activeMatches.get(matchId);
+    if (!match) return;
+    const isPlayer1 = match.player1.id === userId;
+    const winnerId = isPlayer1 ? match.player2.id : match.player1.id;
+    await this.endMatch(matchId, winnerId, io);
+  }
+
   getMatchForPlayer(userId: string): any {
     const matchId = this.playerToMatchMap.get(userId);
     return matchId ? this.activeMatches.get(matchId) : null;

@@ -85,6 +85,7 @@ export default function LiveVideo() {
       })
         .then(res => {
           if (!res.ok) {
+            toast({ title: 'Session Expired', description: 'Your session has expired. Please log in again.', variant: 'destructive' });
             clearAllSession();
             setUser(null);
             setPageState('logged_out');

@@ -403,7 +403,7 @@ export default function Feed() {
                       data-testid={`button-like-${post.id}`}
                     >
                       <Heart className="w-4 h-4 mr-2" />
-                      {post.likesCount} {isOwnPost && '(your post)'}
+                      {post.likesCount}{!isOwnPost && ' · 1 credit'}{isOwnPost && ' (your post)'}
                     </Button>
                     <Dialog>
                       <DialogTrigger asChild>

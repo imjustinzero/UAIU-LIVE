@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, timestamp, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, timestamp, boolean, unique, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,7 +27,9 @@ export const users = pgTable("users", {
   affiliateCode: text("affiliate_code").unique(),
   referredBy: text("referred_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  creditsNonNegative: check('credits_non_negative', sql`${table.credits} >= 0`),
+}));
 
 export const matches = pgTable("matches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -76,7 +78,9 @@ export const friendships = pgTable("friendships", {
   friendId: varchar("friend_id").notNull(),
   status: text("status").notNull().default('pending'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  uniquePair: unique('unique_friendship_pair').on(table.userId, table.friendId),
+}));
 
 export const achievements = pgTable("achievements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
