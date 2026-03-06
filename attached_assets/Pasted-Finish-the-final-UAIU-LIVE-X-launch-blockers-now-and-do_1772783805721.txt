@@ -1,0 +1,85 @@
+Finish the final UAIU.LIVE/X launch blockers now and do not stop until each one is fixed and verified.
+
+Current audit says the platform is CLOSE BUT NOT READY. I need you to patch the remaining gaps, restart the server, and re-run validation.
+
+Fix these exact issues:
+
+1. KYC error leaks
+Patch both routes to stop returning err.message:
+- server/routes.ts line ~1873 in POST /api/kyc/start
+- server/routes.ts line ~1908 in GET /api/kyc/status/:session_id
+Use safeError(err) for client responses and keep full server-side logging only.
+
+2. KYC status route auth
+Protect GET /api/kyc/status/:session_id with authentication.
+At minimum add requireExchangeAuth.
+If better, also verify the authenticated user is allowed to view that KYC session.
+
+3. Health-check internal leakage
+Remove raw e.message exposure from health-check failure branches:
+- PostgreSQL failure
+- marketplace failure
+- Stripe failure
+Keep admin usefulness, but do not expose raw internal errors in the response body.
+Safe pattern: return status false / fail plus a generic reason string.
+
+4. TypeScript cleanup
+Fix all currently reported TS errors:
+- Exchange.tsx gridTemplateColumns typing mismatches
+- ActionLog.tsx Date vs number issue
+- routes.ts Stripe event comparison overlap
+- stripe-init.ts MigrationConfig schema property issue
+- stripeClient.ts API version mismatch
+I want:
+npx tsc --noEmit
+to pass with zero errors.
+
+5. Server boot
+Resolve the port conflict, restart the app cleanly, and confirm the server is actually up.
+
+After fixes, run and report the exact result of these tests:
+
+A. Server/runtime
+- server boots cleanly
+- no EADDRINUSE
+- app responds normally
+
+B. Exchange auth
+- signin returns { account, token }
+- verify-token works
+- /api/exchange/trades without token returns 401
+- authenticated user only sees their own trades
+
+C. Trading security
+- fake client price is ignored in spot-checkout
+- non-verified KYC is blocked from checkout
+- non-owner cannot retire another user’s trade
+- duplicate Stripe webhook does not create duplicate trade rows
+
+D. Admin/security
+- admin routes reject missing X-Admin-Key
+- health-check no longer leaks raw internals
+- KYC routes no longer leak raw err.message
+- escrow routes still return sanitized errors
+
+E. Build quality
+- npm run build passes
+- npx tsc --noEmit passes
+
+Return your answer in exactly these sections:
+
+1. FIXES APPLIED
+2. TEST RESULTS
+3. ANYTHING STILL BROKEN
+4. FINAL VERDICT
+
+For FINAL VERDICT choose only one:
+- READY FOR LIVE INSTITUTIONAL USE
+- CLOSE BUT NOT READY
+- NOT READY
+
+Important rules:
+- Do not tell me “implemented” unless you verified it
+- Do not stop at code inspection only
+- If something cannot be tested, say exactly why
+- If anything is still broken, name the exact file and line

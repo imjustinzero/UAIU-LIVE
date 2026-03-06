@@ -1,0 +1,50 @@
+I need a brutally honest final verification of whether UAIU.LIVE/X is actually production-ready right now.
+
+Do not reassure me. Do not summarize intentions. Do not tell me what is “implemented” unless you verify it in the live code and runtime behavior.
+
+I want you to do a full end-to-end validation and answer in 4 sections only:
+
+SECTION 1 — VERIFIED WORKING
+List only the things you personally verified in code and/or runtime that are definitely working right now.
+
+SECTION 2 — NOT VERIFIED / STILL BROKEN
+List every item that is still broken, incomplete, untested, unsafe, or only partially implemented.
+
+SECTION 3 — REQUIRED LIVE TESTS
+Run or simulate every test you can from the actual codebase and local runtime. Include exact results for:
+- server boot
+- TypeScript typecheck
+- build
+- exchange signin returns { account, token }
+- verify-token works
+- /api/exchange/trades without token returns 401
+- authenticated user only sees own trades
+- spot-checkout ignores fake client price and uses DB price
+- non-verified KYC blocks checkout
+- non-owner cannot retire another user’s trade
+- admin routes reject missing X-Admin-Key
+- duplicate Stripe webhook does not create duplicate trade rows
+- 500 responses no longer leak raw internal e.message text
+- escrow routes work or are safely blocked
+- seller dashboard works without req.session issues
+- retire PDF email attachment works with Buffer content
+- CSP / helmet headers are present
+
+SECTION 4 — FINAL VERDICT
+Choose only one:
+- READY FOR LIVE INSTITUTIONAL USE
+- CLOSE BUT NOT READY
+- NOT READY
+
+Then explain exactly why in plain English.
+
+Important rules:
+- If you did not run something, say “not verified”
+- If you are unsure, say “uncertain”
+- If the server is down, fix/restart it first and then continue
+- If a test cannot be completed without secrets or external services, say exactly what blocked it
+- Do not sugarcoat anything
+- Do not stop at code inspection only — verify runtime wherever possible
+- If anything is still broken, give me the exact files and lines to fix
+
+After the verdict, give me a final launch checklist with checkboxes, but only for items still not proven.
