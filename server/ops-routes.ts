@@ -2,7 +2,7 @@ import type { Express } from 'express';
 import { getOpsState, recordOpsEvent } from './ops-monitoring';
 import { requireAdminHeader } from './exchange-auth';
 import { triggerDatabaseBackup } from './cron';
-import { isS3Configured, getS3BucketName, headS3Object } from './backup-storage';
+import { isS3Configured, getS3BucketName, headS3Object, validateS3Access } from './backup-storage';
 import { db } from './db';
 import { sql } from 'drizzle-orm';
 import { existsSync, readFileSync } from 'fs';
@@ -53,6 +53,27 @@ export function registerOpsRoutes(app: Express) {
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }
+  });
+
+
+  // ── Backup: Validate S3/R2 bucket credentials ─────────────────────────────
+  app.get('/api/admin/backup/validate', requireAdminHeader, async (_req, res) => {
+    const result = await validateS3Access();
+    if (!result.ok) {
+      return res.status(401).json({
+        ok: false,
+        bucket: result.bucket,
+        code: result.code || 'Unauthorized',
+        detail: result.detail || 'n/a',
+        message: result.message || 'S3/R2 validation failed',
+      });
+    }
+
+    return res.json({
+      ok: true,
+      bucket: result.bucket,
+      s3Configured: isS3Configured(),
+    });
   });
 
   // ── Backup: Trigger a manual backup ─────────────────────────────────────────

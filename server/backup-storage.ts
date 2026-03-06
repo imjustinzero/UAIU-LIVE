@@ -1,6 +1,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   DeleteObjectCommand,
@@ -20,6 +21,14 @@ export interface S3ObjectMeta {
 export interface S3HeadResult {
   size: number;
   etag: string;
+}
+
+export interface S3ValidationResult {
+  ok: boolean;
+  bucket: string | null;
+  code?: string;
+  detail?: string;
+  message?: string;
 }
 
 export function isS3Configured(): boolean {
@@ -96,6 +105,42 @@ export async function uploadToS3(
     etag: (result as any).ETag?.replace(/"/g, "") || "",
     versionId: (result as any).VersionId,
   };
+}
+
+export function classifyS3Error(err: any): { code: string; detail: string; message: string } {
+  const code = String(err?.Code || err?.code || err?.name || "unknown");
+  const status = err?.$metadata?.httpStatusCode;
+  const detail = status ? `HTTP ${status}` : "";
+  const message = String(err?.message || "Unknown S3 error");
+  return { code, detail, message };
+}
+
+/**
+ * Validate S3 connectivity/authorization for the configured bucket.
+ */
+export async function validateS3Access(): Promise<S3ValidationResult> {
+  const client = getS3Client();
+  const bucket = getS3BucketName();
+  if (!client || !bucket) {
+    return {
+      ok: false,
+      bucket,
+      code: "NotConfigured",
+      message: "S3 not configured — set S3_BACKUP_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY",
+    };
+  }
+
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: bucket }));
+    return { ok: true, bucket };
+  } catch (err: any) {
+    const parsed = classifyS3Error(err);
+    return {
+      ok: false,
+      bucket,
+      ...parsed,
+    };
+  }
 }
 
 /**
