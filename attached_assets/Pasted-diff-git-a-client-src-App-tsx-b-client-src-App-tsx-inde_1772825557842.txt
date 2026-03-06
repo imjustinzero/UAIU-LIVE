@@ -1,0 +1,63 @@
+diff --git a/client/src/App.tsx b/client/src/App.tsx
+index 9717c25abe47ef2e8f96d1be5b25869ce18766ca..084f283f4d0d20fc1d51f166840bec282253c875 100644
+--- a/client/src/App.tsx
++++ b/client/src/App.tsx
+@@ -1,56 +1,58 @@
+ import { Switch, Route } from "wouter";
+ import { queryClient } from "./lib/queryClient";
+ import { QueryClientProvider } from "@tanstack/react-query";
+ import { Toaster } from "@/components/ui/toaster";
+ import { TooltipProvider } from "@/components/ui/tooltip";
+ import SkipLink from "@/components/SkipLink";
+ import { SettingsProvider } from "@/lib/settings";
+ import Play from "@/pages/Play";
+ import Profile from "@/pages/Profile";
+ import Feed from "@/pages/Feed";
+ import LiveVideo from "@/pages/LiveVideo";
+ import Exchange from "@/pages/Exchange";
+ import Admin from "@/pages/Admin";
+ import Security from "@/pages/Security";
+ import Status from "@/pages/Status";
+ import Legal from "@/pages/Legal";
+ import ZStop from "@/pages/ZStop";
+ import SellerConnect from "@/pages/SellerConnect";
++import RetireUpload from "@/pages/RetireUpload";
+ import NotFound from "@/pages/not-found";
+ 
+ function Router() {
+   return (
+     <Switch>
+       <Route path="/" component={Play} />
+       <Route path="/profile" component={Profile} />
+       <Route path="/feed" component={Feed} />
+       <Route path="/live" component={LiveVideo} />
+       <Route path="/x" component={Exchange} />
+       <Route path="/admin" component={Admin} />
+       <Route path="/security" component={Security} />
+       <Route path="/status" component={Status} />
+       <Route path="/legal" component={Legal} />
+       <Route path="/x/zstop" component={ZStop} />
+       <Route path="/x/seller" component={SellerConnect} />
++      <Route path="/retire/:tradeId" component={RetireUpload} />
+       <Route component={NotFound} />
+     </Switch>
+   );
+ }
+ 
+ function App() {
+   return (
+     <QueryClientProvider client={queryClient}>
+       <SettingsProvider>
+         <TooltipProvider>
+           <SkipLink />
+           <Toaster />
+           <main id="main" className="min-h-screen">
+             <Router />
+           </main>
+         </TooltipProvider>
+       </SettingsProvider>
+     </QueryClientProvider>
+   );
+ }
+ 
+ export default App;

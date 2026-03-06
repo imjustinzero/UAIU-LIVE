@@ -1,0 +1,136 @@
+diff --git a/server/cron.ts b/server/cron.ts
+index a42fbcefc83af9c4bac6a8203e3e4d4339286e1b..f51c80e7432c6cf4118feeb44f280954e4872c1e 100644
+--- a/server/cron.ts
++++ b/server/cron.ts
+@@ -1,43 +1,49 @@
+ import type { Express } from "express";
+ import { exec } from "child_process";
+ import { mkdirSync, readdirSync, statSync, unlinkSync, readFileSync } from "fs";
+ import { createHash } from "crypto";
+ import path from "path";
+ import { db } from "./db";
+ import { sql } from "drizzle-orm";
+ import { sendExchangeEmail } from "./email-service";
++import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+ import {
+   isS3Configured,
+   uploadToS3,
+   pruneS3Backups,
+ } from "./backup-storage";
+ 
+ const BACKUP_DIR = "/tmp/uaiu_backups";
+ const BACKUP_KEEP = 7;
+ const S3_BACKUP_KEEP = 30;
+ 
++async function ensureRetirementReminderColumn(): Promise<void> {
++  await db.execute(sql`ALTER TABLE retirement_upload_tokens ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ`);
++}
++
++
+ export interface BackupResult {
+   success: boolean;
+   file?: string;
+   filename?: string;
+   checksumSha256?: string;
+   fileSizeBytes?: number;
+   s3Key?: string;
+   storageProvider?: string;
+   uploadStatus?: string;
+   logId?: string;
+   error?: string;
+ }
+ 
+ export async function triggerDatabaseBackup(
+   triggeredBy: "cron" | "admin" = "cron",
+   backupType: "scheduled" | "manual" = "scheduled"
+ ): Promise<BackupResult> {
+   return new Promise((resolve) => {
+     const dbUrl = process.env.DATABASE_URL;
+     if (!dbUrl) {
+       console.warn("[Backup] DATABASE_URL not set — skipping");
+       return resolve({ success: false, error: "DATABASE_URL not set" });
+     }
+ 
+     mkdirSync(BACKUP_DIR, { recursive: true });
+@@ -192,50 +198,81 @@ export function startCronJobs(_app: Express): void {
+         );
+     });
+ 
+     setInterval(() => {
+       triggerDatabaseBackup("cron", "scheduled").then((r) => {
+         if (!r.success)
+           console.warn("[Backup] Scheduled backup failed:", r.error);
+         else
+           console.log(
+             `[Backup] Scheduled backup complete — ` +
+               `${r.filename} (${r.uploadStatus}, provider: ${r.storageProvider})`
+           );
+       });
+     }, 24 * 60 * 60 * 1000);
+   }, 5 * 60 * 1000);
+ 
+   // Escrow watchdog
+   async function checkStuckEscrows(): Promise<void> {
+     try {
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) {
+         console.warn("[Cron] Skipping stuck escrow check — STRIPE_SECRET_KEY not set");
+         return;
+       }
+ 
++      await ensureRetirementReminderColumn().catch(() => {});
++
++      const dueReminders = await db.execute(sql`
++        SELECT id, trade_id, seller_email, created_at
++        FROM retirement_upload_tokens
++        WHERE used_at IS NULL
++          AND reminder_sent_at IS NULL
++          AND created_at <= NOW() - INTERVAL '24 hours'
++        ORDER BY created_at ASC
++        LIMIT 100
++      `).catch(() => ({ rows: [] as any[] }));
++
++      for (const token of ((dueReminders as any).rows || [])) {
++        try {
++          const uploadLink = `https://uaiu.live/retire/${encodeURIComponent(String(token.trade_id || ''))}`;
++          const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Reminder — Retirement Certificate Upload Pending</h2><p>Your upload is still pending for trade <strong>${token.trade_id}</strong>.</p><p>Please use your original secure link from the initial email. If unavailable, contact support immediately.</p><p>Fallback page: <a href="${uploadLink}" style="color:#d4a843">${uploadLink}</a></p></div>`;
++          if (isZohoConfigured() && token.seller_email) {
++            await sendZohoEmail(String(token.seller_email), `Reminder: retirement upload due — ${token.trade_id}`, html);
++          } else {
++            await sendExchangeEmail('Retirement Upload Reminder Triggered', {
++              'Trade ID': String(token.trade_id || ''),
++              'Seller Email': String(token.seller_email || ''),
++              'Fallback URL': uploadLink,
++            });
++          }
++          await db.execute(sql`UPDATE retirement_upload_tokens SET reminder_sent_at = NOW() WHERE id = ${token.id}`);
++        } catch (e: any) {
++          console.error('[Cron] Retirement reminder send failed:', e.message);
++        }
++      }
++
+       const { default: Stripe } = await import("stripe");
+       const stripe = new Stripe(stripeKey, {
+         apiVersion: "2024-12-18.acacia" as any,
+       });
+ 
+       const thirtyMinutesAgo = Math.floor(
+         (Date.now() - 30 * 60 * 1000) / 1000
+       );
+       const piList = await stripe.paymentIntents.list({ limit: 100 });
+       const stuckPIs = piList.data.filter(
+         (pi) =>
+           pi.status === "requires_capture" &&
+           pi.metadata?.escrow_type === "carbon_credit_t1" &&
+           pi.created < thirtyMinutesAgo
+       );
+ 
+       if (stuckPIs.length === 0) {
+         console.log("[Cron] No stuck escrow trades found");
+         return;
+       }
+ 
+       console.log(`[Cron] Found ${stuckPIs.length} stuck escrow PI(s)`);
+ 
+       for (const pi of stuckPIs) {
+         const trade_id = pi.metadata?.trade_id || "unknown";

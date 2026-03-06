@@ -1,0 +1,113 @@
+diff --git a/client/src/pages/Exchange.tsx b/client/src/pages/Exchange.tsx
+index 584dc2874ff945d0098f712497ae0c655f927f66..11529bd09426fbc73741d8a7c6008cbd53e5707b 100644
+--- a/client/src/pages/Exchange.tsx
++++ b/client/src/pages/Exchange.tsx
+@@ -141,50 +141,52 @@ const CREDIT_STANDARDS = [
+   'Other',
+ ];
+ 
+ const CREDIT_TYPES = [
+   'Biofuel Production (B100 / SAF)',
+   'REDD++ Forest Conservation',
+   'Blue Carbon / Seagrass',
+   'Coral Restoration',
+   'Agricultural Waste → Biogas',
+   'Renewable Energy (Solar / Wind)',
+   'Human Waste Biodigester',
+   'Other',
+ ];
+ 
+ interface Listing {
+   id: string;
+   standard: string;
+   badgeLabel: string;
+   name: string;
+   origin: string;
+   pricePerTonne: number;
+   changePercent: number;
+   changeDirection: string;
+   status: string;
+   isAcceptingOrders: boolean;
++  registrySerial?: string | null;
++  registryName?: string | null;
+ }
+ 
+ function getBadgeStyle(standard: string, C: typeof C_DARK) {
+   if (standard === 'EU ETS' || standard === 'CORSIA') return { color: '#a855f7', borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)' };
+   if (standard === 'VCS' || standard === 'GOLD STD') return { color: C.green, borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)' };
+   return { color: C.gold, borderColor: C.goldborder, background: C.goldfaint };
+ }
+ 
+ async function sha256(message: string): Promise<string> {
+   try {
+     const msgBuffer = new TextEncoder().encode(message);
+     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+     const hashArray = Array.from(new Uint8Array(hashBuffer));
+     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+   } catch {
+     return Math.random().toString(36).repeat(4).slice(0, 64);
+   }
+ }
+ 
+ function genTradeId(mode: string): string {
+   return `UAIU-${mode.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+ }
+ 
+ export default function Exchange() {
+   const cursorRef = useRef<HTMLDivElement>(null);
+@@ -1064,50 +1066,55 @@ export default function Exchange() {
+                 <div style={{ ...s.eyebrow as React.CSSProperties }}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Live Listings</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0 }}>Available <em style={{ fontStyle: 'italic', color: C.gold }}>Credits</em></h2>
+               </div>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                 {[['all','All'],['eu','EU ETS'],['vcs','VCS'],['redd','REDD++'],['blue','Blue Carbon']].map(([val,label]) => (
+                   <button key={val} className={`x-mfilter${filter === val ? ' active' : ''}`} style={{ fontFamily: F.mono }} onClick={() => setFilter(val)} data-testid={`filter-${val}`}>{label}</button>
+                 ))}
+                 <input className="x-fi" style={{ ...s.fi, flex: 1, maxWidth: 280, fontFamily: F.mono, fontSize: 11 }} placeholder="Search credits..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-credits" />
+               </div>
+             </div>
+             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder }}>
+               {filteredListings.map(l => {
+                 const bs = getBadgeStyle(l.standard, C);
+                 const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
+                 const livePrice = livePrices[liveKey];
+                 const displayPrice = livePrice ? livePrice.price : l.pricePerTonne;
+                 const displayPct = livePrice ? Math.abs(livePrice.changePct) : Math.abs(l.changePercent);
+                 const up = livePrice ? livePrice.up : l.changeDirection !== 'down';
+                 return (
+                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                       <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '5px 12px', border: '1px solid', ...bs }}>{l.badgeLabel}</span>
+                       <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
+                     </div>
+                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
++                    {l.registrySerial && l.registryName && (
++                      <div style={{ marginBottom: 10 }}>
++                        <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.green, background: C.greenfaint, border: `1px solid ${C.green}`, padding: '4px 10px', display: 'inline-flex', borderRadius: 999 }}>Registry Verified · {l.registryName}</span>
++                      </div>
++                    )}
+                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>
+                     <div style={{ height: 1, background: C.goldborder, marginBottom: 20 }} />
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Price / tonne</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{displayPrice.toFixed(2)}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {displayPct.toFixed(2)}% today</div>
+                       </div>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Standard</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700, color: C.cream, lineHeight: 1 }}>{l.badgeLabel}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green }}>&#9679; Active</div>
+                       </div>
+                     </div>
+                     <div style={{ display: 'flex', gap: 10 }}>
+                       <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Buy Now</button>
+                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
+                       <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={l.pricePerTonne} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                       <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
