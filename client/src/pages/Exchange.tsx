@@ -779,7 +779,7 @@ export default function Exchange() {
                 {label:'Budget', href:'#budget'},
                 {label:'Calendar', href:'#calendar'},
                 {label:'Verify', href:'#trust'},
-              ]} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
+              ]} isDark={isDark} onLinkClick={(href) => scrollTo(href.replace('#',''))} />
             </div>
           </div>
         </nav>

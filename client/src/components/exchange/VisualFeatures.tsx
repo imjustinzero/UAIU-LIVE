@@ -51,7 +51,7 @@ export function DarkModeToggle({ isDark, onToggle }: { isDark: boolean; onToggle
 
 // ─── Mobile Nav ───────────────────────────────────────────────────
 interface NavLink { label: string; href: string; }
-export function MobileNav({ links, onLinkClick }: { links: NavLink[]; onLinkClick?: (href: string) => void }) {
+export function MobileNav({ links, isDark = true, onLinkClick }: { links: NavLink[]; isDark?: boolean; onLinkClick?: (href: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ display: 'none' }} className="x-mobile-nav">
