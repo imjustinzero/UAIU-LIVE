@@ -75,10 +75,14 @@ export default function Admin() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   }
 
+  function adminHeaders(key: string): Record<string, string> {
+    return { 'X-Admin-Key': key };
+  }
+
   async function validateAndUnlock(key: string) {
     if (!key) return;
     try {
-      const r = await fetch(`/api/admin/health-check?admin_key=${encodeURIComponent(key)}`);
+      const r = await fetch(`/api/admin/health-check`, { headers: adminHeaders(key) });
       if (r.status === 403) throw new Error('Invalid admin key.');
       setAdminKey(key);
       setAuthed(true);
@@ -97,9 +101,9 @@ export default function Admin() {
     setLoading(true);
     try {
       const [lRes, wRes, hRes] = await Promise.all([
-        fetch(`/api/admin/listings/pending?admin_key=${encodeURIComponent(adminKey)}`),
-        fetch(`/api/admin/webhooks/failures?admin_key=${encodeURIComponent(adminKey)}`),
-        fetch(`/api/admin/health-check?admin_key=${encodeURIComponent(adminKey)}`),
+        fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
+        fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
+        fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
@@ -117,7 +121,7 @@ export default function Admin() {
 
   async function approveListing(id: string) {
     try {
-      const r = await fetch(`/api/admin/listings/${id}/approve?admin_key=${encodeURIComponent(adminKey)}`, { method: 'POST' });
+      const r = await fetch(`/api/admin/listings/${id}/approve`, { method: 'POST', headers: adminHeaders(adminKey) });
       if (!r.ok) throw new Error('Approve failed');
       toast('Listing approved and published');
       setPendingListings(prev => prev.filter(l => l.id !== id));
@@ -127,9 +131,9 @@ export default function Admin() {
   async function confirmReject() {
     if (!rejectId) return;
     try {
-      const r = await fetch(`/api/admin/listings/${rejectId}/reject?admin_key=${encodeURIComponent(adminKey)}`, {
+      const r = await fetch(`/api/admin/listings/${rejectId}/reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...adminHeaders(adminKey), 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectReason }),
       });
       if (!r.ok) throw new Error('Reject failed');
@@ -142,7 +146,7 @@ export default function Admin() {
 
   async function retryWebhook(id: string) {
     try {
-      const r = await fetch(`/api/admin/webhooks/retry/${id}?admin_key=${encodeURIComponent(adminKey)}`, { method: 'POST' });
+      const r = await fetch(`/api/admin/webhooks/retry/${id}`, { method: 'POST', headers: adminHeaders(adminKey) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Retry failed');
       toast(`Retry complete: ${d.action}`);
@@ -310,7 +314,7 @@ export default function Admin() {
                 <div key={f.id} data-testid={`card-webhook-${f.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
                   <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', borderBottom: `1px solid ${C.border}` }}>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.mono, color: C.gold }}>{f.eventType || f.event_type}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', fontFamily: F.mono, color: C.gold }}>{f.eventType || f.event_type}</div>
                       <div style={{ fontSize: '12px', color: C.muted }}>Trade ID: {f.tradeId || f.trade_id || '—'}</div>
                     </div>
                     <button data-testid={`button-retry-webhook-${f.id}`} onClick={() => retryWebhook(f.id)} style={{ background: C.gold, color: C.bg, border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Retry</button>

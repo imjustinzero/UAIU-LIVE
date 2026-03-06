@@ -262,6 +262,7 @@ export default function Exchange() {
   const [pendingTradeId, setPendingTradeId] = useState('');
   const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
   const [sessionAccount, setSessionAccount] = useState<any>(null);
+  const [exchangeToken, setExchangeToken] = useState<string | null>(null);
   const [acctModalTab, setAcctModalTab] = useState<'open' | 'signin'>('open');
   const [signinEmail, setSigninEmail] = useState('');
   const [signinPassword, setSigninPassword] = useState('');
@@ -360,10 +361,13 @@ export default function Exchange() {
   useEffect(() => {
     if (!sessionAccount?.email) { setDbTrades([]); return; }
     setDbTradesLoading(true);
-    fetch(`/api/exchange/trades?email=${encodeURIComponent(sessionAccount.email)}`).then(r => r.json()).then((data: any[]) => {
-      setDbTrades(Array.isArray(data) ? data : []);
-    }).catch(() => {}).finally(() => setDbTradesLoading(false));
-  }, [sessionAccount]);
+    const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    fetch(`/api/exchange/trades`, { headers: token ? { 'X-Exchange-Token': token } : {} })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: any[]) => { setDbTrades(Array.isArray(data) ? data : []); })
+      .catch(() => {})
+      .finally(() => setDbTradesLoading(false));
+  }, [sessionAccount, exchangeToken]);
 
   // Check URL for trade=success (return from Stripe Checkout)
   useEffect(() => {
@@ -374,7 +378,8 @@ export default function Exchange() {
       window.history.replaceState({}, '', '/x');
       if (sessionAccount?.email) {
         setTimeout(() => {
-          fetch(`/api/exchange/trades?email=${encodeURIComponent(sessionAccount.email)}`).then(r => r.json()).then((data: any[]) => {
+          const tok2 = exchangeToken || sessionStorage.getItem('x-exchange-token');
+          fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} }).then(r => r.ok ? r.json() : []).then((data: any[]) => {
             setDbTrades(Array.isArray(data) ? data : []);
           }).catch(() => {});
         }, 2000);
@@ -384,25 +389,51 @@ export default function Exchange() {
       showToast('Identity verification submitted. Confirmation within 24 hours.');
       window.history.replaceState({}, '', '/x');
       if (sessionAccount?.email) {
-        fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email, kycStatus: 'pending' }) }).catch(() => {});
+        fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: exchangeHeaders(), body: JSON.stringify({ kycStatus: 'pending' }) }).catch(() => {});
         setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
       }
     }
   }, []);
 
-  // Restore exchange account session from localStorage on mount
+  function exchangeHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
+    if (token) headers['X-Exchange-Token'] = token;
+    return headers;
+  }
+
+  // Restore exchange account session from sessionStorage token on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('x-exchange-account');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.email) {
-          setSessionAccount(parsed);
+    const token = sessionStorage.getItem('x-exchange-token');
+    if (!token) return;
+    setExchangeToken(token);
+    fetch('/api/exchange/account/verify-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Exchange-Token': token },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(account => {
+        if (account?.email) {
+          setSessionAccount({
+            id: account.id,
+            email: account.email,
+            firstName: account.firstName || '',
+            lastName: account.lastName || '',
+            company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+            accountType: account.accountType || '',
+            annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+            acceptedTermsAt: account.acceptedTermsAt,
+            kycStatus: account.kycStatus || 'not_started',
+          });
+        } else {
+          sessionStorage.removeItem('x-exchange-token');
+          setExchangeToken(null);
         }
-      }
-    } catch {
-      localStorage.removeItem('x-exchange-account');
-    }
+      })
+      .catch(() => {
+        sessionStorage.removeItem('x-exchange-token');
+        setExchangeToken(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -556,7 +587,7 @@ export default function Exchange() {
 
     if (sessionAccount?.email && mode === 'buy') {
       try {
-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email, standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, pricePerTonne: tradePrice, tradeId, side: mode.toUpperCase() }) });
+        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase() }) });
         const data = await res.json();
         if (data.url) { window.location.href = data.url; return; }
       } catch (e) {
@@ -585,11 +616,10 @@ export default function Exchange() {
     if (!sessionAccount?.email) { setShowTermsModal(false); return; }
     setTermsAccepting(true);
     try {
-      const res = await fetch('/api/exchange/account/accept-terms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount.email }) });
+      const res = await fetch('/api/exchange/account/accept-terms', { method: 'PATCH', headers: exchangeHeaders() });
       const updated = await res.json();
       const newSession = { ...sessionAccount, acceptedTermsAt: updated.acceptedTermsAt || new Date().toISOString() };
       setSessionAccount(newSession);
-      localStorage.setItem('x-exchange-account', JSON.stringify(newSession));
       setShowTermsModal(false);
       if (pendingTradeAction) { const fn = pendingTradeAction; setPendingTradeAction(null); fn(); }
     } catch { showToast('Failed to accept terms. Please try again.'); }
@@ -600,7 +630,7 @@ export default function Exchange() {
     if (!retireTrade || !retireeName) { showToast('Please enter your name.'); return; }
     setRetireSubmitting(true);
     try {
-      const res = await fetch('/api/exchange/retire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: sessionAccount?.email, tradeId: retireTrade.tradeId, volumeTonnes: retireTrade.volumeTonnes, standard: retireTrade.standard, retireeName, purpose: retirePurpose }) });
+      const res = await fetch('/api/exchange/retire', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ tradeId: retireTrade.tradeId, volumeTonnes: retireTrade.volumeTonnes, standard: retireTrade.standard, retireeName, purpose: retirePurpose }) });
       if (res.ok) {
         const data = await res.json();
         setDbTrades(prev => prev.map(t => t.tradeId === retireTrade.tradeId ? { ...t, status: 'retired' } : t));
@@ -671,7 +701,6 @@ export default function Exchange() {
         kycStatus: 'not_started',
       };
       setSessionAccount(newSession);
-      localStorage.setItem('x-exchange-account', JSON.stringify(newSession));
       setAcctSuccess(true);
       setAcctShowKyc(true);
       showToast('Account created — verify your identity to begin trading');
@@ -786,8 +815,12 @@ export default function Exchange() {
           acceptedTermsAt: account.acceptedTermsAt,
           kycStatus: account.kycStatus || 'not_started',
         };
+        const token = account.token;
+        if (token) {
+          sessionStorage.setItem('x-exchange-token', token);
+          setExchangeToken(token);
+        }
         setSessionAccount(sessionData);
-        localStorage.setItem('x-exchange-account', JSON.stringify(sessionData));
         setShowAccountModal(false);
         setSigninEmail(''); setSigninPassword(''); setSigninError(''); setSigninNeedsPassword(false);
         showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
@@ -820,7 +853,8 @@ export default function Exchange() {
 
   function handleSignOut() {
     setSessionAccount(null);
-    localStorage.removeItem('x-exchange-account');
+    setExchangeToken(null);
+    sessionStorage.removeItem('x-exchange-token');
     setShowAccountModal(false);
     setAcctModalTab('open');
     showToast('Signed out.');

@@ -6,6 +6,7 @@ import express, {
   Response,
   NextFunction,
 } from "express";
+import helmet from "helmet";
 
 import { registerRoutes } from "./routes";
 
@@ -21,6 +22,22 @@ export function log(message: string, source = "express") {
 }
 
 export const app = express();
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://*.daily.co"],
+      frameSrc: ["https://js.stripe.com", "https://*.stripe.com", "https://*.daily.co"],
+      imgSrc: ["'self'", "data:", "https://*.stripe.com"],
+      connectSrc: ["'self'", "https://*.stripe.com", "https://*.daily.co", "https://api.supabase.co"],
+    }
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  frameguard: { action: "deny" },
+  noSniff: true,
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+}));
 
 declare module 'http' {
   interface IncomingMessage {

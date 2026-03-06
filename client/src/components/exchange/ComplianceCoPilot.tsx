@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import DOMPurify from "dompurify";
 
 // ── AI COMPLIANCE CO-PILOT ────────────────────────────────
 // Floating persistent AI assistant on every page
@@ -189,9 +190,13 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
     return `Great question. For specific compliance calculations, please submit an RFQ at UAIU.LIVE/X#rfq or contact us at info@uaiu.live. I can help with general carbon market questions — what specifically would you like to know about EU ETS, CORSIA, or our available credits?`;
   };
 
-  const formatMsg = (text: string) => text.split('\n').map((line, i) => (
-    <span key={i}>{line}{i < text.split('\n').length - 1 && <br />}</span>
-  ));
+  const formatMsg = (text: string) => {
+    const sanitized = DOMPurify.sanitize(
+      text.replace(/\n/g, "<br />"),
+      { ALLOWED_TAGS: ['p', 'strong', 'em', 'ul', 'li', 'br'], ALLOWED_ATTR: [] }
+    );
+    return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+  };
 
   return (
     <>

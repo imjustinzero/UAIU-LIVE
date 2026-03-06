@@ -123,6 +123,10 @@ export interface IStorage {
   updateExchangeAccountTerms(email: string): Promise<ExchangeAccount>;
   updateExchangeAccountPassword(email: string, passwordHash: string): Promise<void>;
   updateExchangeAccountKyc(email: string, kycStatus: string): Promise<void>;
+  getExchangeListingsByStandard(standard: string): Promise<ExchangeListing[]>;
+  incrementExchangeFailedLogin(email: string): Promise<{ failedLoginAttempts: number; lockedUntil: Date | null } | null>;
+  resetExchangeFailedLogin(email: string): Promise<void>;
+  getRecentSecurityEvents(limit: number): Promise<any[]>;
 
   // Webhook dead-letter queue
   logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure>;
@@ -704,6 +708,48 @@ export class DbStorage implements IStorage {
     await db.update(exchangeAccounts)
       .set({ kycStatus })
       .where(eq(exchangeAccounts.email, email));
+  }
+
+  async getExchangeListingsByStandard(standard: string): Promise<ExchangeListing[]> {
+    return db.select().from(exchangeListings)
+      .where(and(eq(exchangeListings.standard, standard), eq(exchangeListings.status, 'active')))
+      .orderBy(desc(exchangeListings.createdAt));
+  }
+
+  async incrementExchangeFailedLogin(email: string): Promise<{ failedLoginAttempts: number; lockedUntil: Date | null } | null> {
+    const result = await db.execute(sql`
+      UPDATE exchange_accounts
+      SET
+        failed_login_attempts = failed_login_attempts + 1,
+        locked_until = CASE
+          WHEN failed_login_attempts + 1 >= 5 THEN NOW() + INTERVAL '15 minutes'
+          ELSE locked_until
+        END
+      WHERE email = ${email}
+      RETURNING failed_login_attempts, locked_until
+    `);
+    const rows = (result as any).rows || [];
+    if (!rows[0]) return null;
+    return {
+      failedLoginAttempts: rows[0].failed_login_attempts,
+      lockedUntil: rows[0].locked_until ? new Date(rows[0].locked_until) : null,
+    };
+  }
+
+  async resetExchangeFailedLogin(email: string): Promise<void> {
+    await db.update(exchangeAccounts)
+      .set({ failedLoginAttempts: 0, lockedUntil: null })
+      .where(eq(exchangeAccounts.email, email));
+  }
+
+  async getRecentSecurityEvents(limit: number): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT id, email, event_type, ip, detail, created_at
+      FROM exchange_security_log
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `);
+    return (result as any).rows || [];
   }
 }
 

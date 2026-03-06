@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import DOMPurify from "dompurify";
 
 // ══════════════════════════════════════════════════════════
 // FEATURE 22: AI PRICE PREDICTION ENGINE
@@ -595,10 +596,16 @@ export function DueDiligenceReport({
                 color:'rgba(212,168,67,0.7)' }}>
                 {String(i+1).padStart(2,'0')}. {s.title}
               </p>
-              <p style={{ margin:0, fontSize:'13px', lineHeight:1.75,
-                color: isDark?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.7)' }}>
-                {s.content}
-              </p>
+              <p
+                style={{ margin:0, fontSize:'13px', lineHeight:1.75,
+                  color: isDark?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.7)' }}
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(s.content, {
+                    ALLOWED_TAGS: ['p', 'strong', 'em', 'ul', 'li', 'br'],
+                    ALLOWED_ATTR: []
+                  })
+                }}
+              />
             </div>
           ))}
 

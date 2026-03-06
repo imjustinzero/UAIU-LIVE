@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, timestamp, boolean, unique, check } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -315,6 +315,8 @@ export const exchangeAccounts = pgTable("exchange_accounts", {
   passwordHash: varchar("password_hash"),
   acceptedTermsAt: timestamp("accepted_terms_at"),
   kycStatus: varchar("kyc_status").notNull().default('not_started'),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -377,6 +379,31 @@ export const webhookFailures = pgTable("webhook_failures", {
   lastAttemptedAt: timestamp("last_attempted_at").notNull().defaultNow(),
   resolved: boolean("resolved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const exchangeSessions = pgTable("exchange_sessions", {
+  id: serial("id").primaryKey(),
+  email: varchar("email").notNull(),
+  token: varchar("token").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const exchangeSecurityLog = pgTable("exchange_security_log", {
+  id: serial("id").primaryKey(),
+  email: varchar("email"),
+  eventType: varchar("event_type").notNull(),
+  ip: varchar("ip"),
+  detail: text("detail").notNull().default('{}'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: varchar("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  userEmail: varchar("user_email").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
 });
 
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({

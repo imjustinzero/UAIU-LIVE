@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import express from "express";
 import { createHash } from "crypto";
+import rateLimit from "express-rate-limit";
+import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
+import { logSecurityEvent } from "./security-utils";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
@@ -35,6 +38,30 @@ let stripeReady = false;
 let stripeReadyAt: string | null = null;
 
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+  const exchangeSigninLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many signin attempts. Please try again later." },
+  });
+
+  const exchangeAccountCreateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many account creation attempts. Please try again later." },
+  });
+
+  const exchangeCheckoutLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    keyGenerator: (req) => String(req.headers["x-exchange-token"] || 'anon'),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many checkout attempts. Please try again later." },
+  });
   // ── FIX 7: Stripe startup health check ──────────────────────────────────────
   // Validates key on startup. Escrow endpoints are blocked if this fails.
   (async () => {
@@ -432,7 +459,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         console.error('❌ Signup notification error:', err);
       });
 
-      const sessionId = createSession(user.id, user.email);
+      const sessionId = await createSession(user.id, user.email);
       
       // Fetch updated user with credits
       const updatedUser = await storage.getUser(user.id);
@@ -470,7 +497,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(401).json({ message: 'Invalid email or password' });
       }
 
-      const sessionId = createSession(user.id, user.email);
+      const sessionId = await createSession(user.id, user.email);
       res.json({ ...user, sessionId });
     } catch (error) {
       console.error('Login error:', error);
@@ -1341,20 +1368,48 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── EXCHANGE: Account signin ──────────────────────────────────────────────
-  app.post('/api/exchange/account/signin', async (req, res) => {
+  app.post('/api/exchange/account/signin', exchangeSigninLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email) return res.status(400).json({ error: 'email required' });
       const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
       if (!account) return res.status(404).json({ error: 'No account found for that email.' });
+      if (account.lockedUntil && new Date(account.lockedUntil) > new Date()) {
+        await logSecurityEvent({ email: account.email, eventType: 'signin_lockout', req, detail: { lockedUntil: account.lockedUntil } });
+        return res.status(429).json({ error: 'Account temporarily locked. Please try again later.' });
+      }
       if (account.passwordHash) {
         if (!password) return res.status(401).json({ error: 'Password required.' });
         const ok = await bcrypt.compare(password, account.passwordHash);
-        if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+        if (!ok) {
+          const lock = await storage.incrementExchangeFailedLogin(account.email);
+          await logSecurityEvent({ email: account.email, eventType: 'signin_fail', req, detail: { failedLoginAttempts: lock?.failedLoginAttempts || 0 } });
+          if (lock?.lockedUntil) {
+            return res.status(429).json({ error: 'Account temporarily locked. Please try again later.' });
+          }
+          return res.status(401).json({ error: 'Incorrect password.' });
+        }
       }
-      res.json(account);
+      await storage.resetExchangeFailedLogin(account.email);
+      const token = await createExchangeSession(account.email);
+      await logSecurityEvent({ email: account.email, eventType: 'signin_success', req, detail: { tokenIssued: true } });
+      res.json({ account, token });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/exchange/account/verify-token', async (req, res) => {
+    try {
+      const token = String(req.headers['x-exchange-token'] || req.body?.token || '').trim();
+      if (!token) return res.status(401).json({ error: 'Exchange authentication required.' });
+      const session = await verifyExchangeToken(token);
+      if (!session) return res.status(401).json({ error: 'Invalid or expired exchange session.' });
+      const account = await storage.getExchangeAccountByEmail(String(session.email));
+      if (!account) return res.status(404).json({ error: 'Account not found.' });
+      return res.json({ account });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -1375,26 +1430,44 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── EXCHANGE: Accept terms ────────────────────────────────────────────────
-  app.patch('/api/exchange/account/accept-terms', async (req, res) => {
+  app.patch('/api/exchange/account/accept-terms', requireExchangeAuth, async (req, res) => {
     try {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ error: 'email required' });
+      const email = (req as any).exchangeEmail;
       const account = await storage.updateExchangeAccountTerms(email);
+      await logSecurityEvent({ email, eventType: 'terms_accepted', req });
       res.json(account);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
   // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
-  app.post('/api/exchange/spot-checkout', async (req, res) => {
+  app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
     try {
-      const { email, standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
-      if (!email || !standard || !volumeTonnes || !pricePerTonne || !tradeId) {
+      const email = (req as any).exchangeEmail;
+      const { standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
+      if (!standard || !volumeTonnes || !tradeId) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+      const account = await storage.getExchangeAccountByEmail(email);
+      if (!account || account.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required before trading.' });
+      }
+      const listings = await storage.getExchangeListingsByStandard(String(standard));
+      const activeListing = listings[0];
+      if (!activeListing) {
+        return res.status(400).json({ error: 'No active listing found for that standard.' });
+      }
+      const serverPrice = Number(activeListing.pricePerTonne);
+      const submittedPrice = Number(pricePerTonne || 0);
+      if (submittedPrice > 0) {
+        const delta = Math.abs(serverPrice - submittedPrice) / serverPrice;
+        if (delta > 0.05) {
+          await logSecurityEvent({ email, eventType: 'suspicious_price', req, detail: { standard, submittedPrice, serverPrice, delta } });
+        }
+      }
       const stripe = initStripe();
-      const gross = parseFloat(pricePerTonne) * parseFloat(volumeTonnes);
+      const gross = serverPrice * parseFloat(volumeTonnes);
       const fee = gross * 0.0075;
       const totalCents = Math.round((gross + fee) * 100);
       const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
@@ -1412,54 +1485,54 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           },
           quantity: 1,
         }],
-        metadata: { trade_id: tradeId, standard, volume_tonnes: String(volumeTonnes), email, side: side || 'BUY', price_per_tonne: String(pricePerTonne) },
+        metadata: { trade_id: tradeId, standard, volume_tonnes: String(volumeTonnes), email, side: side || 'BUY', price_per_tonne: String(serverPrice) },
         success_url: `${origin}/x?trade=success&id=${tradeId}`,
         cancel_url: `${origin}/x`,
         customer_email: email,
       });
+      await logSecurityEvent({ email, eventType: 'trade_executed', req, detail: { tradeId, standard, volumeTonnes, serverPrice } });
       res.json({ url: session.url });
     } catch (e: any) {
       console.error('[Spot Checkout]', e.message);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
   // ── EXCHANGE: Fetch trade history ─────────────────────────────────────────
-  app.get('/api/exchange/trades', async (req, res) => {
+  app.get('/api/exchange/trades', requireExchangeAuth, async (req, res) => {
     try {
-      const { email } = req.query;
-      if (!email) return res.status(400).json({ error: 'email required' });
-      const trades = await storage.getExchangeTradesByEmail(String(email));
+      const email = (req as any).exchangeEmail;
+      const trades = await storage.getExchangeTradesByEmail(email);
       res.json(trades);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
-  // ── EXCHANGE: Record trade (called server-side or via webhook) ────────────
-  app.post('/api/exchange/trade/record', async (req, res) => {
-    try {
-      const { accountEmail, tradeId, side, standard, volumeTonnes, pricePerTonne, grossEur, feeEur, receiptHash, stripeSessionId } = req.body;
-      if (!accountEmail || !tradeId || !side || !standard || !volumeTonnes || !pricePerTonne || !grossEur) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-      const existing = await storage.getExchangeTradeByTradeId(tradeId);
-      if (existing) return res.json(existing);
-      const trade = await storage.createExchangeTrade({ accountEmail, tradeId, side, standard, volumeTonnes: parseFloat(volumeTonnes), pricePerTonne: parseFloat(pricePerTonne), grossEur: parseFloat(grossEur), feeEur: parseFloat(feeEur || 0), receiptHash, stripeSessionId, status: 'completed' });
-      res.json(trade);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  // Trade recording is handled exclusively by the Stripe webhook handler.
+  // The public /api/exchange/trade/record endpoint has been removed for security.
 
   // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
-  app.post('/api/exchange/retire', async (req, res) => {
+  app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
     try {
-      const { email, tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
-      if (!email || !tradeId || !volumeTonnes || !standard || !retireeName) {
+      const email = (req as any).exchangeEmail;
+      const { tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+      if (!tradeId || !volumeTonnes || !standard || !retireeName) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+      const account = await storage.getExchangeAccountByEmail(email);
+      if (!account || account.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required before trading.' });
+      }
+      const trade = await storage.getExchangeTradeByTradeId(tradeId);
+      if (!trade || trade.accountEmail !== email) {
+        return res.status(403).json({ error: 'You do not own this trade.' });
+      }
+      if (trade.status !== 'completed') {
+        return res.status(400).json({ error: 'Only completed trades can be retired.' });
+      }
       await storage.updateExchangeTradeStatus(tradeId, 'retired');
+      await logSecurityEvent({ email, eventType: 'trade_retire', req, detail: { tradeId, volumeTonnes, standard } });
       const certId = `UAIU-RET-${Date.now()}`;
       const certDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
       const certContent = `${certId}|${retireeName}|${standard}|${volumeTonnes}|${certDate}|${purpose || ''}`;
@@ -1510,23 +1583,25 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.json({ success: true, certificateId: certId, hash });
     } catch (e: any) {
       console.error('[Retire]', e.message);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
   // ── EXCHANGE: KYC status update ───────────────────────────────────────────
-  app.patch('/api/exchange/account/kyc-status', async (req, res) => {
+  app.patch('/api/exchange/account/kyc-status', requireExchangeAuth, async (req, res) => {
     try {
-      const { email, kycStatus } = req.body;
-      if (!email || !kycStatus) return res.status(400).json({ error: 'email and kycStatus required' });
+      const email = (req as any).exchangeEmail;
+      const { kycStatus } = req.body;
+      if (!kycStatus) return res.status(400).json({ error: 'kycStatus required' });
       await storage.updateExchangeAccountKyc(email, kycStatus);
+      await logSecurityEvent({ email, eventType: kycStatus === 'verified' ? 'kyc_verified' : 'kyc_started', req, detail: { kycStatus } });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
-  app.post('/api/exchange/account', requireAuth, async (req, res) => {
+  app.post('/api/exchange/account', requireAuth, exchangeAccountCreateLimiter, async (req, res) => {
     try {
       const body = req.body;
       if (!body.email) {
@@ -1833,10 +1908,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── HEALTH CHECK — full system test ──────────────────────────────────────
-  // GET /api/admin/health-check?admin_key=YOUR_ADMIN_SECRET_KEY
-  app.get('/api/admin/health-check', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  // GET /api/admin/health-check (X-Admin-Key header required)
+  app.get('/api/admin/health-check', requireAdminHeader, async (req, res) => {
 
     const results: Record<string, any> = {};
 
@@ -1863,15 +1936,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     // Webhook UUID
     const wuuid = process.env.STRIPE_WEBHOOK_UUID;
     results.stripe_webhook = {
-      status:   wuuid ? 'OK' : 'WARN — Add STRIPE_WEBHOOK_UUID to Replit Secrets',
-      endpoint: wuuid ? `/api/stripe/webhook/${wuuid}` : 'not configured',
-      webhook_secret_set: !!process.env.STRIPE_WEBHOOK_SECRET,
+      status: !!(wuuid && process.env.STRIPE_WEBHOOK_SECRET) ? 'OK' : 'WARN',
     };
 
     // Email
     results.email = {
-      status:      process.env.ZOHO_SMTP_USER ? 'OK — Zoho configured' : 'WARN — ZOHO_SMTP_USER not set',
-      destination: 'info@uaiu.live',
+      status: process.env.ZOHO_SMTP_USER ? 'OK' : 'WARN',
     };
 
     // Partner API
@@ -1913,10 +1983,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     });
   });
 
-  // ── ADMIN: Pending Seller Listings (Fix 6) ──────────────────────────────────
-  app.get('/api/admin/listings/pending', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  // ── ADMIN: Security event log ─────────────────────────────────────────────
+  app.get('/api/admin/security-log', requireAdminHeader, async (req, res) => {
+    try {
+      const limit = Math.min(Number(req.query.limit || 100), 500);
+      const rows = await storage.getRecentSecurityEvents(limit);
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── ADMIN: Pending Seller Listings ────────────────────────────────────────
+  app.get('/api/admin/listings/pending', requireAdminHeader, async (req, res) => {
     try {
       const listings = await storage.getPendingCreditListings();
       res.json(listings);
@@ -1925,9 +2004,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/admin/listings/:id/approve', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/admin/listings/:id/approve', requireAdminHeader, async (req, res) => {
     try {
       const [submission] = await db.select().from(exchangeCreditListings).where(eq(exchangeCreditListings.id, req.params.id));
       const newListing = await storage.approveCreditListing(req.params.id);
@@ -1948,9 +2025,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/admin/listings/:id/reject', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/admin/listings/:id/reject', requireAdminHeader, async (req, res) => {
     try {
       const rejected = await storage.rejectCreditListing(req.params.id);
       // Email the seller
@@ -1966,9 +2041,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── ADMIN: Webhook Dead-Letter Queue (Fix 8) ────────────────────────────────
-  app.get('/api/admin/webhooks/failures', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  app.get('/api/admin/webhooks/failures', requireAdminHeader, async (req, res) => {
     try {
       const failures = await storage.getWebhookFailures(false);
       res.json(failures);
@@ -1977,9 +2050,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/admin/webhooks/retry/:id', async (req, res) => {
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/admin/webhooks/retry/:id', requireAdminHeader, async (req, res) => {
     try {
       const failures = await storage.getWebhookFailures();
       const failure = failures.find(f => f.id === req.params.id);
@@ -2183,7 +2254,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   const listingChatHistory = new Map<string, any[]>();
   const listingOnlineUsers = new Map<string, Set<string>>();
 
-  io.on('connection', (socket: Socket) => {
+  io.on('connection', async (socket: Socket) => {
     console.log('=== SOCKET CONNECTION ===');
     console.log('Socket ID:', socket.id);
     const sessionId = (socket.handshake.auth as any).sessionId;
@@ -2193,7 +2264,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       return;
     }
     
-    const session = getSession(sessionId);
+    const session = await getSession(sessionId);
     if (!session) {
       console.error('Socket connection rejected: Invalid or expired session');
       socket.disconnect();
