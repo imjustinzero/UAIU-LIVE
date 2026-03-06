@@ -196,7 +196,7 @@ export function AITradeNegotiator({
         body: JSON.stringify({
           rfq: rfqData,
           market: {
-            index_price: currentIndexPrice,
+            indexPrice: currentIndexPrice,
             supply_available: currentSupply,
             timestamp: new Date().toISOString()
           }

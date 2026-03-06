@@ -171,6 +171,7 @@ export function MultiSigApproval({ tradeId, receiptHash, onApproved, onSkip }: M
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [token, setToken] = useState('');
+  const [approvalUrl, setApprovalUrl] = useState('');
 
   async function sendApproval() {
     if (!email.trim()) return;
@@ -184,11 +185,13 @@ export function MultiSigApproval({ tradeId, receiptHash, onApproved, onSkip }: M
       const data = await res.json();
       if (data.token) {
         setToken(data.token);
+        setApprovalUrl(data.approvalUrl || '');
         setSent(true);
       }
     } catch {
       setSent(true);
       setToken('DEMO-' + Math.random().toString(36).slice(2, 10).toUpperCase());
+      setApprovalUrl(`https://uaiu.live/x/verify/${encodeURIComponent(receiptHash || '')}`);
     }
     setSending(false);
   }
@@ -224,7 +227,7 @@ export function MultiSigApproval({ tradeId, receiptHash, onApproved, onSkip }: M
             <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', padding: '20px', marginBottom: 24 }}>
               <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginBottom: 8, letterSpacing: '0.15em' }}>Approval Request Sent</div>
               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Approval Token: <span style={{ color: C.gold }}>{token}</span></div>
-              <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 8 }}>Approval URL: uaiu.live/approve/{token}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 8 }}>Approval URL: {approvalUrl || `https://uaiu.live/x/verify/${encodeURIComponent(receiptHash || '')}`}</div>
             </div>
             <button onClick={() => onApproved(token)} style={{ width: '100%', background: C.gold, color: C.ink, padding: '14px', fontFamily: F.syne, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', border: 'none', cursor: 'pointer' }} data-testid="button-confirm-approval">
               Continue →

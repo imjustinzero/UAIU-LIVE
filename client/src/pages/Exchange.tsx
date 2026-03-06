@@ -159,8 +159,7 @@ interface Listing {
   name: string;
   origin: string;
   pricePerTonne: number;
-  changePercent: number;
-  changeDirection: string;
+  sellerProfileId?: string | null;
   status: string;
   isAcceptingOrders: boolean;
   registrySerial?: string;
@@ -1745,7 +1744,7 @@ export default function Exchange() {
                 </div>
                 <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: 24, fontFamily: F.mono, fontSize: 11, lineHeight: 1.9 }}>
                   <div style={{ color: C.gold, marginBottom: 12, fontSize: 9, letterSpacing: '0.2em' }}>UAIU TRADE RECEIPT · VERIFIED</div>
-                  <div style={{ color: C.cream3 }}>Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>UAIU-BUY-829341</span></div>
+                  <div style={{ color: C.cream3 }}>Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>SAMPLE-RECEIPT-000001</span></div>
                   <div style={{ color: C.cream3 }}>Standard: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>SwissX B100 / VCS</span></div>
                   <div style={{ color: C.cream3 }}>Origin: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>Antigua, Caribbean</span></div>
                   <div style={{ color: C.cream3 }}>Volume: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>50,000 tCO₂</span></div>
@@ -1757,7 +1756,7 @@ export default function Exchange() {
                     <div style={{ color: C.cream3 }}>Registry: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>VCS-7821-2024-001</span></div>
                     <div style={{ color: C.cream3 }}>Receipt Hash:</div>
                     <div style={{ color: C.gold, wordBreak: 'break-all', fontSize: 10 }}>a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6</div>
-                    <div style={{ color: C.cream4, marginTop: 4, fontSize: 9 }}>Verify: uaiu.live/verify/UAIU-BUY-829341</div>
+                    <div style={{ color: C.cream4, marginTop: 4, fontSize: 9 }}>Verify: uaiu.live/x/verify/a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6</div>
                   </div>
                 </div>
               </div>
@@ -1768,7 +1767,7 @@ export default function Exchange() {
               <h3 style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, marginBottom: 12 }}>Enter a Trade ID to verify.</h3>
               <p style={{ fontSize: 14, color: C.cream3, marginBottom: 24 }}>Any counterparty, regulator, or auditor can independently verify any UAIU trade — no account required.</p>
               <div style={{ display: 'flex', maxWidth: 560, margin: '0 auto' }}>
-                <input className="x-fi" style={{ ...s.fi, flex: 1, fontFamily: F.mono, borderRight: 'none' }} type="text" placeholder="e.g. UAIU-BUY-829341" value={verifyInput} onChange={e => setVerifyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupTrade()} data-testid="input-verify-trade" />
+                <input className="x-fi" style={{ ...s.fi, flex: 1, fontFamily: F.mono, borderRight: 'none' }} type="text" placeholder="Enter receipt hash or trade ID" value={verifyInput} onChange={e => setVerifyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupTrade()} data-testid="input-verify-trade" />
                 <button style={{ background: C.gold, color: C.ink, border: 'none', padding: '0 28px', fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }} onClick={lookupTrade} data-testid="button-verify-trade">Verify →</button>
               </div>
               {verifyResult && (

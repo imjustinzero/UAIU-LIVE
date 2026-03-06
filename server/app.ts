@@ -130,7 +130,7 @@ export default async function runApp(
 
   // Retry listen on EADDRINUSE — deployments can take longer than a few
   // seconds to fully release the previous process and socket.
-  const MAX_RETRIES = 30;
+  const MAX_RETRIES = 60;
   const RETRY_DELAY_MS = 1000;
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
