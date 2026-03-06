@@ -1,0 +1,260 @@
+diff --git a/server/routes.ts b/server/routes.ts
+index aecd765c100af3e932f9149221e26de48ed7842f..48939ff06db19ce7a3d2bccf9717edf695935eb5 100644
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@ -1,65 +1,88 @@
+ import type { Express } from "express";
+ import express from "express";
+ import { createHash } from "crypto";
+ import rateLimit from "express-rate-limit";
+ import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
+-import { logSecurityEvent } from "./security-utils";
++import { logSecurityEvent, secureTokenMatch } from "./security-utils";
+ import { createServer, type Server } from "http";
+ import { Server as SocketIOServer, Socket } from "socket.io";
+ import { storage } from "./storage";
+ import bcrypt from "bcrypt";
+ import { sql, eq, desc } from "drizzle-orm";
+ import type { GameState } from "@shared/schema";
+ import { liveMatchSessions } from "@shared/schema";
+ import { db } from "./db";
+ import { sendPayoutNotification } from "./email-config";
+ import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
+ import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
+ import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
+ import multer from "multer";
+ import path from "path";
+ import { registerOpsRoutes } from "./ops-routes";
+ import { registerAutonomousMarketplaceRoutes } from "./autonomous-marketplace";
+ import fs from "fs";
+ import PDFDocument from "pdfkit";
+ import { createSession, getSession, requireAuth } from "./session-middleware";
+ import { initStripe } from "./stripe-init";
+ import { WebhookHandlers } from "./webhookHandlers";
+ import { gameManager, type GameType } from "./game-manager";
+ import { nanoid } from "nanoid";
+ import { startCronJobs } from "./cron";
+ import { generateTradePDF } from "./pdf-generator";
+ import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+ import { getLivePrices, getPriceHistory } from "./exchange-prices";
+ 
+ function estimateNextStripePayoutDate(from = new Date()): string {
+   const next = new Date(from);
+   next.setDate(next.getDate() + 2);
+   return next.toISOString().split('T')[0];
+ }
+ 
++
++
++async function ensureRetirementArtifacts(): Promise<void> {
++  await db.execute(sql`CREATE TABLE IF NOT EXISTS retirement_upload_tokens (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    trade_id TEXT NOT NULL,
++    seller_email TEXT NOT NULL,
++    token_hash TEXT NOT NULL,
++    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    used_at TIMESTAMPTZ,
++    reminder_sent_at TIMESTAMPTZ
++  )`);
++  await db.execute(sql`CREATE TABLE IF NOT EXISTS trade_retirement_certificates (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    trade_id TEXT NOT NULL,
++    uploaded_by_email TEXT,
++    file_path TEXT NOT NULL,
++    original_filename TEXT,
++    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++  )`);
++  await db.execute(sql`ALTER TABLE exchange_trades ADD COLUMN IF NOT EXISTS retirement_status TEXT`);
++}
++
+ async function sendSellerDestinationPayoutEmail(params: {
+   sellerEmail: string;
+   tradeId: string;
+   payoutAmountEur: number;
+   chargeId?: string | null;
+ }): Promise<void> {
+   if (!params.sellerEmail || !isZohoConfigured()) return;
+   const expectedPayoutDate = estimateNextStripePayoutDate();
+   const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Seller Payout Confirmed</h2><p>Your payout has been routed by Stripe.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Payout Amount:</strong> €${params.payoutAmountEur.toFixed(2)}</li><li><strong>Expected Stripe Payout Date:</strong> ${expectedPayoutDate}</li><li><strong>Charge:</strong> ${params.chargeId || 'n/a'}</li></ul><p>Funds were sent using Stripe Connect destination charges. No funds passed through UAIU's account.</p></div>`;
+   await sendZohoEmail(params.sellerEmail, `UAIU Seller Payout Confirmed — ${params.tradeId}`, html);
+ }
+ 
+ // Legacy Pong code removed - all games now use GameManager
+ 
+ // Legacy Pong functions removed - all game logic now in GameManager
+ 
+ let stripeReady = false;
+ let stripeReadyAt: string | null = null;
+ 
+ export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+   const exchangeSigninLimiter = rateLimit({
+     windowMs: 15 * 60 * 1000,
+     max: 5,
+     standardHeaders: true,
+     legacyHeaders: false,
+@@ -313,50 +336,70 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+ 
+                 // Look up seller email and destination transfer if this was a destination charge
+                 let sellerEmail = '';
+                 let destinationTransferId = '';
+                 if (meta.seller_profile_id) {
+                   const sellerProfileLookup = await db.execute(sql`
+                     SELECT exchange_account_email
+                     FROM seller_profiles
+                     WHERE id = ${meta.seller_profile_id}
+                     LIMIT 1
+                   `).catch(() => ({ rows: [] } as any));
+                   sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
+                 }
+                 if (paymentModel === 'destination_charge' && cs.payment_intent) {
+                   try {
+                     const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
+                     const latestCharge: any = pi.latest_charge as any;
+                     destinationTransferId = typeof latestCharge?.transfer === 'string'
+                       ? latestCharge.transfer
+                       : latestCharge?.transfer?.id || '';
+                   } catch (err: any) {
+                     console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                   }
+                 }
+ 
++                // Create one-time retirement upload token for seller evidence collection
++                if (sellerEmail && tradeId) {
++                  try {
++                    await ensureRetirementArtifacts();
++                    const uploadToken = nanoid(40);
++                    const tokenHash = createHash('sha256').update(uploadToken).digest('hex');
++                    await db.execute(sql`
++                      INSERT INTO retirement_upload_tokens (trade_id, seller_email, token_hash, created_at)
++                      VALUES (${tradeId}, ${sellerEmail}, ${tokenHash}, NOW())
++                    `);
++                    const retireUrl = `https://uaiu.live/retire/${encodeURIComponent(tradeId)}?token=${encodeURIComponent(uploadToken)}`;
++                    if (isZohoConfigured()) {
++                      const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Upload Retirement Certificate</h2><p>A completed trade now needs retirement evidence.</p><ul><li><strong>Trade ID:</strong> ${tradeId}</li><li><strong>Upload Link:</strong> <a href="${retireUrl}" style="color:#d4a843">${retireUrl}</a></li><li><strong>Window:</strong> due within 48 hours</li></ul><p>This link is one-time use.</p></div>`;
++                      sendZohoEmail(sellerEmail, `Retirement certificate upload required — ${tradeId}`, html).catch(() => {});
++                    }
++                  } catch (tokenErr: any) {
++                    console.error('[Retirement token create]', tokenErr.message);
++                  }
++                }
++
+                 // Insert seller_payouts row — immediately paid for destination charges
+                 if (meta.seller_profile_id) {
+                   await db.execute(sql`
+                     INSERT INTO seller_payouts (
+                       trade_id, seller_profile_id, seller_email,
+                       gross_eur, fee_eur, seller_net_eur,
+                       payout_status, payout_provider, payout_reference,
+                       settlement_method, stripe_destination_charge_id, stripe_transfer_id, released_at
+                     ) VALUES (
+                       ${tradeId},
+                       ${meta.seller_profile_id},
+                       ${sellerEmail || null},
+                       ${grossEur},
+                       ${feeEur},
+                       ${grossEur - feeEur},
+                       ${paymentModel === 'destination_charge' ? 'paid' : 'pending_release'},
+                       ${paymentModel === 'destination_charge' ? 'stripe_destination' : 'workflow_only'},
+                       ${paymentModel === 'destination_charge' ? (destinationTransferId || String(cs.payment_intent || cs.id)) : null},
+                       ${paymentModel},
+                       ${String(cs.payment_intent || '')},
+                       ${destinationTransferId || null},
+                       ${paymentModel === 'destination_charge' ? new Date() : null}
+                     )
+                   `).catch((e: any) => console.error('[seller_payouts insert]', e.message));
+                 }
+@@ -1654,50 +1697,94 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+         customer_email: email,
+       });
+       await logSecurityEvent({ email, eventType: 'trade_executed', req, detail: { tradeId, standard, volumeTonnes, serverPrice } });
+       res.json({ url: session.url });
+     } catch (e: any) {
+       console.error('[Spot Checkout]', e.message);
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // ── EXCHANGE: Fetch trade history ─────────────────────────────────────────
+   app.get('/api/exchange/trades', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const trades = await storage.getExchangeTradesByEmail(email);
+       res.json(trades);
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // Trade recording is handled exclusively by the Stripe webhook handler.
+   // The public /api/exchange/trade/record endpoint has been removed for security.
+ 
+   // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
++  app.post('/api/exchange/retire-upload/:tradeId', upload.single('certificate'), async (req, res) => {
++    try {
++      const tradeId = String(req.params.tradeId || '').trim();
++      const token = String(req.body?.token || '').trim();
++      const certFile = (req as any).file as Express.Multer.File | undefined;
++
++      if (!tradeId || !token || !certFile) {
++        return res.status(400).json({ error: 'tradeId, token, and certificate file are required.' });
++      }
++
++      await ensureRetirementArtifacts();
++
++      const tokenRows = await db.execute(sql`
++        SELECT id, token_hash, used_at, seller_email
++        FROM retirement_upload_tokens
++        WHERE trade_id = ${tradeId}
++        ORDER BY created_at DESC
++        LIMIT 20
++      `);
++
++      const match = (tokenRows as any).rows?.find((r: any) => !r.used_at && secureTokenMatch(token, String(r.token_hash || '')));
++      if (!match) {
++        return res.status(401).json({ error: 'Invalid or expired upload token.' });
++      }
++
++      const confirmedAt = new Date().toISOString();
++      await db.execute(sql`
++        INSERT INTO trade_retirement_certificates (trade_id, uploaded_by_email, file_path, original_filename, uploaded_at)
++        VALUES (${tradeId}, ${String(match.seller_email || '')}, ${certFile.path}, ${certFile.originalname}, NOW())
++      `);
++
++      await db.execute(sql`UPDATE retirement_upload_tokens SET used_at = NOW() WHERE id = ${match.id}`);
++      await db.execute(sql`
++        UPDATE exchange_trades
++        SET retirement_status = ${`Confirmed — ${confirmedAt}`}
++        WHERE trade_id = ${tradeId}
++      `);
++
++      return res.json({ success: true, message: 'Retirement certificate uploaded successfully.' });
++    } catch (e: any) {
++      return res.status(500).json({ error: safeError(e) });
++    }
++  });
++
+   app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const { tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+       if (!tradeId || !volumeTonnes || !standard || !retireeName) {
+         return res.status(400).json({ error: 'Missing required fields' });
+       }
+       const account = await storage.getExchangeAccountByEmail(email);
+       if (!account || account.kycStatus !== 'verified') {
+         return res.status(403).json({ error: 'KYC verification required before trading.' });
+       }
+       const trade = await storage.getExchangeTradeByTradeId(tradeId);
+       if (!trade || trade.accountEmail !== email) {
+         return res.status(403).json({ error: 'You do not own this trade.' });
+       }
+       if (trade.status !== 'completed') {
+         return res.status(400).json({ error: 'Only completed trades can be retired.' });
+       }
+       await storage.updateExchangeTradeStatus(tradeId, 'retired');
+       await logSecurityEvent({ email, eventType: 'trade_retire', req, detail: { tradeId, volumeTonnes, standard } });
+       const certId = `UAIU-RET-${Date.now()}`;
+       const certDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+       const certContent = `${certId}|${retireeName}|${standard}|${volumeTonnes}|${certDate}|${purpose || ''}`;
+       const hash = createHash('sha256').update(certContent).digest('hex');
+       const doc = new PDFDocument({ size: 'A4', margin: 60 });
