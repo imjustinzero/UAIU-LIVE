@@ -11,7 +11,7 @@ const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif", pla
 const fi: React.CSSProperties = { width: '100%', background: C.ink2, border: `1px solid ${C.goldborder}`, color: C.cream, padding: '13px 16px', fontFamily: F.mono, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
 const fl: React.CSSProperties = { fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3, display: 'block', marginBottom: 8 };
 
-interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; }
+interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; }
 interface Retirement { cert_id?: string; trade_id?: string; tonnes_retired?: number; beneficiary?: string; receipt_hash?: string; }
 
 interface PortfolioProps {
@@ -321,6 +321,41 @@ export async function generatePDFReport({ accountName, trades, retirements, annu
         doc.text((r.beneficiary || '').slice(0, 20), 140, y);
         y += 7;
         if (y > 270) { doc.addPage(); doc.setFillColor(...ink); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
+      });
+    }
+
+    const chainTrades = trades.filter(t => t.receipt_hash);
+    if (chainTrades.length > 0) {
+      doc.addPage();
+      doc.setFillColor(...ink);
+      doc.rect(0, 0, 210, 297, 'F');
+      doc.setFillColor(...gold);
+      doc.rect(0, 0, 210, 4, 'F');
+      y = 20;
+      doc.setFontSize(13);
+      doc.setTextColor(...gold);
+      doc.text('Tamper-Evident Receipt Chain', 20, y); y += 12;
+      doc.setFontSize(8);
+      doc.setTextColor(180, 160, 120);
+      doc.text('This chain links each trade hash to the previous, ensuring immutable audit integrity.', 20, y); y += 12;
+
+      chainTrades.forEach((t, i) => {
+        if (y > 250) { doc.addPage(); doc.setFillColor(...ink); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
+        doc.setFillColor(13, 18, 32);
+        doc.rect(18, y - 4, 174, 32, 'F');
+        doc.setDrawColor(...gold);
+        doc.rect(18, y - 4, 174, 32, 'S');
+        doc.setFontSize(8);
+        doc.setTextColor(...gold);
+        doc.text(`#${i + 1} — Trade ${(t.trade_id || '').slice(0, 28)}`, 22, y + 2);
+        doc.setTextColor(...cream);
+        doc.setFontSize(7);
+        doc.text(`Hash:     ${(t.receipt_hash || '—').slice(0, 55)}`, 22, y + 9);
+        doc.text(`Prev:     ${(t.prev_receipt_hash || '—').slice(0, 55)}`, 22, y + 15);
+        doc.text(`PI:       ${(t.payment_intent_id || '—').slice(0, 40)}`, 22, y + 21);
+        doc.setTextColor(180, 160, 120);
+        doc.text(`Settled: ${t.settled_at || 'session trade'}`, 22, y + 27);
+        y += 40;
       });
     }
 

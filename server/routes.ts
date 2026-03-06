@@ -21,12 +21,36 @@ import { initStripe } from "./stripe-init";
 import { WebhookHandlers } from "./webhookHandlers";
 import { gameManager, type GameType } from "./game-manager";
 import { nanoid } from "nanoid";
+import { startCronJobs } from "./cron";
+import { generateTradePDF } from "./pdf-generator";
+import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 
 // Legacy Pong code removed - all games now use GameManager
 
 // Legacy Pong functions removed - all game logic now in GameManager
 
+let stripeReady = false;
+let stripeReadyAt: string | null = null;
+
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+  // ── FIX 7: Stripe startup health check ──────────────────────────────────────
+  // Validates key on startup. Escrow endpoints are blocked if this fails.
+  (async () => {
+    try {
+      const sk = process.env.STRIPE_SECRET_KEY;
+      if (!sk) throw new Error('STRIPE_SECRET_KEY not set');
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(sk, { apiVersion: '2024-12-18.acacia' as any });
+      await stripe.paymentIntents.list({ limit: 1 });
+      stripeReady = true;
+      stripeReadyAt = new Date().toISOString();
+      console.log('[Stripe] ✅ Key valid — escrow enabled');
+    } catch (e: any) {
+      stripeReady = false;
+      console.error('[Stripe] ❌ Key invalid — escrow disabled:', e.message);
+    }
+  })();
+
   // Persist webhook UUID across server restarts via STRIPE_WEBHOOK_UUID secret
   let webhookUuid = process.env.STRIPE_WEBHOOK_UUID;
   if (!webhookUuid) {
@@ -64,9 +88,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
           await WebhookHandlers.processWebhook(req.body as Buffer, sig, uuid);
 
-          // ── AUTO ESCROW RELEASE ─────────────────────────────────────────
-          // When a PaymentIntent is authorized (requires_capture), auto-capture
-          // it for UAIU escrow trades so no manual /api/escrow/release call needed.
+          // ── AUTO ESCROW RELEASE + COMPENSATION + PDF (Fix 4, 5, 8) ─────────
           try {
             const stripeKey = process.env.STRIPE_SECRET_KEY;
             const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -81,50 +103,104 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
               ) {
                 const pi = event.data.object as any;
                 if (pi.metadata?.escrow_type === 'carbon_credit_t1' && pi.status === 'requires_capture') {
-                  const trade_id = pi.metadata?.trade_id || 'unknown';
+                  const trade_id   = pi.metadata?.trade_id || 'unknown';
+                  const buyer_email = pi.metadata?.buyer_email || pi.receipt_email || '';
                   console.log(`[Escrow Auto-Release] Capturing trade ${trade_id} — PI: ${pi.id}`);
 
-                  const captured    = await stripe.paymentIntents.capture(pi.id);
-                  const gross       = captured.amount / 100;
-                  const uaiu_fee    = gross * 0.0075;
-                  const seller_net  = gross - uaiu_fee;
+                  // Helper: perform capture + downstream writes/email/PDF
+                  const doCapture = async (): Promise<void> => {
+                    const captured   = await stripe.paymentIntents.capture(pi.id);
+                    const gross      = captured.amount / 100;
+                    const uaiu_fee   = gross * 0.0075;
+                    const seller_net = gross - uaiu_fee;
+                    const settled_at = new Date().toISOString();
+                    const charge_id  = captured.latest_charge as string;
 
-                  // Write to PostgreSQL (always available — no Supabase dependency)
-                  await db.execute(sql`
-                    INSERT INTO escrow_settlements_log
-                      (trade_id, payment_intent_id, amount_eur, uaiu_fee_eur,
-                       seller_net_eur, status, settled_at, stripe_charge_id)
-                    VALUES
-                      (${trade_id}, ${pi.id}, ${gross}, ${uaiu_fee},
-                       ${seller_net}, 'auto_settled', NOW(), ${captured.latest_charge as string})
-                    ON CONFLICT (payment_intent_id) DO UPDATE
-                      SET status = 'auto_settled', settled_at = NOW()
-                  `).catch((e: any) => console.error('[Escrow PG log]', e.message));
+                    await db.execute(sql`
+                      INSERT INTO escrow_settlements_log
+                        (trade_id, payment_intent_id, amount_eur, uaiu_fee_eur,
+                         seller_net_eur, status, settled_at, stripe_charge_id)
+                      VALUES
+                        (${trade_id}, ${pi.id}, ${gross}, ${uaiu_fee},
+                         ${seller_net}, 'auto_settled', NOW(), ${charge_id})
+                      ON CONFLICT (payment_intent_id) DO UPDATE
+                        SET status = 'auto_settled', settled_at = NOW()
+                    `).catch((e: any) => console.error('[Escrow PG log]', e.message));
 
-                  // Also update Supabase if available
-                  await (req.app.locals.supabase as any)
-                    ?.from('escrow_settlements')
-                    .update({
-                      status:           'auto_settled',
-                      settled_at:       new Date().toISOString(),
-                      uaiu_fee_eur:     uaiu_fee,
-                      seller_net_eur:   seller_net,
-                      stripe_charge_id: captured.latest_charge,
-                    })
-                    .eq('payment_intent_id', pi.id)
-                    .catch((e: any) => console.error('[Escrow Supabase]', e.message));
+                    await (req.app.locals.supabase as any)
+                      ?.from('escrow_settlements')
+                      .update({ status: 'auto_settled', settled_at, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: charge_id })
+                      .eq('payment_intent_id', pi.id)
+                      .catch((e: any) => console.error('[Escrow Supabase]', e.message));
 
-                  // Fire settlement email
-                  sendExchangeEmail(`Trade ${trade_id} — Auto-Settled`, {
-                    'Trade ID':          trade_id,
-                    'Gross':             `€${gross.toLocaleString()}`,
-                    'UAIU Fee (0.75%)':  `€${uaiu_fee.toFixed(2)}`,
-                    'Net to Seller':     `€${seller_net.toFixed(2)}`,
-                    'Stripe Charge':     captured.latest_charge as string,
-                    'Settled At':        new Date().toISOString(),
-                  }).catch((e: any) => console.error('[Escrow Email]', e.message));
+                    sendExchangeEmail(`Trade ${trade_id} — Auto-Settled`, {
+                      'Trade ID':          trade_id,
+                      'Gross':             `€${gross.toLocaleString()}`,
+                      'UAIU Fee (0.75%)':  `€${uaiu_fee.toFixed(2)}`,
+                      'Net to Seller':     `€${seller_net.toFixed(2)}`,
+                      'Stripe Charge':     charge_id,
+                      'Settled At':        settled_at,
+                    }).catch((e: any) => console.error('[Escrow Email]', e.message));
 
-                  console.log(`[Escrow Auto-Release] ✅ Trade ${trade_id} settled. Gross: €${gross}`);
+                    // ── FIX 4: Auto-generate and email PDF audit pack ────────
+                    generateTradePDF({
+                      trade_id,
+                      side:                'BUY',
+                      standard:            pi.metadata?.standard || 'Carbon Credit',
+                      volume_tonnes:       parseFloat(pi.metadata?.volume_tonnes || '0'),
+                      price_eur_per_tonne: gross / (parseFloat(pi.metadata?.volume_tonnes || '1') || 1),
+                      gross_eur:           gross,
+                      fee_eur:             uaiu_fee,
+                      receipt_hash:        '',
+                      prev_receipt_hash:   '',
+                      payment_intent_id:   pi.id,
+                      stripe_charge_id:    charge_id,
+                      settled_at,
+                      buyer_email,
+                    }).then(pdfBuffer => {
+                      const recipients = ['info@uaiu.live'];
+                      if (buyer_email && buyer_email !== 'info@uaiu.live') recipients.push(buyer_email);
+                      const attachment = [{ filename: `UAIU-Trade-${trade_id}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
+                      const emailHtml = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Trade Confirmed</h2><p>Trade <strong>${trade_id}</strong> has settled. Please find your audit pack PDF attached.</p><p style="color:#6ee7b7;font-size:12px">UAIU Exchange — info@uaiu.live</p></div>`;
+                      return sendZohoEmail(recipients.join(','), `Your UAIU Trade Confirmation — ${trade_id}`, emailHtml, attachment);
+                    }).catch((e: any) => console.error('[PDF email]', e.message));
+
+                    console.log(`[Escrow Auto-Release] ✅ Trade ${trade_id} settled. Gross: €${gross}`);
+                  };
+
+                  // ── FIX 5: Compensation — first attempt + 60s retry ─────
+                  try {
+                    await doCapture();
+                  } catch (firstErr: any) {
+                    console.error(`[Escrow] ⚠️ First capture attempt failed for PI ${pi.id}:`, firstErr.message);
+                    setTimeout(async () => {
+                      try {
+                        await doCapture();
+                        console.log(`[Escrow] ✅ Retry capture succeeded for PI ${pi.id}`);
+                      } catch (retryErr: any) {
+                        console.error(`[Escrow] ❌ Retry capture also failed for PI ${pi.id}:`, retryErr.message);
+                        await (req.app.locals.supabase as any)
+                          ?.from('escrow_settlements')
+                          .update({ status: 'capture_failed' })
+                          .eq('payment_intent_id', pi.id)
+                          .catch(() => {});
+                        await db.execute(sql`
+                          INSERT INTO escrow_settlements_log (trade_id, payment_intent_id, amount_eur, uaiu_fee_eur, seller_net_eur, status, settled_at, stripe_charge_id)
+                          VALUES (${trade_id}, ${pi.id}, ${pi.amount / 100}, 0, 0, 'capture_failed', NOW(), '')
+                          ON CONFLICT (payment_intent_id) DO UPDATE SET status = 'capture_failed', settled_at = NOW()
+                        `).catch(() => {});
+                        sendExchangeEmail('🚨 CAPTURE FAILED — Manual action required', {
+                          'Trade ID':   trade_id,
+                          'PI ID':      pi.id,
+                          'Amount':     `€${(pi.amount / 100).toLocaleString()}`,
+                          'Error':      retryErr.message,
+                          'Attempts':   '2',
+                          'Action':     'Manual capture required in Stripe Dashboard',
+                          'Timestamp':  new Date().toISOString(),
+                        }).catch(() => {});
+                      }
+                    }, 60_000);
+                  }
                 }
               }
 
@@ -153,8 +229,44 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
               }
             }
           } catch (autoErr: any) {
-            // Non-fatal — do not fail the webhook response
+            // ── FIX 8: Dead-letter queue — log unhandled webhook errors ────
             console.error('[Webhook Auto-Handler]', autoErr.message);
+            let eventId: string | undefined;
+            let eventType = 'unknown';
+            let trade_id: string | undefined;
+            let piId: string | undefined;
+            try {
+              const sk = process.env.STRIPE_SECRET_KEY;
+              const ws = process.env.STRIPE_WEBHOOK_SECRET;
+              if (sk && ws) {
+                const { default: Stripe } = await import('stripe');
+                const s = new Stripe(sk, { apiVersion: '2024-12-18.acacia' as any });
+                const ev = s.webhooks.constructEvent(req.body as Buffer, sig, ws);
+                eventId   = ev.id;
+                eventType = ev.type;
+                const obj = ev.data.object as any;
+                trade_id  = obj?.metadata?.trade_id;
+                piId      = obj?.id;
+              }
+            } catch {}
+            storage.logWebhookFailure({
+              eventId,
+              eventType,
+              tradeId:          trade_id,
+              paymentIntentId:  piId,
+              payload:          req.body.toString(),
+              errorMessage:     autoErr.message,
+              lastAttemptedAt:  new Date(),
+            }).catch(() => {});
+            sendExchangeEmail('🚨 WEBHOOK FAILURE — Dead-letter queue', {
+              'Event Type':  eventType,
+              'Event ID':    eventId || 'unknown',
+              'Trade ID':    trade_id || 'unknown',
+              'PI ID':       piId || 'unknown',
+              'Error':       autoErr.message,
+              'Timestamp':   new Date().toISOString(),
+              'Action':      'Check /admin for retry options',
+            }).catch(() => {});
           }
 
           res.status(200).json({ received: true });
@@ -1237,55 +1349,30 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
       }
 
-      // 1. Save submission record to exchangeCreditListings
+      // Save as 'pending' — admin must approve before appearing on marketplace
       const listing = await storage.createExchangeCreditListing(parsed.data);
-
-      // 2. Auto-publish directly to live marketplace (exchangeListings table)
-      const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
       const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
+      const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
 
-      const standardMap: Record<string, string> = {
-        'EU ETS — European Union Allowances': 'EU ETS',
-        'VCS — Verified Carbon Standard':     'VCS',
-        'Gold Standard':                       'GOLD STD',
-        'CORSIA — Aviation Offsets':           'CORSIA',
-        'Blue Carbon / VCS':                   'VCS',
-        'Other':                               'VCS',
-      };
-      const badge = standardMap[parsed.data.standard] || 'VCS';
-
-      await storage.seedExchangeListings([{
-        standard:          badge,
-        badgeLabel:        badge,
-        name:              `${parsed.data.creditType} — ${parsed.data.orgName}`,
-        origin:            parsed.data.projectOrigin,
-        pricePerTonne:     priceNum,
-        changePercent:     0,
-        changeDirection:   'up',
-        status:            'active',
-        isAcceptingOrders: true,
-      }]);
-
-      // 3. Notify info@uaiu.live
-      sendExchangeEmail('New Credit Listing — LIVE on Marketplace', {
-        'Organization':        parsed.data.orgName,
-        'Contact':             parsed.data.contactName,
-        'Email':               parsed.data.email,
-        'Standard':            parsed.data.standard,
-        'Credit Type':         parsed.data.creditType,
-        'Volume (Tonnes)':     String(volumeNum),
-        'Asking Price EUR/t':  String(priceNum),
-        'Project Origin':      parsed.data.projectOrigin,
-        'Registry Serial':     parsed.data.registrySerial || 'Not provided',
-        'Status':              'AUTO-PUBLISHED TO LIVE MARKETPLACE',
-        'Submission ID':       listing.id,
+      sendExchangeEmail('New Credit Listing — Pending Review', {
+        'Organization':      parsed.data.orgName,
+        'Contact':           parsed.data.contactName,
+        'Email':             parsed.data.email,
+        'Standard':          parsed.data.standard,
+        'Credit Type':       parsed.data.creditType,
+        'Volume (Tonnes)':   String(volumeNum),
+        'Asking Price EUR/t': String(priceNum),
+        'Project Origin':    parsed.data.projectOrigin,
+        'Registry Serial':   parsed.data.registrySerial || 'Not provided',
+        'Status':            'PENDING REVIEW — Go to /admin to approve or reject',
+        'Submission ID':     listing.id,
       }).catch(err => console.error('Exchange email error:', err));
 
       res.json({
         success:   true,
         id:        listing.id,
-        published: true,
-        message:   'Listing is now live on the marketplace.',
+        published: false,
+        message:   'Your listing is under review. You will be notified once approved.',
       });
     } catch (error) {
       console.error('Exchange list credits error:', error);
@@ -1536,6 +1623,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       endpoint: 'POST /api/kyc/start',
     };
 
+    // Stripe startup validation (Fix 7)
+    results.stripe_startup = {
+      status:       stripeReady ? 'OK — Key validated at startup' : 'FAIL — Key invalid or not yet validated',
+      validated_at: stripeReadyAt || 'not yet',
+      escrow_gate:  stripeReady ? 'open' : 'blocked',
+    };
+
     // Supabase
     try {
       const sb = res.app.locals.supabase;
@@ -1554,6 +1648,103 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         ? '✅ All systems operational. Safe to onboard Swiss X REDD UK Limited.'
         : '❌ Fix FAIL items above before going live to Alki\'s network.',
     });
+  });
+
+  // ── ADMIN: Pending Seller Listings (Fix 6) ──────────────────────────────────
+  app.get('/api/admin/listings/pending', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const listings = await storage.getPendingCreditListings();
+      res.json(listings);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/admin/listings/:id/approve', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const newListing = await storage.approveCreditListing(req.params.id);
+      sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
+        'Listing ID':   req.params.id,
+        'Name':         newListing.name,
+        'Standard':     newListing.standard,
+        'Price EUR/t':  String(newListing.pricePerTonne),
+        'Approved At':  new Date().toISOString(),
+      }).catch(() => {});
+      res.json({ success: true, listing: newListing });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/admin/listings/:id/reject', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const rejected = await storage.rejectCreditListing(req.params.id);
+      // Email the seller
+      const reason = req.body.reason || 'Your listing did not meet our current marketplace requirements.';
+      const html = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Listing Review</h2><p>Thank you for submitting your carbon credits to UAIU.LIVE/X.</p><p>After review, we are unable to approve your listing at this time.</p><p><strong>Reason:</strong> ${reason}</p><p>Please contact info@uaiu.live if you have questions.</p></div>`;
+      if (rejected.email && isZohoConfigured()) {
+        sendZohoEmail(rejected.email, 'UAIU.LIVE/X — Your listing was not approved', html).catch(() => {});
+      }
+      res.json({ success: true, id: req.params.id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── ADMIN: Webhook Dead-Letter Queue (Fix 8) ────────────────────────────────
+  app.get('/api/admin/webhooks/failures', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const failures = await storage.getWebhookFailures(false);
+      res.json(failures);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/admin/webhooks/retry/:id', async (req, res) => {
+    const adminKey = process.env.ADMIN_SECRET_KEY;
+    if (adminKey && req.query.admin_key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const failures = await storage.getWebhookFailures();
+      const failure = failures.find(f => f.id === req.params.id);
+      if (!failure) return res.status(404).json({ error: 'Failure record not found' });
+
+      await storage.incrementWebhookRetry(req.params.id);
+
+      // If we have a PI ID, attempt to re-capture
+      if (failure.paymentIntentId && stripeReady) {
+        const stripeKey = process.env.STRIPE_SECRET_KEY!;
+        const { default: Stripe } = await import('stripe');
+        const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+        const pi = await stripe.paymentIntents.retrieve(failure.paymentIntentId);
+        if (pi.status === 'requires_capture') {
+          const captured = await stripe.paymentIntents.capture(pi.id);
+          const gross = captured.amount / 100;
+          const uaiu_fee = gross * 0.0075;
+          const seller_net = gross - uaiu_fee;
+          await db.execute(sql`
+            INSERT INTO escrow_settlements_log (trade_id, payment_intent_id, amount_eur, uaiu_fee_eur, seller_net_eur, status, settled_at, stripe_charge_id)
+            VALUES (${failure.tradeId || 'manual-retry'}, ${pi.id}, ${gross}, ${uaiu_fee}, ${seller_net}, 'manual_retry_settled', NOW(), ${captured.latest_charge as string})
+            ON CONFLICT (payment_intent_id) DO UPDATE SET status = 'manual_retry_settled', settled_at = NOW()
+          `).catch(() => {});
+          await storage.resolveWebhookFailure(req.params.id);
+          return res.json({ success: true, action: 'captured', gross_eur: gross });
+        }
+      }
+
+      await storage.resolveWebhookFailure(req.params.id);
+      res.json({ success: true, action: 'resolved_no_capture' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ==================== END EXCHANGE ROUTES ====================
@@ -2428,6 +2619,7 @@ Respond with a JSON object (no markdown) with these exact fields:
   // ─── Wave 3: Stripe Escrow Routes ────────────────────────────────
 
   app.post('/api/escrow/create', async (req, res) => {
+    if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard } = req.body;
       if (!trade_id || !amount_eur || amount_eur < 100) {
@@ -2442,7 +2634,7 @@ Respond with a JSON object (no markdown) with these exact fields:
         currency: 'eur',
         capture_method: 'manual',
         receipt_email: buyer_email,
-        metadata: { trade_id, listing_id: listing_id || '', volume_tonnes: String(volume_tonnes), standard: standard || '', escrow_type: 'carbon_credit_t1', platform: 'uaiu_exchange', created_at: new Date().toISOString() },
+        metadata: { trade_id, listing_id: listing_id || '', volume_tonnes: String(volume_tonnes), standard: standard || '', escrow_type: 'carbon_credit_t1', platform: 'uaiu_exchange', buyer_email: buyer_email || '', created_at: new Date().toISOString() },
         description: `UAIU Carbon Credit Escrow — Trade ${trade_id} — ${volume_tonnes?.toLocaleString()}t ${standard}`,
         statement_descriptor: 'UAIU EXCH',
       });
@@ -2455,6 +2647,7 @@ Respond with a JSON object (no markdown) with these exact fields:
   });
 
   app.post('/api/escrow/verify', async (req, res) => {
+    if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
       const { trade_id, payment_intent_id, receipt_hash } = req.body;
       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
@@ -2475,6 +2668,7 @@ Respond with a JSON object (no markdown) with these exact fields:
   });
 
   app.post('/api/escrow/release', async (req, res) => {
+    if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
       const { payment_intent_id, trade_id } = req.body;
       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
@@ -2499,6 +2693,7 @@ Respond with a JSON object (no markdown) with these exact fields:
   });
 
   app.post('/api/escrow/cancel', async (req, res) => {
+    if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
       const { payment_intent_id, trade_id, reason } = req.body;
       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
@@ -2618,6 +2813,9 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.status(500).json({ error: 'Subscription failed' });
     }
   });
+
+  // ── FIX 3: Start cron watchdog for stuck escrow trades ──────────────────────
+  startCronJobs(app);
 
   // Socket.IO is now attached to the HTTP server passed in from runApp
   // No need to return the server

@@ -1335,7 +1335,7 @@ export default function Exchange() {
         </section>
 
         <PortfolioDashboard
-          trades={sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '' }))}
+          trades={sessionTrades.map(t => ({ trade_id: t.trade_id || t.id || '', side: t.side || t.mode || 'BUY', standard: t.standard || 'Carbon Credit', volume_tonnes: t.volume_tonnes || t.volumeTonnes || 0, price_eur_per_tonne: t.price_eur_per_tonne || t.priceEurPerTonne || 0, gross_eur: t.gross_eur || t.grossEur || 0, receipt_hash: t.receipt_hash || t.receiptHash || '', prev_receipt_hash: t.prev_receipt_hash || t.prevReceiptHash || '', payment_intent_id: t.payment_intent_id || t.paymentIntentId || '', settled_at: t.settled_at || (t.ts ? new Date(t.ts).toISOString() : '') }))}
           retirements={[]}
           accountName={sessionAccount?.company || 'Exchange Account'}
           annualTarget={sessionAccount?.annualCo2 || 10000}

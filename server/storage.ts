@@ -27,6 +27,8 @@ import {
   type InsertExchangeRfq,
   type ExchangeCreditListing,
   type InsertExchangeCreditListing,
+  type WebhookFailure,
+  type InsertWebhookFailure,
   users,
   matches,
   payoutRequests,
@@ -41,6 +43,7 @@ import {
   exchangeAccounts,
   exchangeRfqs,
   exchangeCreditListings,
+  webhookFailures,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
@@ -100,6 +103,17 @@ export interface IStorage {
   createExchangeAccount(account: InsertExchangeAccount): Promise<ExchangeAccount>;
   createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq>;
   createExchangeCreditListing(listing: InsertExchangeCreditListing): Promise<ExchangeCreditListing>;
+
+  // Seller listing approval
+  getPendingCreditListings(): Promise<ExchangeCreditListing[]>;
+  approveCreditListing(id: string): Promise<ExchangeListing>;
+  rejectCreditListing(id: string): Promise<ExchangeCreditListing>;
+
+  // Webhook dead-letter queue
+  logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure>;
+  getWebhookFailures(resolved?: boolean): Promise<WebhookFailure[]>;
+  resolveWebhookFailure(id: string): Promise<void>;
+  incrementWebhookRetry(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -545,6 +559,86 @@ export class DbStorage implements IStorage {
       .where(eq(exchangeAccounts.email, trimmed))
       .limit(1);
     return account || null;
+  }
+
+  async getPendingCreditListings(): Promise<ExchangeCreditListing[]> {
+    return db.select().from(exchangeCreditListings)
+      .where(eq(exchangeCreditListings.status, 'pending'))
+      .orderBy(desc(exchangeCreditListings.createdAt));
+  }
+
+  async approveCreditListing(id: string): Promise<ExchangeListing> {
+    const [submission] = await db.select().from(exchangeCreditListings).where(eq(exchangeCreditListings.id, id));
+    if (!submission) throw new Error(`Credit listing ${id} not found`);
+
+    await db.update(exchangeCreditListings)
+      .set({ status: 'approved' })
+      .where(eq(exchangeCreditListings.id, id));
+
+    const standardMap: Record<string, string> = {
+      'EU ETS — European Union Allowances': 'EU ETS',
+      'VCS — Verified Carbon Standard':     'VCS',
+      'Gold Standard':                       'GOLD STD',
+      'CORSIA — Aviation Offsets':           'CORSIA',
+      'Blue Carbon / VCS':                   'VCS',
+      'Other':                               'VCS',
+    };
+    const badge = standardMap[submission.standard] || 'VCS';
+    const priceNum = parseFloat(String(submission.askingPricePerTonne)) || 0;
+
+    const [newListing] = await db.insert(exchangeListings).values({
+      standard:          badge,
+      badgeLabel:        badge,
+      name:              `${submission.creditType} — ${submission.orgName}`,
+      origin:            submission.projectOrigin,
+      pricePerTonne:     priceNum,
+      changePercent:     0,
+      changeDirection:   'up',
+      status:            'active',
+      isAcceptingOrders: true,
+    }).returning();
+    return newListing;
+  }
+
+  async rejectCreditListing(id: string): Promise<ExchangeCreditListing> {
+    const [updated] = await db.update(exchangeCreditListings)
+      .set({ status: 'rejected' })
+      .where(eq(exchangeCreditListings.id, id))
+      .returning();
+    if (!updated) throw new Error(`Credit listing ${id} not found`);
+    return updated;
+  }
+
+  async logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure> {
+    const [result] = await db.insert(webhookFailures).values({
+      ...failure,
+      lastAttemptedAt: new Date(),
+    }).returning();
+    return result;
+  }
+
+  async getWebhookFailures(resolved?: boolean): Promise<WebhookFailure[]> {
+    if (resolved !== undefined) {
+      return db.select().from(webhookFailures)
+        .where(eq(webhookFailures.resolved, resolved))
+        .orderBy(desc(webhookFailures.createdAt));
+    }
+    return db.select().from(webhookFailures)
+      .orderBy(desc(webhookFailures.createdAt));
+  }
+
+  async resolveWebhookFailure(id: string): Promise<void> {
+    await db.update(webhookFailures)
+      .set({ resolved: true })
+      .where(eq(webhookFailures.id, id));
+  }
+
+  async incrementWebhookRetry(id: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE webhook_failures
+      SET retry_count = retry_count + 1, last_attempted_at = NOW()
+      WHERE id = ${id}
+    `);
   }
 }
 

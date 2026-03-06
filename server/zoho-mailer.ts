@@ -1,5 +1,11 @@
 import nodemailer from 'nodemailer';
 
+export interface ZohoAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export function isZohoConfigured(): boolean {
   return !!(process.env.ZOHO_SMTP_USER && process.env.ZOHO_SMTP_PASS);
 }
@@ -16,7 +22,12 @@ function createTransporter() {
   });
 }
 
-export async function sendZohoEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendZohoEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: ZohoAttachment[]
+): Promise<boolean> {
   try {
     const transporter = createTransporter();
     await transporter.sendMail({
@@ -24,6 +35,11 @@ export async function sendZohoEmail(to: string, subject: string, html: string): 
       to,
       subject,
       html,
+      attachments: attachments?.map(a => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     return true;
   } catch (error) {

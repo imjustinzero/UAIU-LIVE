@@ -1,0 +1,40 @@
+This is a full implementation plan from Replit. It's detailed and correct. Here's exactly how to execute it yourself, step by step:
+
+---
+
+**STEP ZERO — Do this first before anything else**
+
+In Replit Agent paste:
+> "Run restart_workflow on 'Start application' and confirm the server responds on port 5000 with no EADDRINUSE error before doing anything else."
+
+---
+
+**Then do each task in this exact order:**
+
+**T002 first** (schema) — paste this:
+> "In shared/schema.ts, add a status varchar column with default 'pending' to the exchangeCreditListings table. Then create a new webhookFailures pgTable with these exact columns: id varchar primaryKey default gen_random_uuid(), event_id varchar nullable, event_type varchar notNull, trade_id varchar nullable, payment_intent_id varchar nullable, payload text, error_message text, retry_count integer default 0, last_attempted_at timestamp defaultNow, resolved boolean default false, created_at timestamp defaultNow. Add the InsertWebhookFailure, WebhookFailure types and insertWebhookFailureSchema. Then run npm run db:push."
+
+**T003** — paste this:
+> "In server/routes.ts, add a module-level let stripeReady = false flag. Inside registerRoutes before any routes are registered, add an async IIFE that calls stripe.paymentIntents.list({ limit: 1 }). If it succeeds set stripeReady = true and log [Stripe] ✅ Key valid. If it fails log [Stripe] ❌ Key invalid — escrow disabled. Add a guard at the top of /api/escrow/create, /api/escrow/verify, /api/escrow/release, and /api/escrow/cancel that returns 503 if stripeReady is false. Add stripe_startup status to /api/admin/health-check response."
+
+**T004** — paste this:
+> "In server/routes.ts in the webhook handler around lines 87–128, wrap the Stripe capture call in try/catch. On first failure, schedule a retry after 60 seconds with setTimeout. If the retry also fails: update Supabase escrow_settlements status to 'capture_failed', write to escrow_settlements_log with status 'capture_failed', and send an alert email via sendExchangeEmail with subject 'CAPTURE FAILED — Manual action required' including trade_id, PI id, amount, and error message."
+
+**T005** — paste this:
+> "Create a new file server/cron.ts with an exported startCronJobs(app) function. Inside, create checkStuckEscrows that calls stripe.paymentIntents.list({ limit: 100 }), filters for status requires_capture AND metadata.escrow_type === 'carbon_credit_t1' AND created more than 30 minutes ago, checks PostgreSQL escrow_settlements_log for each, and if no log entry exists attempts capture. On success write to escrow_settlements_log with status 'cron_settled' and fire settlement email. On failure send alert to info@uaiu.live. Run with setInterval every 30 minutes and also once 60 seconds after startup. Import and call startCronJobs(app) at the end of registerRoutes in server/routes.ts."
+
+**T006** — paste this:
+> "In server/storage.ts add logWebhookFailure, getWebhookFailures, resolveWebhookFailure, and incrementWebhookRetry to IStorage and implement all four in DbStorage using Drizzle against the webhookFailures table. In server/routes.ts wrap the entire webhook processing block so any unhandled exception logs to webhookFailures via storage.logWebhookFailure and fires an alert email immediately. Add GET /api/admin/webhooks/failures?admin_key= and POST /api/admin/webhooks/retry/:id?admin_key= endpoints."
+
+**T007** — paste this:
+> "In server/storage.ts add getPendingCreditListings, approveCreditListing, and rejectCreditListing to IStorage and DbStorage. In the list-credits route remove the auto-publish block — listings now save as 'pending' and the response says 'Your listing is under review.' Add admin endpoints GET /api/admin/listings/pending, POST /api/admin/listings/:id/approve, and POST /api/admin/listings/:id/reject all requiring ?admin_key=. On approve call approveCreditListing and map fields to exchangeListings. On reject send rejection email to the seller via sendZohoEmail. Create client/src/pages/Admin.tsx as a dark ink and gold styled dashboard with three sections: Pending Listings, Failed Webhooks, and Health Check. Add the /admin route to App.tsx. The page reads ?key= from URL as the admin key and shows a PIN entry form if no key is present."
+
+**T008** — paste this:
+> "Install pdfkit and @types/pdfkit. Create server/pdf-generator.ts with a generateTradePDF function that takes trade data and returns a Buffer. The PDF should have a UAIU.LIVE/X header, gold rule, trade summary table, and a Tamper-Evident Receipt Chain section with receipt_hash, prev_receipt_hash, PaymentIntent ID, Stripe charge ID, and settlement timestamp. In server/zoho-mailer.ts add an optional attachments parameter to sendZohoEmail. In /api/escrow/create add buyer_email to the PaymentIntent metadata. In the webhook handler after successful capture, call generateTradePDF and email the PDF to the buyer and CC info@uaiu.live with subject 'Your UAIU Trade Confirmation — [trade_id]'. Make this non-blocking — if PDF generation fails log the error but do not fail the settlement. In InstitutionalFeatures.tsx extend the Trade interface and add a Tamper-Evident Receipt Chain section to generatePDFReport."
+
+**T009 — Final verification** — paste this:
+> "Run npm run db:push, restart the Start application workflow, and confirm: server starts clean with no errors, GET /api/admin/health-check shows stripe_startup, GET /api/admin/listings/pending returns 200, GET /api/admin/webhooks/failures returns 200, /admin dashboard loads with all 3 sections, a test listing submission appears in the pending queue and NOT on the marketplace, approving it via admin UI makes it appear on the marketplace grid, and the cron job log line appears after startup."
+
+---
+
+**Do each one sequentially, paste Replit's response back here after each task and I'll check it before you move to the next one.** That way nothing gets built on a broken foundation.

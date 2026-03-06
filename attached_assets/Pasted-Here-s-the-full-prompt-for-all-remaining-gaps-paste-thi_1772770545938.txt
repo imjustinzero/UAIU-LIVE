@@ -1,0 +1,18 @@
+Here’s the full prompt for all remaining gaps — paste this into Replit Agent:
+
+Fix all of the following production gaps on UAIU.LIVE/X. These are required for the platform to be institutional-grade and fully operational.
+Fix 3 — Cron job for stuck escrow trades:
+Create a scheduled job that runs every 30 minutes and scans for Stripe PaymentIntents in requires_capture status that are older than 30 minutes and have no matching entry in escrow_settlements_log. For each one found, attempt to capture it. If capture fails, send an alert email via Zoho SMTP to info@uaiu.live with the PaymentIntent ID, trade ID, amount, and timestamp. This prevents trades from getting permanently stuck if the webhook missed.
+Fix 4 — Auto-generate and email PDF audit pack on settlement:
+Currently the PDF is manual — the buyer has to click download. When a trade settles (escrow status hits auto_settled or any trade completes), automatically generate the full PDF audit pack server-side and email it to both the buyer and seller via Zoho SMTP. The email subject should be “Your UAIU Trade Confirmation — [Trade ID]” and the PDF should be attached.
+Fix 5 — Webhook compensation logic for failed auto-capture:
+In the webhook handler in routes.ts, when auto-capture throws an error the PI stays stuck in requires_capture with no retry logic. Add a compensation function: if capture fails, wait 60 seconds and retry once. If the second attempt also fails, update the escrow status in Supabase to capture_failed and send an alert to info@uaiu.live immediately.
+Fix 6 — Seller listing approval flow:
+Currently when a seller submits, an email goes to info@uaiu.live but there is no in-platform approval workflow. Build an admin approval queue where submitted listings show with Approve / Reject buttons. On approval, status updates to approved and the listing bridges to exchange_listings (per Fix 1). On rejection, send the seller an email via Zoho SMTP explaining their listing was not approved.
+Fix 7 — Stripe key health check on startup:
+On server startup, run a health check that validates STRIPE_SECRET_KEY is live and working by making a test API call to Stripe. If it fails, log a clear error and prevent the escrow flow from being accessible rather than failing silently mid-trade. Surface this status on an internal admin health dashboard.
+Fix 8 — Dead-letter queue for exhausted Stripe retries:
+If all Stripe webhook retries exhaust after 72 hours, currently there is no alerting and no dead-letter queue — the trade just disappears into limbo. Implement a dead-letter queue: log all failed webhook events to a webhook_failures table in Supabase with full payload, trade ID, and timestamp. Send an immediate alert email to info@uaiu.live. Add a manual retry button in the admin dashboard for each failed webhook event.
+After all fixes, confirm each one with a specific test result. Do not mark anything as done without a passing test.
+
+That covers every gap Replit surfaced. Once these 8 are done alongside the Stripe key and the listings bridge, the platform is genuinely institutional grade end to end.​​​​​​​​​​​​​​​​

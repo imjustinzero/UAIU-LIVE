@@ -338,6 +338,21 @@ export const exchangeCreditListings = pgTable("exchange_credit_listings", {
   askingPricePerTonne: varchar("asking_price_per_tonne").notNull(),
   projectOrigin: varchar("project_origin").notNull(),
   registrySerial: varchar("registry_serial"),
+  status: varchar("status").notNull().default('pending'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const webhookFailures = pgTable("webhook_failures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id"),
+  eventType: varchar("event_type").notNull(),
+  tradeId: varchar("trade_id"),
+  paymentIntentId: varchar("payment_intent_id"),
+  payload: text("payload"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").notNull().default(0),
+  lastAttemptedAt: timestamp("last_attempted_at").notNull().defaultNow(),
+  resolved: boolean("resolved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -355,6 +370,14 @@ export const insertExchangeRfqSchema = createInsertSchema(exchangeRfqs).omit({
 });
 export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
   id: true,
+  status: true,
+  createdAt: true,
+});
+
+export const insertWebhookFailureSchema = createInsertSchema(webhookFailures).omit({
+  id: true,
+  retryCount: true,
+  resolved: true,
   createdAt: true,
 });
 
@@ -366,6 +389,8 @@ export type ExchangeRfq = typeof exchangeRfqs.$inferSelect;
 export type InsertExchangeRfq = z.infer<typeof insertExchangeRfqSchema>;
 export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
 export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
+export type WebhookFailure = typeof webhookFailures.$inferSelect;
+export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
 
 export interface GameState {
   matchId: string;
