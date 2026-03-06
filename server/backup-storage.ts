@@ -34,8 +34,10 @@ export function getS3Client(): S3Client | null {
   const bucket = process.env.S3_BACKUP_BUCKET;
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  const region = process.env.AWS_REGION || "us-east-1";
-  const endpoint = process.env.S3_BACKUP_ENDPOINT;
+  const region = (process.env.AWS_REGION || "us-east-1").toLowerCase().trim();
+  const rawEndpoint = process.env.S3_BACKUP_ENDPOINT;
+  // Strip trailing slash — AWS Signature V4 signing is sensitive to this
+  const endpoint = rawEndpoint ? rawEndpoint.replace(/\/+$/, "") : undefined;
 
   if (!bucket || !accessKeyId || !secretAccessKey) return null;
 
