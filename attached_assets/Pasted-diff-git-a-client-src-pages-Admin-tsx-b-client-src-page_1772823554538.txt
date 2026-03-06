@@ -1,0 +1,84 @@
+diff --git a/client/src/pages/Admin.tsx b/client/src/pages/Admin.tsx
+index 663e9c17666ae52d2c8fc9fcec9dcb5fdbe83b9e..363b5bc56bf357cb7948deb655c9f6f6180adcc5 100644
+--- a/client/src/pages/Admin.tsx
++++ b/client/src/pages/Admin.tsx
+@@ -285,50 +285,52 @@ export default function Admin() {
+             </div>
+             
+             {loading ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+             ) : pendingListings.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No listings pending review.</div>
+             ) : (
+               pendingListings.map(l => (
+                 <div key={l.id} data-testid={`card-listing-${l.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+                   <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', borderBottom: `1px solid ${C.border}` }}>
+                     <div>
+                       <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.syne }}>{l.orgName || l.org_name}</div>
+                       <div style={{ fontSize: '12px', color: C.muted }}>{l.creditType || l.credit_type} • {l.standard}</div>
+                     </div>
+                     <div style={{ display: 'flex', gap: '8px' }}>
+                       <button data-testid={`button-approve-${l.id}`} onClick={() => approveListing(l.id)} style={{ background: C.green, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Approve</button>
+                       <button data-testid={`button-reject-${l.id}`} onClick={() => { setRejectId(l.id); setShowRejectModal(true); }} style={{ background: C.red, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Reject</button>
+                     </div>
+                   </div>
+                   <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Email</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.email}</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Origin</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.projectOrigin || l.project_origin}</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Volume</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.annualVolume || l.annual_volume} t/yr</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Price</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>€{l.askingPricePerTonne || l.asking_price_per_tonne}/t</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Serial</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registrySerial || l.registry_serial}</span></div>
++                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Registry</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registryName || l.registry_name || '—'}</span></div>
++                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Vintage Year</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.vintageYear || l.vintage_year || '—'}</span></div>
+                   </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+ 
+         {/* Panel 2: Webhooks */}
+         {activeTab === 'webhooks' && (
+           <div style={{ animation: 'fadeIn .3s ease' }}>
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+               <div>
+                 <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Webhook Dead-Letter Queue</h2>
+                 <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Unhandled webhook exceptions. Retry re-attempts Stripe capture.</p>
+               </div>
+               <button data-testid="button-refresh-webhooks" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+             </div>
+ 
+             {loading ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+             ) : webhookFailures.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No webhook failures recorded.</div>
+             ) : (
+               webhookFailures.map(f => (
+                 <div key={f.id} data-testid={`card-webhook-${f.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+@@ -406,26 +408,25 @@ export default function Admin() {
+               <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>
+                 Daily automated backups with SHA-256 integrity verification. S3-compatible off-site storage.
+                 See <code style={{ color: C.gold, fontSize: '11px' }}>docs/BACKUP_ROLLBACK_RUNBOOK.md</code> for the full DR policy, restore procedure, and test checklist.
+               </p>
+             </div>
+             <BackupAdmin adminKey={adminKey} />
+           </div>
+         )}
+ 
+       <section style={{ padding: '0 24px 40px', maxWidth: 1400, margin: '0 auto' }}>
+         <IncidentBanner status={platformStatus.status} message={platformStatus.message} />
+         <EnterpriseOpsDashboard adminKey={adminKey} />
+         <LaunchChecklist />
+       </section>
+ 
+       </main>
+ 
+       <style>{`
+         @keyframes spin { to { transform: rotate(360deg); } }
+         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+       `}</style>
+     </div>
+   );
+ }
+ 
+-

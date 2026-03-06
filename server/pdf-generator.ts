@@ -14,6 +14,12 @@ export interface TradeForPDF {
   stripe_charge_id: string;
   settled_at: string;
   buyer_email: string;
+  buyer_registry_account_id?: string;
+  buyer_registry_name?: string;
+  seller_registry_name?: string;
+  seller_registry_serial?: string;
+  vintage_year?: number;
+  retirement_status?: string;
 }
 
 export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
@@ -61,6 +67,7 @@ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
       ["Net Amount",       `€${(trade.gross_eur - trade.fee_eur).toFixed(2)}`],
       ["Settled At",       trade.settled_at || new Date().toISOString()],
       ["Buyer",            trade.buyer_email],
+      ["Retirement Status", trade.retirement_status || 'Retirement Pending — Due within 48 hours of settlement.'],
     ];
 
     let y = 182;
@@ -98,6 +105,22 @@ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
     });
 
     y += 8;
+    doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
+    y += 16;
+
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(gold).text("Registry Transfer Instructions", 50, y);
+    y += 18;
+    doc.font("Helvetica").fontSize(8).fillColor(cream3).text(
+      `Seller registry name and serial: ${trade.seller_registry_name || 'N/A'} / ${trade.seller_registry_serial || 'N/A'}\n` +
+      `Buyer registry account ID and registry name: ${trade.buyer_registry_account_id || 'N/A'} / ${trade.buyer_registry_name || 'N/A'}\n` +
+      `Volume in tonnes: ${trade.volume_tonnes}\nCredit standard: ${trade.standard}\nTrade ID: ${trade.trade_id}\nSettlement timestamp: ${trade.settled_at || new Date().toISOString()}\n` +
+      `Instruction: Seller to transfer ${trade.volume_tonnes} ${trade.standard} credits from registry account ${trade.seller_registry_serial || 'N/A'} to buyer registry account ${trade.buyer_registry_account_id || 'N/A'} within 48 hours of settlement date ${(trade.settled_at || new Date().toISOString()).split('T')[0]}.`,
+      50,
+      y,
+      { width: 495 }
+    );
+    y += 78;
+
     doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
     y += 14;
 

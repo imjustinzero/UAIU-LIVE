@@ -1,0 +1,58 @@
+diff --git a/server/storage.ts b/server/storage.ts
+index 2877c65c00be735f6e23f15567a95b78613d5822..0e12519cec683bba88b97d3dd84613f711e11cca 100644
+--- a/server/storage.ts
++++ b/server/storage.ts
+@@ -605,50 +605,53 @@ export class DbStorage implements IStorage {
+     const standardMap: Record<string, string> = {
+       'EU ETS — European Union Allowances': 'EU ETS',
+       'VCS — Verified Carbon Standard':     'VCS',
+       'Gold Standard':                       'GOLD STD',
+       'CORSIA — Aviation Offsets':           'CORSIA',
+       'Blue Carbon / VCS':                   'VCS',
+       'Other':                               'VCS',
+     };
+     const badge = standardMap[submission.standard] || 'VCS';
+     const priceNum = parseFloat(String(submission.askingPricePerTonne)) || 0;
+ 
+     const sellerProfileResult = await db.execute(sql`
+       SELECT id
+       FROM seller_profiles
+       WHERE exchange_account_email = ${submission.email}
+       LIMIT 1
+     `);
+     const sellerProfileId: string | null = (sellerProfileResult as any).rows?.[0]?.id ?? null;
+ 
+     const [newListing] = await db.insert(exchangeListings).values({
+       standard:          badge,
+       badgeLabel:        badge,
+       name:              `${submission.creditType} — ${submission.orgName}`,
+       origin:            submission.projectOrigin,
+       sellerProfileId,
++      registrySerial:    submission.registrySerial,
++      registryName:      submission.registryName,
++      vintageYear:       submission.vintageYear,
+       pricePerTonne:     priceNum,
+       changePercent:     0,
+       changeDirection:   'up',
+       status:            'active',
+       isAcceptingOrders: true,
+     }).returning();
+     return newListing;
+   }
+ 
+   async rejectCreditListing(id: string): Promise<ExchangeCreditListing> {
+     const [updated] = await db.update(exchangeCreditListings)
+       .set({ status: 'rejected' })
+       .where(eq(exchangeCreditListings.id, id))
+       .returning();
+     if (!updated) throw new Error(`Credit listing ${id} not found`);
+     return updated;
+   }
+ 
+   async logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure> {
+     const [result] = await db.insert(webhookFailures).values({
+       ...failure,
+       lastAttemptedAt: new Date(),
+     }).returning();
+     return result;
+   }

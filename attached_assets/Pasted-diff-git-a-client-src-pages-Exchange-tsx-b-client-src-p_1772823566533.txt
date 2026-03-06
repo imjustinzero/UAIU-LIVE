@@ -1,0 +1,646 @@
+diff --git a/client/src/pages/Exchange.tsx b/client/src/pages/Exchange.tsx
+index 584dc2874ff945d0098f712497ae0c655f927f66..ec3f506f0688c692a9514c2028cea02df1769632 100644
+--- a/client/src/pages/Exchange.tsx
++++ b/client/src/pages/Exchange.tsx
+@@ -141,50 +141,53 @@ const CREDIT_STANDARDS = [
+   'Other',
+ ];
+ 
+ const CREDIT_TYPES = [
+   'Biofuel Production (B100 / SAF)',
+   'REDD++ Forest Conservation',
+   'Blue Carbon / Seagrass',
+   'Coral Restoration',
+   'Agricultural Waste → Biogas',
+   'Renewable Energy (Solar / Wind)',
+   'Human Waste Biodigester',
+   'Other',
+ ];
+ 
+ interface Listing {
+   id: string;
+   standard: string;
+   badgeLabel: string;
+   name: string;
+   origin: string;
+   pricePerTonne: number;
+   changePercent: number;
+   changeDirection: string;
+   status: string;
+   isAcceptingOrders: boolean;
++  registrySerial?: string;
++  registryName?: string;
++  vintageYear?: number;
+ }
+ 
+ function getBadgeStyle(standard: string, C: typeof C_DARK) {
+   if (standard === 'EU ETS' || standard === 'CORSIA') return { color: '#a855f7', borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)' };
+   if (standard === 'VCS' || standard === 'GOLD STD') return { color: C.green, borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)' };
+   return { color: C.gold, borderColor: C.goldborder, background: C.goldfaint };
+ }
+ 
+ async function sha256(message: string): Promise<string> {
+   try {
+     const msgBuffer = new TextEncoder().encode(message);
+     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+     const hashArray = Array.from(new Uint8Array(hashBuffer));
+     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+   } catch {
+     return Math.random().toString(36).repeat(4).slice(0, 64);
+   }
+ }
+ 
+ function genTradeId(mode: string): string {
+   return `UAIU-${mode.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+ }
+ 
+ export default function Exchange() {
+   const cursorRef = useRef<HTMLDivElement>(null);
+@@ -209,81 +212,85 @@ export default function Exchange() {
+   const [tradeRefStr, setTradeRefStr] = useState('');
+   const [tradeHashStr, setTradeHashStr] = useState('');
+   const [sessionTrades, setSessionTrades] = useState<any[]>([]);
+ 
+   const [showAccountModal, setShowAccountModal] = useState(false);
+   const [acctFirstName, setAcctFirstName] = useState('');
+   const [acctLastName, setAcctLastName] = useState('');
+   const [acctCompany, setAcctCompany] = useState('');
+   const [acctEmail, setAcctEmail] = useState('');
+   const [acctPhone, setAcctPhone] = useState('');
+   const [acctType, setAcctType] = useState('');
+   const [acctCo2, setAcctCo2] = useState('');
+   const [acctSubmitting, setAcctSubmitting] = useState(false);
+   const [acctSuccess, setAcctSuccess] = useState(false);
+   const [acctId, setAcctId] = useState('');
+ 
+   const [listOrgName, setListOrgName] = useState('');
+   const [listContact, setListContact] = useState('');
+   const [listEmail, setListEmail] = useState('');
+   const [listStandard, setListStandard] = useState('');
+   const [listType, setListType] = useState('');
+   const [listVolume, setListVolume] = useState('');
+   const [listPrice, setListPrice] = useState('');
+   const [listOrigin, setListOrigin] = useState('');
+   const [listSerial, setListSerial] = useState('');
++  const [listRegistryName, setListRegistryName] = useState('');
++  const [listVintageYear, setListVintageYear] = useState('');
+   const [listSubmitting, setListSubmitting] = useState(false);
+   const [listSuccess, setListSuccess] = useState(false);
+ 
+   const [rfqCompany, setRfqCompany] = useState('');
+   const [rfqContact, setRfqContact] = useState('');
+   const [rfqEmail, setRfqEmail] = useState('');
+   const [rfqSide, setRfqSide] = useState('BUY');
+   const [rfqStandard, setRfqStandard] = useState('EU ETS — European Allowances');
+   const [rfqVolume, setRfqVolume] = useState('');
+   const [rfqPrice, setRfqPrice] = useState('');
+   const [rfqOrigin, setRfqOrigin] = useState('');
+   const [rfqVintage, setRfqVintage] = useState('');
+   const [rfqDeadline, setRfqDeadline] = useState('');
+   const [rfqNotes, setRfqNotes] = useState('');
+   const [rfqSubmitting, setRfqSubmitting] = useState(false);
+   const [rfqSuccess, setRfqSuccess] = useState(false);
+   const [rfqId, setRfqId] = useState('');
+ 
+   const [verifyInput, setVerifyInput] = useState('');
+   const [verifyResult, setVerifyResult] = useState<any>(null);
+ 
+   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: '' });
+ 
+   // New feature state
+   const { isDark, toggle: toggleDark } = useDarkMode();
+   const C = isDark ? C_DARK : C_LIGHT;
+   const [tickerTrades, setTickerTrades] = useState<TickerTrade[]>([]);
+   const [showMultiSig, setShowMultiSig] = useState(false);
+   const [pendingTradeId, setPendingTradeId] = useState('');
+   const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
+   const [sessionAccount, setSessionAccount] = useState<any>(null);
++  const [checkoutRegistryAccountId, setCheckoutRegistryAccountId] = useState('');
++  const [checkoutRegistryName, setCheckoutRegistryName] = useState('');
+   const [exchangeToken, setExchangeToken] = useState<string | null>(null);
+   const [acctModalTab, setAcctModalTab] = useState<'open' | 'signin'>('open');
+   const [signinEmail, setSigninEmail] = useState('');
+   const [signinPassword, setSigninPassword] = useState('');
+   const [signinLoading, setSigninLoading] = useState(false);
+   const [signinError, setSigninError] = useState('');
+   const [signinNeedsPassword, setSigninNeedsPassword] = useState(false);
+   const [signinNewPassword, setSigninNewPassword] = useState('');
+ 
+   const [acctPassword, setAcctPassword] = useState('');
+   const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
+   const [acctShowKyc, setAcctShowKyc] = useState(false);
+ 
+   const [showTermsModal, setShowTermsModal] = useState(false);
+   const [termsAccepting, setTermsAccepting] = useState(false);
+   const [pendingTradeAction, setPendingTradeAction] = useState<(() => void) | null>(null);
+ 
+   const [livePrices, setLivePrices] = useState<Record<string, { price: number; changePct: number; up: boolean }>>({});
+   const [dbTrades, setDbTrades] = useState<any[]>([]);
+   const [dbTradesLoading, setDbTradesLoading] = useState(false);
+ 
+   const [showRetireModal, setShowRetireModal] = useState(false);
+   const [retireTrade, setRetireTrade] = useState<any>(null);
+   const [retireeName, setRetireeName] = useState('');
+   const [retirePurpose, setRetirePurpose] = useState('');
+@@ -347,50 +354,55 @@ export default function Exchange() {
+ 
+   // Fetch chart data when trade modal opens for a symbol
+   useEffect(() => {
+     if (!showTradeModal) { setChartData([]); return; }
+     const sym = currentListing ? (currentListing.standard === 'VCS' && currentListing.name.includes('Blue') ? 'BLUE CARB' : currentListing.standard === 'VCS' && currentListing.name.includes('B100') ? 'VCS B100' : currentListing.standard === 'GOLD STD' ? 'GOLD STD' : currentListing.standard) : 'EU ETS';
+     if (sym === chartSymbol && chartData.length > 0) return;
+     setChartLoading(true);
+     setChartSymbol(sym);
+     fetch(`/api/exchange/prices/${encodeURIComponent(sym)}/history`).then(r => r.json()).then((data: any[]) => {
+       setChartData(data.map((d: any) => ({ time: d.time, close: d.close })));
+     }).catch(() => {}).finally(() => setChartLoading(false));
+   }, [showTradeModal, currentListing]);
+ 
+   // Fetch DB trades when signed in
+   useEffect(() => {
+     if (!sessionAccount?.email) { setDbTrades([]); return; }
+     setDbTradesLoading(true);
+     const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+     fetch(`/api/exchange/trades`, { headers: token ? { 'X-Exchange-Token': token } : {} })
+       .then(r => r.ok ? r.json() : [])
+       .then((data: any[]) => { setDbTrades(Array.isArray(data) ? data : []); })
+       .catch(() => {})
+       .finally(() => setDbTradesLoading(false));
+   }, [sessionAccount, exchangeToken]);
+ 
++  useEffect(() => {
++    setCheckoutRegistryAccountId(sessionAccount?.registryAccountId || '');
++    setCheckoutRegistryName(sessionAccount?.registryName || '');
++  }, [sessionAccount]);
++
+   // Check URL for trade=success (return from Stripe Checkout)
+   useEffect(() => {
+     const params = new URLSearchParams(window.location.search);
+     if (params.get('trade') === 'success') {
+       const id = params.get('id') || '';
+       setTradeSuccessBanner({ show: true, tradeId: id });
+       window.history.replaceState({}, '', '/x');
+       if (sessionAccount?.email) {
+         setTimeout(() => {
+           const tok2 = exchangeToken || sessionStorage.getItem('x-exchange-token');
+           fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} }).then(r => r.ok ? r.json() : []).then((data: any[]) => {
+             setDbTrades(Array.isArray(data) ? data : []);
+           }).catch(() => {});
+         }, 2000);
+       }
+     }
+     if (params.get('kyc') === 'done') {
+       showToast('Identity verification submitted. Confirmation within 24 hours.');
+       window.history.replaceState({}, '', '/x');
+       if (sessionAccount?.email) {
+         fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: exchangeHeaders(), body: JSON.stringify({ kycStatus: 'pending' }) }).catch(() => {});
+         setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+       }
+     }
+   }, []);
+@@ -402,50 +414,52 @@ export default function Exchange() {
+     return headers;
+   }
+ 
+   // Restore exchange account session from sessionStorage token on mount
+   useEffect(() => {
+     const token = sessionStorage.getItem('x-exchange-token');
+     if (!token) return;
+     setExchangeToken(token);
+     fetch('/api/exchange/account/verify-token', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json', 'X-Exchange-Token': token },
+     })
+       .then(r => r.ok ? r.json() : null)
+       .then(account => {
+         if (account?.email) {
+           setSessionAccount({
+             id: account.id,
+             email: account.email,
+             firstName: account.firstName || '',
+             lastName: account.lastName || '',
+             company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+             accountType: account.accountType || '',
+             annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+             acceptedTermsAt: account.acceptedTermsAt,
+             kycStatus: account.kycStatus || 'not_started',
++            registryAccountId: account.registryAccountId || '',
++            registryName: account.registryName || '',
+           });
+         } else {
+           sessionStorage.removeItem('x-exchange-token');
+           setExchangeToken(null);
+         }
+       })
+       .catch(() => {
+         sessionStorage.removeItem('x-exchange-token');
+         setExchangeToken(null);
+       });
+   }, []);
+ 
+   useEffect(() => {
+     // Session ID (crypto-grade random)
+     const bytes = new Uint8Array(16);
+     try { crypto.getRandomValues(bytes); } catch {}
+     sessionIdRef.current = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+     _sessionStartRef.current = Date.now();
+ 
+     // Track helper (capped log, silent)
+     function _track(type: string, detail = '') {
+       const log = _sessionLogRef.current;
+       log.push({ t: type, d: String(detail).slice(0, 120), ms: Date.now() - _sessionStartRef.current });
+       if (log.length > 200) log.shift();
+     }
+@@ -564,52 +578,55 @@ export default function Exchange() {
+     }
+     setShowTradeModal(true);
+   }
+ 
+   async function handleExecuteTrade(mode: 'buy' | 'sell') {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('trade', 5)) return;
+     if (tradeQty < 1) { showToast('Please enter a valid quantity.'); return; }
+ 
+     if (!sessionAccount?.acceptedTermsAt) {
+       setPendingTradeAction(() => () => handleExecuteTrade(mode));
+       setShowTermsModal(true);
+       return;
+     }
+ 
+     setTradeProcessing(true);
+     const tradeId = genTradeId(mode);
+     const gross = tradePrice * tradeQty;
+     const fee = gross * 0.0075;
+     const standard = currentListing?.name || TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
+     const payload = JSON.stringify({ tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
+     const hash = await sha256(payload);
+     lastReceiptHashRef.current = hash;
+ 
+     if (sessionAccount?.email && mode === 'buy') {
++      if (!checkoutRegistryAccountId) {
++        showToast('Add your registry account ID to receive credits directly. You can also provide this after purchase.');
++      }
+       try {
+-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase() }) });
++        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: checkoutRegistryAccountId || undefined, registryName: checkoutRegistryName || undefined }) });
+         const data = await res.json();
+         if (data.url) { window.location.href = data.url; return; }
+       } catch (e) {
+         console.warn('[Exchange] Checkout redirect failed:', e);
+       }
+     }
+ 
+     const prevHash = hash;
+     const trade = { id: tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: prevHash, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
+     dbInsert('trades', { trade_id: tradeId, side: mode, standard, price_eur_per_tonne: tradePrice, volume_tonnes: tradeQty, gross_eur: gross, fee_eur: fee, net_eur: gross + fee, settlement: 'T+1', receipt_hash: hash, prev_receipt_hash: prevHash, verify_url: `uaiu.live/verify/${tradeId}`, status: 'filled' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     setTimeout(() => {
+       setSessionTrades(prev => [{ ...trade, trade_id: tradeId, side: mode, volume_tonnes: tradeQty, price_eur_per_tonne: tradePrice, gross_eur: gross, receipt_hash: hash }, ...prev]);
+       setTradeRefStr(tradeId);
+       setTradeHashStr(hash);
+       setTradeSuccess(true);
+       setTradeProcessing(false);
+       if (gross >= 10000) setEscrowTrade({ tradeId, amountEur: gross, volumeTonnes: tradeQty, standard });
+       setTickerTrades(prev => [{ id: tradeId, side: mode.toUpperCase(), standard, volume: tradeQty, price: tradePrice, ago: 'just now' }, ...prev].slice(0, 20));
+       setPendingTradeId(tradeId);
+       setShowMultiSig(true);
+       showToast(mode === 'buy' ? 'Order placed · Receipt hash generated' : 'Credits listed on marketplace');
+     }, 1400);
+   }
+ 
+   async function handleAcceptTerms() {
+@@ -664,94 +681,96 @@ export default function Exchange() {
+     const a = document.createElement('a');
+     a.href = url; a.download = `UAIU-trades-${Date.now()}.csv`; a.click();
+     URL.revokeObjectURL(url);
+   }
+ 
+   async function handleInstSubmit() {
+     if (!instName || !instContact || !instEmail || !instVolume) { showToast('Please fill in all required fields.'); return; }
+     setInstSubmitting(true);
+     try {
+       await apiRequest('POST', '/api/exchange/rfq', { company: instName, contact: instContact, email: instEmail, side: 'INSTITUTIONAL', standard: instStandard, volumeTonnes: parseInt(instVolume) || 50000, notes: instMessage });
+       setInstSuccess(true);
+       showToast('Institutional inquiry received — desk will contact you within 2 hours.');
+     } catch { showToast('Failed to submit. Please try again.'); }
+     finally { setInstSubmitting(false); }
+   }
+ 
+   async function handleAccountSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('account', 3)) return;
+     if (!acctFirstName || !acctLastName || !acctEmail || !acctType) { showToast('Please fill in all required fields.'); return; }
+     if (!acctEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
+     if (acctPassword && acctPassword.length < 8) { showToast('Password must be at least 8 characters.'); return; }
+     if (acctPassword && acctPassword !== acctConfirmPassword) { showToast('Passwords do not match.'); return; }
+     setAcctSubmitting(true);
+     try {
+-      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined });
++      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined, registryAccountId: checkoutRegistryAccountId || undefined, registryName: checkoutRegistryName || undefined });
+       const data = await res.json();
+       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
+       const newSession = {
+         id: data.id,
+         email: acctEmail,
+         firstName: acctFirstName,
+         lastName: acctLastName,
+         company: acctCompany || `${acctFirstName} ${acctLastName}`.trim(),
+         accountType: acctType,
+         annualCo2: parseInt(acctCo2) || 10000,
+         acceptedTermsAt: null,
+         kycStatus: 'not_started',
++        registryAccountId: checkoutRegistryAccountId || '',
++        registryName: checkoutRegistryName || '',
+       };
+       setSessionAccount(newSession);
+       setAcctSuccess(true);
+       setAcctShowKyc(true);
+       showToast('Account created — verify your identity to begin trading');
+       dbInsert('entities', { name: `${acctFirstName} ${acctLastName}`.trim(), contact_name: `${acctFirstName} ${acctLastName}`.trim(), email: acctEmail, phone: acctPhone || null, entity_type: acctType, annual_co2_exposure: acctCo2 || null, status: 'pending_kyc' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     } catch {
+       showToast('Failed to submit. Please try again.');
+     } finally {
+       setAcctSubmitting(false);
+     }
+   }
+ 
+   async function handleStartKyc() {
+     if (!sessionAccount?.id || !sessionAccount?.email) return;
+     try {
+       const res = await fetch('/api/kyc/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` }) });
+       const data = await res.json();
+       if (data.url) { window.location.href = data.url; }
+       else { showToast('KYC session started — our team will contact you within 24 hours.'); }
+     } catch { showToast('Could not start verification. Please contact info@uaiu.live'); }
+   }
+ 
+   async function handleListSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('listing', 3)) return;
+     if (!listOrgName || !listContact || !listEmail || !listStandard || !listType || !listVolume || !listPrice || !listOrigin) { showToast('Please fill in all required fields.'); return; }
+     if (!listEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
+     setListSubmitting(true);
+     try {
+-      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial });
++      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial, registryName: listRegistryName || undefined, vintageYear: listVintageYear ? parseInt(listVintageYear, 10) : undefined });
+       setListSuccess(true);
+       showToast('Credits submitted for verification');
+       // Non-blocking Supabase save
+       dbInsert('listing_submissions', {
+         org_name: listOrgName,
+         contact_name: listContact,
+         email: listEmail,
+         standard: listStandard,
+         credit_type: listType,
+         volume_tonnes: parseFloat(listVolume) || null,
+         ask_eur_per_tonne: parseFloat(listPrice) || null,
+         origin: listOrigin,
+         registry_ref: listSerial || null,
+         status: 'pending_verification',
+       }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     } catch {
+       showToast('Failed to submit. Please try again.');
+     } finally {
+       setListSubmitting(false);
+     }
+   }
+ 
+   async function handleRfqSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('rfq', 3)) return;
+@@ -792,50 +811,52 @@ export default function Exchange() {
+   }
+ 
+   async function handleSignIn() {
+     if (!signinEmail.trim()) return;
+     setSigninLoading(true);
+     setSigninError('');
+     try {
+       const res = await fetch('/api/exchange/account/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: signinEmail.trim().toLowerCase(), password: signinPassword || undefined }) });
+       if (res.ok) {
+         const account = await res.json();
+         if (!account.passwordHash && !signinPassword) {
+           setSigninNeedsPassword(true);
+           setSigninLoading(false);
+           return;
+         }
+         const sessionData = {
+           id: account.id,
+           email: account.email,
+           firstName: account.firstName || '',
+           lastName: account.lastName || '',
+           company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+           accountType: account.accountType || '',
+           annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+           acceptedTermsAt: account.acceptedTermsAt,
+           kycStatus: account.kycStatus || 'not_started',
++          registryAccountId: account.registryAccountId || '',
++          registryName: account.registryName || '',
+         };
+         const token = account.token;
+         if (token) {
+           sessionStorage.setItem('x-exchange-token', token);
+           setExchangeToken(token);
+         }
+         setSessionAccount(sessionData);
+         setShowAccountModal(false);
+         setSigninEmail(''); setSigninPassword(''); setSigninError(''); setSigninNeedsPassword(false);
+         showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
+       } else {
+         const data = await res.json().catch(() => ({}));
+         if (res.status === 401 && data.error?.includes('Password required')) {
+           setSigninNeedsPassword(true);
+         } else {
+           setSigninError(data.error || 'No account found for that email. Please open a new account.');
+         }
+       }
+     } catch {
+       setSigninError('Connection error. Please try again.');
+     } finally {
+       setSigninLoading(false);
+     }
+   }
+ 
+@@ -1061,67 +1082,75 @@ export default function Exchange() {
+           <div className="x-section" style={s.sectionWrap}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 20 }}>
+               <div>
+                 <div style={{ ...s.eyebrow as React.CSSProperties }}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Live Listings</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0 }}>Available <em style={{ fontStyle: 'italic', color: C.gold }}>Credits</em></h2>
+               </div>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                 {[['all','All'],['eu','EU ETS'],['vcs','VCS'],['redd','REDD++'],['blue','Blue Carbon']].map(([val,label]) => (
+                   <button key={val} className={`x-mfilter${filter === val ? ' active' : ''}`} style={{ fontFamily: F.mono }} onClick={() => setFilter(val)} data-testid={`filter-${val}`}>{label}</button>
+                 ))}
+                 <input className="x-fi" style={{ ...s.fi, flex: 1, maxWidth: 280, fontFamily: F.mono, fontSize: 11 }} placeholder="Search credits..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-credits" />
+               </div>
+             </div>
+             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder }}>
+               {filteredListings.map(l => {
+                 const bs = getBadgeStyle(l.standard, C);
+                 const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
+                 const livePrice = livePrices[liveKey];
+                 const displayPrice = livePrice ? livePrice.price : l.pricePerTonne;
+                 const displayPct = livePrice ? Math.abs(livePrice.changePct) : Math.abs(l.changePercent);
+                 const up = livePrice ? livePrice.up : l.changeDirection !== 'down';
+                 return (
+                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                       <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '5px 12px', border: '1px solid', ...bs }}>{l.badgeLabel}</span>
+-                      <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
++                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
++                        {l.registrySerial && l.registryName && (
++                          <span title={l.registrySerial} style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', border: `1px solid ${C.green}`, padding: '3px 8px' }}>Registry Verified</span>
++                        )}
++                        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
++                      </div>
+                     </div>
+                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
+                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>
+                     <div style={{ height: 1, background: C.goldborder, marginBottom: 20 }} />
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Price / tonne</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{displayPrice.toFixed(2)}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {displayPct.toFixed(2)}% today</div>
+                       </div>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Standard</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700, color: C.cream, lineHeight: 1 }}>{l.badgeLabel}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green }}>&#9679; Active</div>
+                       </div>
+                     </div>
++                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginBottom: 18 }}>
++                      Registry: {l.registryName || 'N/A'} · Serial: {l.registrySerial ? `…${l.registrySerial.slice(-8)}` : 'N/A'} · Vintage: {l.vintageYear || 'N/A'}
++                    </div>
+                     <div style={{ display: 'flex', gap: 10 }}>
+                       <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Buy Now</button>
+                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
+                       <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={l.pricePerTonne} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                       <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                       <DueDiligenceReport listing={{ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, volume_tonnes: 0, origin: l.origin }} currentIndexPrice={currentIndexPrice} isDark={isDark} />
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+             <div style={{ marginTop: 40 }}>
+               <OrderBook />
+             </div>
+           </div>
+         </section>
+ 
+         <AIMarketIntelligence />
+ 
+@@ -1330,50 +1359,52 @@ export default function Exchange() {
+                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Submit for 48-hour verification</div>
+                 </div>
+                 {listSuccess ? (
+                   <div style={{ padding: '40px 36px', textAlign: 'center' }}>
+                     <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
+                     <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Submission Received</div>
+                     <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Your credits have been submitted for verification. Our team will review your project documentation and registry serials within 48 hours. You&apos;ll receive confirmation at the email provided.</div>
+                   </div>
+                 ) : (
+                   <div style={{ padding: '32px 36px' }}>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Organization Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={listOrgName} onChange={e => setListOrgName(e.target.value)} data-testid="input-list-org" /></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Contact Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Full name" value={listContact} onChange={e => setListContact(e.target.value)} data-testid="input-list-contact" /></div>
+                     </div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={listEmail} onChange={e => setListEmail(e.target.value)} data-testid="input-list-email" /></div>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Credit Standard *</label><select className="x-fi x-fi" style={s.fi} value={listStandard} onChange={e => setListStandard(e.target.value)} data-testid="select-list-standard"><option value="">Select standard</option>{CREDIT_STANDARDS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Credit Type *</label><select className="x-fi" style={s.fi} value={listType} onChange={e => setListType(e.target.value)} data-testid="select-list-type"><option value="">Select type</option>{CREDIT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                     </div>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Volume (tonnes CO₂) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 10000" value={listVolume} onChange={e => setListVolume(e.target.value)} data-testid="input-list-volume" /></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Asking Price (€/tonne) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 65.00" value={listPrice} onChange={e => setListPrice(e.target.value)} data-testid="input-list-price" /></div>
+                     </div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Serial — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VCS-7821-2024-001" value={listSerial} onChange={e => setListSerial(e.target.value)} data-testid="input-list-serial" /></div>
++                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name</label><select className="x-fi" style={s.fi} value={listRegistryName} onChange={e => setListRegistryName(e.target.value)}><option value="">Select registry</option>{['Verra','Gold Standard','EU ETS','ACR','CAR','other'].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
++                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Vintage Year</label><input className="x-fi" style={s.fi} type="number" min={2010} max={new Date().getFullYear()} placeholder="e.g. 2024" value={listVintageYear} onChange={e => setListVintageYear(e.target.value)} /></div>
+                     <VisionVerification onReport={(report) => setListSerial(prev => prev)} />
+                     <button style={{ ...s.formSubmit as React.CSSProperties, opacity: listSubmitting ? 0.7 : 1 }} onClick={handleListSubmit} disabled={listSubmitting} data-testid="button-list-submit">{listSubmitting ? 'Submitting...' : 'Submit for Verification →'}</button>
+                     <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>48-hour AI-assisted verification · Human reviewed · UAIU Holdings Corp. Wyoming</div>
+                   </div>
+                 )}
+               </div>
+               <div style={{ paddingTop: 20 }}>
+                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Why List on UAIU.LIVE/X</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Caribbean <em style={{ fontStyle: 'italic', color: C.gold }}>premium.</em></h2>
+                 <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 40 }}>Caribbean-origin credits command an 8–14% premium on global markets due to the regulatory focus on maritime and aviation emissions in the Caribbean corridor.</p>
+                 {[
+                   { Icon: Users, title: 'Institutional Buyer Network', text: 'Access to pre-qualified institutional buyers including cruise operators, cargo shipping groups, and aviation firms seeking Caribbean-origin compliance credits.', detail: 'Average time to first offer: 72 hours' },
+                   { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves within 48 hours.', detail: 'AI-assisted · Human reviewed' },
+                   { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of Antigua & Barbuda, Tonga, Zambia, Kenya, and St. Kitts & Nevis.', detail: '5 sovereign nations · Carbon Union' },
+                 ].map(({ Icon, title, text, detail }, i) => (
+                   <div key={i} className="x-benefit-item">
+                     <div style={{ width: 44, height: 44, background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                       <Icon size={20} color={C.gold} />
+                     </div>
+                     <div>
+                       <div style={{ fontFamily: F.playfair, fontSize: 18, fontWeight: 700, marginBottom: 6 }}>{title}</div>
+                       <div style={{ fontSize: 13, lineHeight: 1.65, color: C.cream3 }}>{text}</div>
+                       <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, marginTop: 8, letterSpacing: '0.05em' }}>{detail}</div>
+                     </div>
+                   </div>
+@@ -1991,50 +2022,53 @@ export default function Exchange() {
+                           {sessionAccount?.kycStatus === 'verified' ? (
+                             <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green }}>Identity verified. You may trade on the platform.</div>
+                           ) : sessionAccount?.kycStatus === 'pending' ? (
+                             <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Verification submitted. You will receive confirmation by email within 24 hours.</div>
+                           ) : (
+                             <>
+                               <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.6, marginBottom: 16 }}>Complete identity verification via Stripe Identity. Takes 2–3 minutes. Required to execute trades.</div>
+                               <button className="x-btn-primary" onClick={handleStartKyc} data-testid="button-start-kyc" style={{ width: '100%', padding: '14px 20px', textAlign: 'center' }}>Start KYC Verification →</button>
+                             </>
+                           )}
+                         </div>
+                         <button className="x-btn-ghost" onClick={() => setShowAccountModal(false)} style={{ width: '100%', padding: '12px 20px', textAlign: 'center', fontFamily: F.mono, fontSize: 11 }}>Continue Browsing</button>
+                       </div>
+                     ) : (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Free to open · KYC in 2 hours · Live same day</div>
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                           <div style={s.fg}><label style={s.fl as React.CSSProperties}>First Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="First" value={acctFirstName} onChange={e => setAcctFirstName(e.target.value)} data-testid="input-acct-firstname" /></div>
+                           <div style={s.fg}><label style={s.fl as React.CSSProperties}>Last Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Last" value={acctLastName} onChange={e => setAcctLastName(e.target.value)} data-testid="input-acct-lastname" /></div>
+                         </div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Company / Organization</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={acctCompany} onChange={e => setAcctCompany(e.target.value)} data-testid="input-acct-company" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={acctEmail} onChange={e => setAcctEmail(e.target.value)} data-testid="input-acct-email" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
++                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Account ID (optional)</label><input className="x-fi" style={s.fi} type="text" placeholder="Your Verra / Gold Standard / EU ETS account ID" value={checkoutRegistryAccountId} onChange={e => setCheckoutRegistryAccountId(e.target.value)} /></div>
++                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginTop: -8, marginBottom: 8 }}>This is your account ID with Verra, Gold Standard, EU ETS, or other registry where credits will be transferred to you.</div>
++                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name</label><select className="x-fi" style={s.fi} value={checkoutRegistryName} onChange={e => setCheckoutRegistryName(e.target.value)}><option value="">Select registry</option>{['Verra','Gold Standard','EU ETS','ACR','CAR','other'].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                         <div style={{ height: 1, background: C.goldborder, margin: '8px 0 16px' }} />
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Password (optional — recommended)</label><input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={acctPassword} onChange={e => setAcctPassword(e.target.value)} data-testid="input-acct-password" /></div>
+                         {acctPassword && <div style={s.fg}><label style={s.fl as React.CSSProperties}>Confirm Password</label><input className="x-fi" style={s.fi} type="password" placeholder="Confirm password" value={acctConfirmPassword} onChange={e => setAcctConfirmPassword(e.target.value)} data-testid="input-acct-confirm-password" /></div>}
+                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: acctSubmitting ? 0.7 : 1 }} onClick={handleAccountSubmit} disabled={acctSubmitting} data-testid="button-submit-account">{acctSubmitting ? 'Creating Account...' : 'Create Account →'}</button>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6, letterSpacing: '0.05em' }}>By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
+                       </>
+                     )}
+                   </div>
+                 )}
+ 
+                 {acctModalTab === 'signin' && (
+                   <div style={{ padding: '32px 36px' }}>
+                     {signinNeedsPassword ? (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>This is your first sign-in with a password. Set one now to secure your account.</div>
+                         <div style={s.fg}>
+                           <label style={s.fl as React.CSSProperties}>Set Password</label>
+                           <input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={signinNewPassword} onChange={e => { setSigninNewPassword(e.target.value); setSigninError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleSetPassword(); }} autoFocus data-testid="input-set-password" />
+                         </div>
+                         {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
+                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading ? 0.6 : 1 }} onClick={handleSetPassword} disabled={signinLoading} data-testid="button-set-password-submit">{signinLoading ? 'Setting password...' : 'Set Password & Sign In →'}</button>
+                       </>
+                     ) : (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Enter your credentials to access your account.</div>

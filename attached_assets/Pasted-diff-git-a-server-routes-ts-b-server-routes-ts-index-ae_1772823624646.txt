@@ -1,0 +1,808 @@
+diff --git a/server/routes.ts b/server/routes.ts
+index aecd765c100af3e932f9149221e26de48ed7842f..994e4db2ea4d11854c38181e75e557f0167566d8 100644
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@ -1,77 +1,90 @@
+ import type { Express } from "express";
+ import express from "express";
+-import { createHash } from "crypto";
++import { createHash, randomBytes, timingSafeEqual } from "crypto";
+ import rateLimit from "express-rate-limit";
+ import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
+ import { logSecurityEvent } from "./security-utils";
+ import { createServer, type Server } from "http";
+ import { Server as SocketIOServer, Socket } from "socket.io";
+ import { storage } from "./storage";
+ import bcrypt from "bcrypt";
+ import { sql, eq, desc } from "drizzle-orm";
+ import type { GameState } from "@shared/schema";
+ import { liveMatchSessions } from "@shared/schema";
+ import { db } from "./db";
+ import { sendPayoutNotification } from "./email-config";
+ import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
+ import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
+-import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
++import { exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
+ import multer from "multer";
+ import path from "path";
+ import { registerOpsRoutes } from "./ops-routes";
+ import { registerAutonomousMarketplaceRoutes } from "./autonomous-marketplace";
+ import fs from "fs";
+ import PDFDocument from "pdfkit";
+ import { createSession, getSession, requireAuth } from "./session-middleware";
+ import { initStripe } from "./stripe-init";
+ import { WebhookHandlers } from "./webhookHandlers";
+ import { gameManager, type GameType } from "./game-manager";
+ import { nanoid } from "nanoid";
+ import { startCronJobs } from "./cron";
+ import { generateTradePDF } from "./pdf-generator";
+ import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+ import { getLivePrices, getPriceHistory } from "./exchange-prices";
+ 
+ function estimateNextStripePayoutDate(from = new Date()): string {
+   const next = new Date(from);
+   next.setDate(next.getDate() + 2);
+   return next.toISOString().split('T')[0];
+ }
+ 
+ async function sendSellerDestinationPayoutEmail(params: {
+   sellerEmail: string;
+   tradeId: string;
+   payoutAmountEur: number;
+   chargeId?: string | null;
+ }): Promise<void> {
+   if (!params.sellerEmail || !isZohoConfigured()) return;
+   const expectedPayoutDate = estimateNextStripePayoutDate();
+   const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Seller Payout Confirmed</h2><p>Your payout has been routed by Stripe.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Payout Amount:</strong> €${params.payoutAmountEur.toFixed(2)}</li><li><strong>Expected Stripe Payout Date:</strong> ${expectedPayoutDate}</li><li><strong>Charge:</strong> ${params.chargeId || 'n/a'}</li></ul><p>Funds were sent using Stripe Connect destination charges. No funds passed through UAIU's account.</p></div>`;
+   await sendZohoEmail(params.sellerEmail, `UAIU Seller Payout Confirmed — ${params.tradeId}`, html);
+ }
+ 
++const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
++
++function createRetirementUploadToken(): { token: string; tokenHash: string } {
++  const token = randomBytes(24).toString('hex');
++  const tokenHash = createHash('sha256').update(token).digest('hex');
++  return { token, tokenHash };
++}
++
++function secureTokenMatch(rawToken: string, tokenHash: string): boolean {
++  const inputHash = createHash('sha256').update(rawToken).digest('hex');
++  return timingSafeEqual(Buffer.from(inputHash), Buffer.from(tokenHash));
++}
++
+ // Legacy Pong code removed - all games now use GameManager
+ 
+ // Legacy Pong functions removed - all game logic now in GameManager
+ 
+ let stripeReady = false;
+ let stripeReadyAt: string | null = null;
+ 
+ export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+   const exchangeSigninLimiter = rateLimit({
+     windowMs: 15 * 60 * 1000,
+     max: 5,
+     standardHeaders: true,
+     legacyHeaders: false,
+     message: { error: "Too many signin attempts. Please try again later." },
+   });
+ 
+   const exchangeAccountCreateLimiter = rateLimit({
+     windowMs: 60 * 60 * 1000,
+     max: 3,
+     standardHeaders: true,
+     legacyHeaders: false,
+     message: { error: "Too many account creation attempts. Please try again later." },
+   });
+ 
+   const exchangeCheckoutLimiter = rateLimit({
+@@ -286,50 +299,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+                 const tradeId     = meta.trade_id || cs.id;
+                 const standard    = meta.standard || 'Carbon Credit';
+                 const volumeT     = parseFloat(meta.volume_tonnes || '0');
+                 const pricePerT   = parseFloat(meta.price_per_tonne || '0');
+                 const side        = meta.side || 'BUY';
+                 const email       = meta.email || cs.customer_email || '';
+                 const grossEur    = Number(meta.gross_eur || ((cs.amount_total || 0) / 100));
+                 const feeEur      = Number(meta.fee_eur || (grossEur * 0.0075));
+                 const paymentModel = String(meta.payment_model || 'platform_collect');
+                 const settled_at  = new Date().toISOString();
+                 const receiptData = `${tradeId}:${cs.id}:${grossEur}:${settled_at}`;
+                 const receiptHash = createHash('sha256').update(receiptData).digest('hex');
+ 
+                 // Store trade record in DB
+                 storage.createExchangeTrade({
+                   accountEmail:    email,
+                   tradeId,
+                   side,
+                   standard,
+                   volumeTonnes:    volumeT,
+                   pricePerTonne:   pricePerT,
+                   grossEur,
+                   feeEur,
+                   receiptHash,
+                   stripeSessionId: cs.id,
++                  buyerRegistryAccountId: meta.buyer_registry_account_id || null,
++                  buyerRegistryName: meta.buyer_registry_name || null,
++                  sellerRegistryName: meta.seller_registry_name || null,
++                  sellerRegistrySerial: meta.seller_registry_serial || null,
++                  vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
+                   status:          'completed',
+                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
+ 
+                 // Look up seller email and destination transfer if this was a destination charge
+                 let sellerEmail = '';
+                 let destinationTransferId = '';
+                 if (meta.seller_profile_id) {
+                   const sellerProfileLookup = await db.execute(sql`
+                     SELECT exchange_account_email
+                     FROM seller_profiles
+                     WHERE id = ${meta.seller_profile_id}
+                     LIMIT 1
+                   `).catch(() => ({ rows: [] } as any));
+                   sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
+                 }
+                 if (paymentModel === 'destination_charge' && cs.payment_intent) {
+                   try {
+                     const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
+                     const latestCharge: any = pi.latest_charge as any;
+                     destinationTransferId = typeof latestCharge?.transfer === 'string'
+                       ? latestCharge.transfer
+                       : latestCharge?.transfer?.id || '';
+                   } catch (err: any) {
+                     console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                   }
+@@ -364,50 +382,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+                 // Send seller payout email for destination charges
+                 if (paymentModel === 'destination_charge' && sellerEmail) {
+                   sendSellerDestinationPayoutEmail({
+                     sellerEmail,
+                     tradeId,
+                     payoutAmountEur: grossEur - feeEur,
+                     chargeId: String(cs.payment_intent || ''),
+                   }).catch((e: any) => console.error('[Seller payout email]', e.message));
+                 }
+ 
+                 // Generate and email PDF receipt
+                 generateTradePDF({
+                   trade_id:            tradeId,
+                   side,
+                   standard,
+                   volume_tonnes:       volumeT,
+                   price_eur_per_tonne: pricePerT,
+                   gross_eur:           grossEur,
+                   fee_eur:             feeEur,
+                   receipt_hash:        receiptHash,
+                   prev_receipt_hash:   '',
+                   payment_intent_id:   cs.payment_intent || '',
+                   stripe_charge_id:    '',
+                   settled_at,
+                   buyer_email:         email,
++                  buyer_registry_account_id: meta.buyer_registry_account_id || '',
++                  buyer_registry_name: meta.buyer_registry_name || '',
++                  seller_registry_name: meta.seller_registry_name || '',
++                  seller_registry_serial: meta.seller_registry_serial || '',
++                  vintage_year: meta.vintage_year ? Number(meta.vintage_year) : undefined,
+                 }).then(pdfBuffer => {
+                   const recipients = ['info@uaiu.live'];
+                   if (email && email !== 'info@uaiu.live') recipients.push(email);
+                   const attachment = [{ filename: `UAIU-Trade-${tradeId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
+                   const emailHtml = `<div style="font-family:Arial;background:#0d1220;color:#e8dcc8;padding:28px;border:1px solid #d4a843"><h2 style="color:#d4a843;font-family:Georgia">UAIU.LIVE/X — Trade Confirmed</h2><p>Your trade <strong>${tradeId}</strong> has been executed successfully.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;color:#9b9b7a">Standard:</td><td style="padding:8px;color:#e8dcc8"><strong>${standard}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Volume:</td><td style="padding:8px;color:#e8dcc8"><strong>${volumeT.toLocaleString()} tCO₂e</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Gross:</td><td style="padding:8px;color:#d4a843"><strong>€${grossEur.toLocaleString()}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Settlement:</td><td style="padding:8px;color:#e8dcc8">T+1 (next business day)</td></tr></table><p style="font-size:12px;color:#9b9b7a">Receipt Hash: ${receiptHash.slice(0, 32)}...</p><p style="font-size:12px;color:#9b9b7a">UAIU Exchange · info@uaiu.live</p></div>`;
+                   return sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
+                 }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
+ 
+                 console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: €${grossEur}`);
+               }
+ 
+               // Stripe Connect - account.updated (onboarding complete / requirements changed)
+               if (event.type === 'account.updated') {
+                 const acct = event.data.object as any;
+                 const accountId = acct.id;
+                 const detailsSubmitted = !!acct.details_submitted;
+                 const payoutsEnabled = !!acct.payouts_enabled;
+                 if (accountId) {
+                   await db.execute(sql`
+                     UPDATE seller_profiles
+                     SET connect_onboarding_complete = ${detailsSubmitted && payoutsEnabled},
+                         connect_details_submitted = ${detailsSubmitted},
+                         updated_at = NOW()
+                     WHERE stripe_connect_account_id = ${accountId}
+                   `).catch((e: any) => console.error('[Connect account.updated]', e.message));
+@@ -1548,147 +1571,194 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+       const { email, password } = req.body;
+       if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+       if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+       const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
+       if (!account) return res.status(404).json({ error: 'Account not found.' });
+       const hash = await bcrypt.hash(password, 12);
+       await storage.updateExchangeAccountPassword(email.trim().toLowerCase(), hash);
+       res.json({ success: true });
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // ── EXCHANGE: Accept terms ────────────────────────────────────────────────
+   app.patch('/api/exchange/account/accept-terms', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const account = await storage.updateExchangeAccountTerms(email);
+       await logSecurityEvent({ email, eventType: 'terms_accepted', req });
+       res.json(account);
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
++  app.patch('/api/exchange/account/registry', requireExchangeAuth, async (req, res) => {
++    try {
++      const email = (req as any).exchangeEmail;
++      const { registryAccountId, registryName } = req.body;
++      await db.execute(sql`
++        UPDATE exchange_accounts
++        SET registry_account_id = ${registryAccountId ? String(registryAccountId).trim() : null},
++            registry_name = ${registryName ? String(registryName).trim() : null}
++        WHERE email = ${email}
++      `);
++      const updated = await storage.getExchangeAccountByEmail(email);
++      res.json(updated || { success: true });
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
+   // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
+   app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+-      const { standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
++      const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName } = req.body;
+       if (!standard || !volumeTonnes || !tradeId) {
+         return res.status(400).json({ error: 'Missing required fields' });
+       }
+       const account = await storage.getExchangeAccountByEmail(email);
+       if (!account || account.kycStatus !== 'verified') {
+         return res.status(403).json({ error: 'KYC verification required before trading.' });
+       }
+       const listings = await storage.getExchangeListingsByStandard(String(standard));
+       const activeListing = listings[0];
+       if (!activeListing) {
+         return res.status(400).json({ error: 'No active listing found for that standard.' });
+       }
+       const serverPrice = Number(activeListing.pricePerTonne);
+       const submittedPrice = Number(pricePerTonne || 0);
+       if (submittedPrice > 0) {
+         const delta = Math.abs(serverPrice - submittedPrice) / serverPrice;
+         if (delta > 0.05) {
+           await logSecurityEvent({ email, eventType: 'suspicious_price', req, detail: { standard, submittedPrice, serverPrice, delta } });
+         }
+       }
+       const stripeInit = await initStripe();
+       if (!stripeInit?.stripeSync) return res.status(503).json({ error: 'Payment processor unavailable.' });
+       const stripe = stripeInit.stripeSync;
+       const gross = serverPrice * parseFloat(volumeTonnes);
+       const fee = gross * 0.0075;
+       const grossCents = Math.round(gross * 100);
+       const applicationFeeAmount = Math.round(fee * 100);
+       const connectAccountId: string | null = (activeListing as any).stripe_connect_account_id || null;
+       const connectReady: boolean = (activeListing as any).connect_onboarding_complete === true;
+       const paymentModel = connectAccountId && connectReady ? 'destination_charge' : 'platform_collect';
+       const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
++      const buyerRegistryAccountId = registryAccountId || account.registryAccountId || '';
++      const buyerRegistryName = registryName || account.registryName || '';
++      if (registryAccountId || registryName) {
++        await db.execute(sql`
++          UPDATE exchange_accounts
++          SET registry_account_id = ${buyerRegistryAccountId || null},
++              registry_name = ${buyerRegistryName || null}
++          WHERE email = ${email}
++        `);
++      }
+       const session = await stripe.checkout.sessions.create({
+         payment_method_types: ['card'],
+         mode: 'payment',
+         line_items: [{
+           price_data: {
+             currency: 'eur',
+             product_data: {
+               name: `${standard} Carbon Credits — ${volumeTonnes} tonnes`,
+               description: `${side || 'BUY'} order · Trade ID: ${tradeId}`,
+             },
+             unit_amount: grossCents,
+           },
+           quantity: 1,
+         }],
+         metadata: {
+           trade_id: tradeId,
+           standard,
+           volume_tonnes: String(volumeTonnes),
+           email,
+           side: side || 'BUY',
+           price_per_tonne: String(serverPrice),
+           gross_eur: gross.toFixed(2),
+           fee_eur: fee.toFixed(2),
++          buyer_registry_account_id: String(buyerRegistryAccountId || ''),
++          buyer_registry_name: String(buyerRegistryName || ''),
++          seller_registry_serial: String((activeListing as any).registry_serial || (activeListing as any).registrySerial || ''),
++          seller_registry_name: String((activeListing as any).registry_name || (activeListing as any).registryName || ''),
++          vintage_year: String((activeListing as any).vintage_year || (activeListing as any).vintageYear || ''),
+           seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+           seller_connect_account_id: String(connectAccountId || ''),
+           payment_model: paymentModel,
+         },
+         payment_intent_data: paymentModel === 'destination_charge' ? {
+           application_fee_amount: applicationFeeAmount,
+           transfer_data: { destination: connectAccountId as string },
+           metadata: {
+             trade_id: tradeId,
+             payment_model: paymentModel,
+             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+             seller_connect_account_id: String(connectAccountId || ''),
+           },
+         } : {
+           metadata: {
+             trade_id: tradeId,
+             payment_model: paymentModel,
+             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+           },
+         },
+         success_url: `${origin}/x?trade=success&id=${tradeId}`,
+         cancel_url: `${origin}/x`,
+         customer_email: email,
+       });
+       await logSecurityEvent({ email, eventType: 'trade_executed', req, detail: { tradeId, standard, volumeTonnes, serverPrice } });
+       res.json({ url: session.url });
+     } catch (e: any) {
+       console.error('[Spot Checkout]', e.message);
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // ── EXCHANGE: Fetch trade history ─────────────────────────────────────────
+   app.get('/api/exchange/trades', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const trades = await storage.getExchangeTradesByEmail(email);
+-      res.json(trades);
++      const enriched = await Promise.all(trades.map(async (t) => {
++        const [cert] = await db.select().from(tradeRetirementCertificates)
++          .where(eq(tradeRetirementCertificates.tradeId, t.tradeId))
++          .orderBy(desc(tradeRetirementCertificates.createdAt))
++          .limit(1);
++        const overdue = !cert && (Date.now() - new Date(t.createdAt).getTime()) > (48 * 60 * 60 * 1000);
++        return {
++          ...t,
++          retirement_status: cert
++            ? `Retirement Confirmed — ${new Date(cert.uploadedAt || cert.createdAt).toISOString()}`
++            : overdue
++              ? 'Retirement Pending — Overdue'
++              : 'Retirement Pending — Due within 48 hours of settlement.',
++        };
++      }));
++      res.json(enriched);
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // Trade recording is handled exclusively by the Stripe webhook handler.
+   // The public /api/exchange/trade/record endpoint has been removed for security.
+ 
+   // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
+   app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const { tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+       if (!tradeId || !volumeTonnes || !standard || !retireeName) {
+         return res.status(400).json({ error: 'Missing required fields' });
+       }
+       const account = await storage.getExchangeAccountByEmail(email);
+       if (!account || account.kycStatus !== 'verified') {
+         return res.status(403).json({ error: 'KYC verification required before trading.' });
+       }
+       const trade = await storage.getExchangeTradeByTradeId(tradeId);
+       if (!trade || trade.accountEmail !== email) {
+         return res.status(403).json({ error: 'You do not own this trade.' });
+       }
+       if (trade.status !== 'completed') {
+@@ -1757,50 +1827,52 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+       const { kycStatus } = req.body;
+       if (!kycStatus) return res.status(400).json({ error: 'kycStatus required' });
+       await storage.updateExchangeAccountKyc(email, kycStatus);
+       await logSecurityEvent({ email, eventType: kycStatus === 'verified' ? 'kyc_verified' : 'kyc_started', req, detail: { kycStatus } });
+       res.json({ success: true });
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   app.post('/api/exchange/account', requireAuth, exchangeAccountCreateLimiter, async (req, res) => {
+     try {
+       const body = req.body;
+       if (!body.email) {
+         return res.status(400).json({ message: 'Email is required' });
+       }
+       const accountData: any = { email: body.email };
+       if (body.orgName) accountData.orgName = body.orgName;
+       if (body.contactName) accountData.contactName = body.contactName;
+       if (body.role) accountData.role = body.role;
+       if (body.firstName) accountData.firstName = body.firstName;
+       if (body.lastName) accountData.lastName = body.lastName;
+       if (body.phone) accountData.phone = body.phone;
+       if (body.accountType) accountData.accountType = body.accountType;
+       if (body.annualCo2Exposure) accountData.annualCo2Exposure = body.annualCo2Exposure;
++      if (body.registryAccountId) accountData.registryAccountId = String(body.registryAccountId);
++      if (body.registryName) accountData.registryName = String(body.registryName);
+       if (body.password) {
+         accountData.passwordHash = await bcrypt.hash(body.password, 12);
+       }
+       const account = await storage.createExchangeAccount(accountData);
+       sendExchangeEmail('Open Account Request', {
+         'Name': body.firstName ? `${body.firstName} ${body.lastName || ''}`.trim() : (body.contactName || 'N/A'),
+         'Organization': body.orgName || body.company || 'N/A',
+         'Email': body.email,
+         'Phone': body.phone || 'N/A',
+         'Account Type': body.accountType || body.role || 'N/A',
+         'Annual CO₂ Exposure': body.annualCo2Exposure || 'N/A',
+       }).catch(err => console.error('Exchange email error:', err));
+       res.json({ success: true, id: account.id });
+     } catch (error) {
+       console.error('Exchange account error:', error);
+       res.status(500).json({ message: 'Failed to submit account request' });
+     }
+   });
+ 
+   app.post('/api/exchange/rfq', requireAuth, async (req, res) => {
+     try {
+       const body = req.body;
+       if (!body.company || !body.contact || !body.email || !body.side || !body.standard || !body.volumeTonnes) {
+         return res.status(400).json({ message: 'Missing required fields: company, contact, email, side, standard, volumeTonnes' });
+       }
+@@ -1842,93 +1914,109 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+     }
+   });
+ 
+   app.post('/api/exchange/list-credits', requireAuth, async (req, res) => {
+     try {
+       const parsed = insertExchangeCreditListingSchema.safeParse(req.body);
+       if (!parsed.success) {
+         return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
+       }
+ 
+       // Save as 'pending' — admin must approve before appearing on marketplace
+       const listing = await storage.createExchangeCreditListing(parsed.data);
+       const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
+       const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
+ 
+       sendExchangeEmail('New Credit Listing — Pending Review', {
+         'Organization':      parsed.data.orgName,
+         'Contact':           parsed.data.contactName,
+         'Email':             parsed.data.email,
+         'Standard':          parsed.data.standard,
+         'Credit Type':       parsed.data.creditType,
+         'Volume (Tonnes)':   String(volumeNum),
+         'Asking Price EUR/t': String(priceNum),
+         'Project Origin':    parsed.data.projectOrigin,
+         'Registry Serial':   parsed.data.registrySerial || 'Not provided',
++        'Registry Name':     parsed.data.registryName || 'Not provided',
++        'Vintage Year':      parsed.data.vintageYear?.toString() || 'Not provided',
+         'Status':            'PENDING REVIEW — Go to /admin to approve or reject',
+         'Submission ID':     listing.id,
+       }).catch(err => console.error('Exchange email error:', err));
+ 
+       res.json({
+         success:   true,
+         id:        listing.id,
+         published: false,
+         message:   'Your listing is under review. You will be notified once approved.',
+       });
+     } catch (error) {
+       console.error('Exchange list credits error:', error);
+       res.status(500).json({ message: 'Failed to submit credit listing' });
+     }
+   });
+ 
+   // ── PARTNER API — Swiss X REDD UK Limited live inventory push ─────────────
+   // POST /api/partner/listings
+   // Authenticated by PARTNER_API_KEY secret. Alki's team calls this to push
+   // live credit inventory directly into the marketplace in real time.
+   app.post('/api/partner/listings', async (req, res) => {
+     try {
+       const { api_key, listings } = req.body;
+       const validKey = process.env.PARTNER_API_KEY;
+       if (!validKey) return res.status(500).json({ error: 'PARTNER_API_KEY not configured in Replit Secrets' });
+       if (!api_key || api_key !== validKey) return res.status(401).json({ error: 'Invalid API key' });
+       if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
+       if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
+ 
+       const inserted: string[] = [];
+       const errors: string[]   = [];
+ 
+       for (const item of listings) {
+         try {
+           if (!item.name || !item.standard || !item.pricePerTonne) {
+             errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
+             continue;
+           }
++          if (!item.registry_serial || !String(item.registry_serial).trim()) {
++            return res.status(400).json({ error: 'Validation failed: registry_serial is required for each listing.' });
++          }
++          if (!item.registry_name || !ALLOWED_REGISTRY_NAMES.includes(item.registry_name)) {
++            return res.status(400).json({ error: `Validation failed: registry_name must be one of ${ALLOWED_REGISTRY_NAMES.join(', ')}.` });
++          }
++          const vintageYear = Number(item.vintage_year);
++          const currentYear = new Date().getFullYear();
++          if (!Number.isInteger(vintageYear) || vintageYear < 2010 || vintageYear > currentYear) {
++            return res.status(400).json({ error: `Validation failed: vintage_year must be an integer between 2010 and ${currentYear}.` });
++          }
+           await storage.seedExchangeListings([{
+             standard:          item.standard,
+             badgeLabel:        item.badgeLabel || item.standard,
+             name:              item.name,
+             origin:            item.origin || 'Caribbean Basin',
++            registrySerial:    String(item.registry_serial),
++            registryName:      String(item.registry_name),
++            vintageYear,
+             pricePerTonne:     parseFloat(item.pricePerTonne),
+             changePercent:     parseFloat(item.changePercent) || 0,
+             changeDirection:   item.changeDirection || 'up',
+             status:            'active',
+             isAcceptingOrders: true,
+           }]);
+           inserted.push(item.name);
+         } catch (itemErr: any) {
+           errors.push(`Failed: ${item.name} — ${itemErr.message}`);
+         }
+       }
+ 
+       sendExchangeEmail('Partner Inventory Push — Marketplace Updated', {
+         'Partner':          'Swiss X REDD UK Limited',
+         'Listings Pushed':  String(inserted.length),
+         'Errors':           errors.length > 0 ? errors.join('; ') : 'None',
+         'Timestamp':        new Date().toISOString(),
+       }).catch((e: any) => console.error('[Partner Email]', e.message));
+ 
+       res.json({
+         success:  true,
+         inserted: inserted.length,
+         listings: inserted,
+         errors:   errors.length > 0 ? errors : undefined,
+         message:  `${inserted.length} listing(s) are now live on marketplace.`,
+@@ -3103,50 +3191,160 @@ Respond with a JSON object (no markdown) with these exact fields:
+   "confidence": number (0-100)
+ }`;
+ 
+       const { default: Anthropic } = await import('@anthropic-ai/sdk');
+       const client = new Anthropic({ apiKey });
+       const msg = await client.messages.create({
+         model: 'claude-sonnet-4-5',
+         max_tokens: 512,
+         messages: [{ role: 'user', content: prompt }],
+       });
+ 
+       const text = (msg.content[0] as any).text?.trim() || '{}';
+       let recommendation: any;
+       try {
+         recommendation = JSON.parse(text);
+       } catch {
+         recommendation = { action: 'ACCEPT', counter_price: (market?.indexPrice || 67.43) * 0.97, counter_volume: rfq.volume_tonnes, rationale: text, risk_assessment: 'LOW', settlement_days: 5, confidence: 75 };
+       }
+       res.json({ recommendation });
+     } catch (err: any) {
+       console.error('Negotiate error:', err?.message);
+       res.status(500).json({ error: 'Negotiation engine error' });
+     }
+   });
+ 
++  const retirementUpload = multer({
++    storage: multer.memoryStorage(),
++    limits: { fileSize: 15 * 1024 * 1024 },
++  });
++
++  async function sendRetirementUploadRequest(params: {
++    tradeId: string;
++    volumeTonnes?: number;
++    standard?: string;
++    sellerEmail: string;
++    uploadedBy?: string;
++    pdfBuffer?: Buffer;
++  }): Promise<void> {
++    if (!params.sellerEmail || !isZohoConfigured()) return;
++    const { token, tokenHash } = createRetirementUploadToken();
++    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
++    await db.insert(retirementUploadTokens).values({
++      tradeId: params.tradeId,
++      tokenHash,
++      sellerEmail: params.sellerEmail,
++      expiresAt,
++    });
++    const uploadLink = `https://uaiu.live/retire/${params.tradeId}?token=${token}`;
++    const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Retirement Certificate Upload Required</h2><p>Trade ${params.tradeId} has settled successfully.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Volume:</strong> ${params.volumeTonnes || 0} tonnes</li><li><strong>Standard:</strong> ${params.standard || 'N/A'}</li></ul><p>Please upload the registry retirement certificate within 48 hours:</p><p><a href="${uploadLink}" style="color:#d4a843">${uploadLink}</a></p></div>`;
++    const attachments = params.pdfBuffer ? [{ filename: `UAIU-Trade-${params.tradeId}.pdf`, content: params.pdfBuffer, contentType: 'application/pdf' as const }] : undefined;
++    await sendZohoEmail(params.sellerEmail, `Action Required: Upload retirement certificate for ${params.tradeId}`, html, attachments);
++  }
++
++  setInterval(async () => {
++    try {
++      if (!isZohoConfigured()) return;
++      const rows = await db.execute(sql`
++        SELECT id, trade_id, seller_email
++        FROM retirement_upload_tokens
++        WHERE used_at IS NULL
++          AND created_at <= NOW() - INTERVAL '24 hours'
++          AND created_at > NOW() - INTERVAL '25 hours'
++      `);
++      for (const row of (rows as any).rows || []) {
++        if (!row.seller_email) continue;
++        await sendZohoEmail(
++          row.seller_email,
++          `Reminder: retirement certificate due for ${row.trade_id}`,
++          `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">24-hour Reminder</h2><p>Trade ${row.trade_id} still requires a retirement certificate upload.</p></div>`
++        );
++      }
++    } catch (e: any) {
++      console.error('[Retirement reminder]', e.message);
++    }
++  }, 60 * 60 * 1000);
++
++  app.post('/api/retire/:trade_id', retirementUpload.single('file'), async (req, res) => {
++    try {
++      const tradeId = req.params.trade_id;
++      const token = String(req.body?.token || req.query?.token || '');
++      const file = req.file;
++      if (!token) return res.status(400).json({ error: 'token is required' });
++      if (!file) return res.status(400).json({ error: 'file is required' });
++      if (!['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)) {
++        return res.status(400).json({ error: 'Only PDF or image uploads are allowed.' });
++      }
++
++      const [tokenRow] = await db.select().from(retirementUploadTokens)
++        .where(eq(retirementUploadTokens.tradeId, tradeId))
++        .orderBy(desc(retirementUploadTokens.createdAt))
++        .limit(1);
++      if (!tokenRow || tokenRow.usedAt || new Date(tokenRow.expiresAt) < new Date() || !secureTokenMatch(token, tokenRow.tokenHash)) {
++        return res.status(401).json({ error: 'Invalid or expired token.' });
++      }
++
++      const sb = req.app.locals.supabase as any;
++      if (!sb) return res.status(500).json({ error: 'Supabase not configured.' });
++      const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
++      const storagePath = `retirement-certificates/${tradeId}/${safeName}`;
++      const { error: uploadError } = await sb.storage.from('retirement-certificates').upload(storagePath, file.buffer, {
++        contentType: file.mimetype,
++        upsert: false,
++      });
++      if (uploadError) return res.status(500).json({ error: `Upload failed: ${uploadError.message}` });
++
++      await db.insert(tradeRetirementCertificates).values({
++        tradeId,
++        uploadUrl: storagePath,
++        uploadedAt: new Date(),
++        uploadedBy: tokenRow.sellerEmail || null,
++        certificateFilename: file.originalname,
++        supabaseStoragePath: storagePath,
++      });
++      await db.update(retirementUploadTokens).set({ usedAt: new Date() }).where(eq(retirementUploadTokens.id, tokenRow.id));
++
++      res.status(200).send(`<html><body style="font-family:Arial;background:#060810;color:#f2ead8;padding:32px"><h2 style="color:#d4a843">Retirement certificate uploaded</h2><p>Trade ${tradeId} is now marked as retirement confirmed.</p></body></html>`);
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
++  app.get('/api/retire/:trade_id/status', async (req, res) => {
++    try {
++      const tradeId = req.params.trade_id;
++      const [cert] = await db.select().from(tradeRetirementCertificates)
++        .where(eq(tradeRetirementCertificates.tradeId, tradeId))
++        .orderBy(desc(tradeRetirementCertificates.createdAt))
++        .limit(1);
++      if (!cert) return res.json({ uploaded: false, status: 'Retirement Pending — Due within 48 hours of settlement.' });
++      return res.json({ uploaded: true, uploadedAt: cert.uploadedAt, filename: cert.certificateFilename, status: `Retirement Confirmed — ${cert.uploadedAt?.toISOString?.() || cert.uploadedAt}` });
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
+   // ─── Wave 3: Stripe Escrow Routes ────────────────────────────────
+ 
+   app.post('/api/escrow/create', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
+       if (!trade_id || !amount_eur || amount_eur < 100) {
+         return res.status(400).json({ error: 'Invalid escrow parameters' });
+       }
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+ 
+       let escrowSellerProfileId = '';
+       let escrowConnectAccountId: string = seller_connect_account_id || '';
+       let escrowPaymentModel: 'destination_charge' | 'platform_collect' = 'platform_collect';
+       if (listing_id) {
+         const listingLookup = await db.execute(sql`
+           SELECT el.seller_profile_id, sp.stripe_connect_account_id, sp.connect_onboarding_complete
+           FROM exchange_listings el
+           LEFT JOIN seller_profiles sp ON sp.id = el.seller_profile_id
+           WHERE el.id = ${listing_id}
+           LIMIT 1
+         `).catch(() => ({ rows: [] } as any));
+@@ -3199,50 +3397,77 @@ Respond with a JSON object (no markdown) with these exact fields:
+   });
+ 
+   app.post('/api/escrow/release', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { payment_intent_id, trade_id } = req.body;
+       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+       const captured = await stripe.paymentIntents.capture(payment_intent_id);
+       const gross = captured.amount / 100;
+       const uaiu_fee = gross * 0.0075;
+       const seller_net = gross - uaiu_fee;
+       const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
+       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
+       if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
+         const escrowSellerLookup = await db.execute(sql`
+           SELECT exchange_account_email FROM seller_profiles
+           WHERE id = ${(captured.metadata as any).seller_profile_id} LIMIT 1
+         `).catch(() => ({ rows: [] } as any));
+         const escrowSellerEmail = (escrowSellerLookup as any).rows?.[0]?.exchange_account_email || '';
+         if (escrowSellerEmail) {
+           sendSellerDestinationPayoutEmail({ sellerEmail: escrowSellerEmail, tradeId: trade_id, payoutAmountEur: seller_net, chargeId: String(captured.latest_charge || '') }).catch(() => {});
++          const tradePdf = await generateTradePDF({
++            trade_id,
++            side: 'BUY',
++            standard: String((captured.metadata as any)?.standard || ''),
++            volume_tonnes: Number((captured.metadata as any)?.volume_tonnes || 0),
++            price_eur_per_tonne: Number((gross / Math.max(Number((captured.metadata as any)?.volume_tonnes || 1), 1)).toFixed(2)),
++            gross_eur: gross,
++            fee_eur: uaiu_fee,
++            receipt_hash: String(captured.id || ''),
++            prev_receipt_hash: '',
++            payment_intent_id: captured.id,
++            stripe_charge_id: String(captured.latest_charge || ''),
++            settled_at: new Date().toISOString(),
++            buyer_email: String((captured.metadata as any)?.buyer_email || ''),
++            seller_registry_name: String((captured.metadata as any)?.seller_registry_name || ''),
++            seller_registry_serial: String((captured.metadata as any)?.seller_registry_serial || ''),
++            buyer_registry_account_id: String((captured.metadata as any)?.buyer_registry_account_id || ''),
++            buyer_registry_name: String((captured.metadata as any)?.buyer_registry_name || ''),
++            retirement_status: 'Retirement Pending — Due within 48 hours of settlement.',
++          });
++          await sendRetirementUploadRequest({
++            tradeId: trade_id,
++            volumeTonnes: Number((captured.metadata as any)?.volume_tonnes || 0),
++            standard: String((captured.metadata as any)?.standard || ''),
++            sellerEmail: escrowSellerEmail,
++            pdfBuffer: tradePdf,
++          });
+         }
+       }
+       try {
+         const { sendExchangeEmail } = await import('./email-service');
+         await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Settlement Model': escrowPaymentModel, 'Stripe Charge': captured.latest_charge as string });
+       } catch (emailError) { console.error('Settlement email error:', emailError); }
+       res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, payment_model: escrowPaymentModel, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
+     } catch (e: any) {
+       console.error('Escrow release error:', e);
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   app.post('/api/escrow/cancel', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { payment_intent_id, trade_id, reason } = req.body;
+       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+       await stripe.paymentIntents.cancel(payment_intent_id, { cancellation_reason: 'abandoned' });
+       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: reason || 'trade_cancelled' }).eq('payment_intent_id', payment_intent_id);
+       res.json({ success: true, status: 'cancelled', message: 'Escrow cancelled. Funds will be released back to buyer within 5-10 business days.' });

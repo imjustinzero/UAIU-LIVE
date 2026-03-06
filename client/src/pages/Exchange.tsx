@@ -163,6 +163,9 @@ interface Listing {
   changeDirection: string;
   status: string;
   isAcceptingOrders: boolean;
+  registrySerial?: string;
+  registryName?: string;
+  vintageYear?: number;
 }
 
 function getBadgeStyle(standard: string, C: typeof C_DARK) {
@@ -231,6 +234,8 @@ export default function Exchange() {
   const [listPrice, setListPrice] = useState('');
   const [listOrigin, setListOrigin] = useState('');
   const [listSerial, setListSerial] = useState('');
+  const [listRegistryName, setListRegistryName] = useState('');
+  const [listVintageYear, setListVintageYear] = useState('');
   const [listSubmitting, setListSubmitting] = useState(false);
   const [listSuccess, setListSuccess] = useState(false);
 
@@ -274,6 +279,8 @@ export default function Exchange() {
   const [acctPassword, setAcctPassword] = useState('');
   const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
   const [acctShowKyc, setAcctShowKyc] = useState(false);
+  const [acctRegistryAccountId, setAcctRegistryAccountId] = useState('');
+  const [acctRegistryName, setAcctRegistryName] = useState('');
 
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAccepting, setTermsAccepting] = useState(false);
@@ -587,7 +594,7 @@ export default function Exchange() {
 
     if (sessionAccount?.email && mode === 'buy') {
       try {
-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase() }) });
+        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: (sessionAccount as any)?.registryAccountId || '', registryName: (sessionAccount as any)?.registryName || '' }) });
         const data = await res.json();
         if (data.url) { window.location.href = data.url; return; }
       } catch (e) {
@@ -686,7 +693,7 @@ export default function Exchange() {
     if (acctPassword && acctPassword !== acctConfirmPassword) { showToast('Passwords do not match.'); return; }
     setAcctSubmitting(true);
     try {
-      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined });
+      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined, registryAccountId: acctRegistryAccountId || undefined, registryName: acctRegistryName || undefined });
       const data = await res.json();
       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
       const newSession = {
@@ -729,7 +736,7 @@ export default function Exchange() {
     if (!listEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
     setListSubmitting(true);
     try {
-      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial });
+      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial, registryName: listRegistryName || undefined, vintageYear: listVintageYear ? Number(listVintageYear) : undefined });
       setListSuccess(true);
       showToast('Credits submitted for verification');
       // Non-blocking Supabase save
@@ -1352,6 +1359,8 @@ export default function Exchange() {
                     </div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Serial — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VCS-7821-2024-001" value={listSerial} onChange={e => setListSerial(e.target.value)} data-testid="input-list-serial" /></div>
+                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name — optional</label><select className="x-fi" style={s.fi} value={listRegistryName} onChange={e => setListRegistryName(e.target.value)} data-testid="select-list-registry-name"><option value="">Select registry…</option><option value="Verra">Verra (VCS)</option><option value="Gold Standard">Gold Standard</option><option value="EU ETS">EU ETS</option><option value="ACR">American Carbon Registry (ACR)</option><option value="CAR">Climate Action Reserve (CAR)</option><option value="other">Other</option></select></div>
+                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Vintage Year — optional</label><input className="x-fi" style={s.fi} type="number" placeholder={`e.g. ${new Date().getFullYear() - 1}`} value={listVintageYear} onChange={e => setListVintageYear(e.target.value)} min="2010" max={new Date().getFullYear()} data-testid="input-list-vintage-year" /></div>
                     <VisionVerification onReport={(report) => setListSerial(prev => prev)} />
                     <button style={{ ...s.formSubmit as React.CSSProperties, opacity: listSubmitting ? 0.7 : 1 }} onClick={handleListSubmit} disabled={listSubmitting} data-testid="button-list-submit">{listSubmitting ? 'Submitting...' : 'Submit for Verification →'}</button>
                     <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>48-hour AI-assisted verification · Human reviewed · UAIU Holdings Corp. Wyoming</div>
@@ -2015,6 +2024,8 @@ export default function Exchange() {
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Account ID — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VA-00012345" value={acctRegistryAccountId} onChange={e => setAcctRegistryAccountId(e.target.value)} data-testid="input-acct-registry-account-id" /></div>
+                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name — optional</label><select className="x-fi" style={s.fi} value={acctRegistryName} onChange={e => setAcctRegistryName(e.target.value)} data-testid="select-acct-registry-name"><option value="">Select registry…</option><option value="Verra">Verra (VCS)</option><option value="Gold Standard">Gold Standard</option><option value="EU ETS">EU ETS</option><option value="ACR">American Carbon Registry (ACR)</option><option value="CAR">Climate Action Reserve (CAR)</option><option value="other">Other</option></select></div>
                         <div style={{ height: 1, background: C.goldborder, margin: '8px 0 16px' }} />
                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Password (optional — recommended)</label><input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={acctPassword} onChange={e => setAcctPassword(e.target.value)} data-testid="input-acct-password" /></div>
                         {acctPassword && <div style={s.fg}><label style={s.fl as React.CSSProperties}>Confirm Password</label><input className="x-fi" style={s.fi} type="password" placeholder="Confirm password" value={acctConfirmPassword} onChange={e => setAcctConfirmPassword(e.target.value)} data-testid="input-acct-confirm-password" /></div>}

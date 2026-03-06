@@ -1,0 +1,2091 @@
+diff --git a/client/src/components/exchange/InstitutionalFeatures.tsx b/client/src/components/exchange/InstitutionalFeatures.tsx
+index 95ccd7170b512d0172f0bd49f47dc2f46a27f47e..536c35ddb923b60c3f8da33c4910befc35c0b276 100644
+--- a/client/src/components/exchange/InstitutionalFeatures.tsx
++++ b/client/src/components/exchange/InstitutionalFeatures.tsx
+@@ -1,39 +1,39 @@
+ import { useState } from "react";
+ 
+ const C = {
+   ink: '#060810', ink2: '#0d1220', ink3: '#141e30',
+   gold: '#d4a843', gold2: '#f0c96a', goldfaint: 'rgba(212,168,67,0.12)',
+   goldborder: 'rgba(212,168,67,0.22)', cream: '#f2ead8',
+   cream2: 'rgba(242,234,216,0.7)', cream3: 'rgba(242,234,216,0.35)',
+   cream4: 'rgba(242,234,216,0.1)', green: '#22c55e', red: '#ef4444',
+ };
+ const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif", playfair: "'Playfair Display', serif" };
+ const fi: React.CSSProperties = { width: '100%', background: C.ink2, border: `1px solid ${C.goldborder}`, color: C.cream, padding: '13px 16px', fontFamily: F.mono, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
+ const fl: React.CSSProperties = { fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3, display: 'block', marginBottom: 8 };
+ 
+-interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; }
++interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; retirement_status?: string; }
+ interface Retirement { cert_id?: string; trade_id?: string; tonnes_retired?: number; beneficiary?: string; receipt_hash?: string; }
+ 
+ interface PortfolioProps {
+   trades?: Trade[];
+   retirements?: Retirement[];
+   accountName?: string;
+   annualTarget?: number;
+ }
+ 
+ export function PortfolioDashboard({ trades = [], retirements = [], accountName = 'Your Account', annualTarget = 10000 }: PortfolioProps) {
+   const [activeTab, setActiveTab] = useState<'overview' | 'trades' | 'retirements'>('overview');
+ 
+   const totalTonnes = trades.reduce((s, t) => s + (t.volume_tonnes || 0), 0);
+   const totalSpend = trades.reduce((s, t) => s + (t.gross_eur || 0), 0);
+   const totalRetired = retirements.reduce((s, r) => s + (r.tonnes_retired || 0), 0);
+   const compliancePct = annualTarget > 0 ? Math.min(100, (totalRetired / annualTarget) * 100) : 0;
+   const complianceColor = compliancePct >= 100 ? C.green : compliancePct >= 60 ? '#f59e0b' : C.red;
+ 
+   function downloadPDF() {
+     generatePDFReport({ accountName, trades, retirements, annualTarget });
+   }
+ 
+   return (
+     <section id="dashboard" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '100px 52px' }}>
+@@ -69,67 +69,71 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+             <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>EU ETS Compliance Status</div>
+             <div style={{ fontFamily: F.mono, fontSize: 10, color: complianceColor }}>{compliancePct.toFixed(0)}% — {totalRetired.toLocaleString()} / {annualTarget.toLocaleString()} t retired</div>
+           </div>
+           <div style={{ height: 8, background: C.ink3, position: 'relative' }}>
+             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${compliancePct}%`, background: complianceColor, transition: 'width 1s ease' }} />
+           </div>
+           <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 10 }}>
+             {compliancePct >= 100 ? '✓ Fully compliant for reporting period' : `${(annualTarget - totalRetired).toLocaleString()} tonnes remaining to meet annual target`}
+           </div>
+         </div>
+ 
+         <div style={{ display: 'flex', gap: 0, marginBottom: 24 }}>
+           {(['overview','trades','retirements'] as const).map(tab => (
+             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '12px 24px', fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', border: `1px solid ${C.goldborder}`, cursor: 'pointer', background: activeTab === tab ? C.goldfaint : 'transparent', color: activeTab === tab ? C.gold : C.cream3, borderBottom: activeTab === tab ? `2px solid ${C.gold}` : `1px solid ${C.goldborder}` }}>
+               {tab}
+             </button>
+           ))}
+         </div>
+ 
+         {activeTab === 'trades' && (
+           <div>
+             {trades.length === 0 ? (
+               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, padding: '40px 0', textAlign: 'center' }}>No trades yet. Execute a trade to see your history here.</div>
+             ) : trades.map((t, i) => (
+-              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
++              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Trade ID</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 11, color: t.side === 'buy' ? C.green : C.red }}>{t.trade_id}</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Volume</div>
+                   <div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>{(t.volume_tonnes || 0).toLocaleString()} t</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Gross</div>
+                   <div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>€{(t.gross_eur || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Receipt</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.gold }}>{(t.receipt_hash || '').slice(0, 20)}...</div>
+                 </div>
++                <div>
++                  <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Retirement Status</div>
++                  <div style={{ fontFamily: F.mono, fontSize: 9, color: (t.retirement_status || '').includes('Confirmed') ? C.green : C.red }}>{t.retirement_status || 'Pending / Overdue'}</div>
++                </div>
+               </div>
+             ))}
+           </div>
+         )}
+ 
+         {activeTab === 'retirements' && (
+           <div>
+             {retirements.length === 0 ? (
+               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, padding: '40px 0', textAlign: 'center' }}>No retirements yet.</div>
+             ) : retirements.map((r, i) => (
+               <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Cert ID</div><div style={{ fontFamily: F.mono, fontSize: 11, color: C.gold }}>{r.cert_id}</div></div>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Tonnes Retired</div><div style={{ fontFamily: F.syne, fontSize: 13, color: C.green }}>{(r.tonnes_retired || 0).toLocaleString()} t</div></div>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Beneficiary</div><div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>{r.beneficiary}</div></div>
+               </div>
+             ))}
+           </div>
+         )}
+ 
+         {activeTab === 'overview' && (
+           <div style={{ padding: '20px 0' }}>
+             {trades.length === 0 && retirements.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 24px', border: `1px solid ${C.goldborder}` }}>
+                 <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.cream2, marginBottom: 12 }}>No trades yet</div>
+                 <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, lineHeight: 1.7 }}>Execute a trade in the marketplace to begin building your carbon portfolio.<br />Your position, spend, and compliance status will appear here.</div>
+diff --git a/client/src/pages/Admin.tsx b/client/src/pages/Admin.tsx
+index 663e9c17666ae52d2c8fc9fcec9dcb5fdbe83b9e..363b5bc56bf357cb7948deb655c9f6f6180adcc5 100644
+--- a/client/src/pages/Admin.tsx
++++ b/client/src/pages/Admin.tsx
+@@ -285,50 +285,52 @@ export default function Admin() {
+             </div>
+             
+             {loading ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+             ) : pendingListings.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No listings pending review.</div>
+             ) : (
+               pendingListings.map(l => (
+                 <div key={l.id} data-testid={`card-listing-${l.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+                   <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', borderBottom: `1px solid ${C.border}` }}>
+                     <div>
+                       <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.syne }}>{l.orgName || l.org_name}</div>
+                       <div style={{ fontSize: '12px', color: C.muted }}>{l.creditType || l.credit_type} • {l.standard}</div>
+                     </div>
+                     <div style={{ display: 'flex', gap: '8px' }}>
+                       <button data-testid={`button-approve-${l.id}`} onClick={() => approveListing(l.id)} style={{ background: C.green, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Approve</button>
+                       <button data-testid={`button-reject-${l.id}`} onClick={() => { setRejectId(l.id); setShowRejectModal(true); }} style={{ background: C.red, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Reject</button>
+                     </div>
+                   </div>
+                   <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Email</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.email}</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Origin</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.projectOrigin || l.project_origin}</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Volume</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.annualVolume || l.annual_volume} t/yr</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Price</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>€{l.askingPricePerTonne || l.asking_price_per_tonne}/t</span></div>
+                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Serial</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registrySerial || l.registry_serial}</span></div>
++                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Registry</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registryName || l.registry_name || '—'}</span></div>
++                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Vintage Year</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.vintageYear || l.vintage_year || '—'}</span></div>
+                   </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+ 
+         {/* Panel 2: Webhooks */}
+         {activeTab === 'webhooks' && (
+           <div style={{ animation: 'fadeIn .3s ease' }}>
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+               <div>
+                 <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Webhook Dead-Letter Queue</h2>
+                 <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Unhandled webhook exceptions. Retry re-attempts Stripe capture.</p>
+               </div>
+               <button data-testid="button-refresh-webhooks" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+             </div>
+ 
+             {loading ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+             ) : webhookFailures.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No webhook failures recorded.</div>
+             ) : (
+               webhookFailures.map(f => (
+                 <div key={f.id} data-testid={`card-webhook-${f.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' }}>
+@@ -406,26 +408,25 @@ export default function Admin() {
+               <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>
+                 Daily automated backups with SHA-256 integrity verification. S3-compatible off-site storage.
+                 See <code style={{ color: C.gold, fontSize: '11px' }}>docs/BACKUP_ROLLBACK_RUNBOOK.md</code> for the full DR policy, restore procedure, and test checklist.
+               </p>
+             </div>
+             <BackupAdmin adminKey={adminKey} />
+           </div>
+         )}
+ 
+       <section style={{ padding: '0 24px 40px', maxWidth: 1400, margin: '0 auto' }}>
+         <IncidentBanner status={platformStatus.status} message={platformStatus.message} />
+         <EnterpriseOpsDashboard adminKey={adminKey} />
+         <LaunchChecklist />
+       </section>
+ 
+       </main>
+ 
+       <style>{`
+         @keyframes spin { to { transform: rotate(360deg); } }
+         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+       `}</style>
+     </div>
+   );
+ }
+ 
+-
+diff --git a/client/src/pages/Exchange.tsx b/client/src/pages/Exchange.tsx
+index 584dc2874ff945d0098f712497ae0c655f927f66..ec3f506f0688c692a9514c2028cea02df1769632 100644
+--- a/client/src/pages/Exchange.tsx
++++ b/client/src/pages/Exchange.tsx
+@@ -141,50 +141,53 @@ const CREDIT_STANDARDS = [
+   'Other',
+ ];
+ 
+ const CREDIT_TYPES = [
+   'Biofuel Production (B100 / SAF)',
+   'REDD++ Forest Conservation',
+   'Blue Carbon / Seagrass',
+   'Coral Restoration',
+   'Agricultural Waste → Biogas',
+   'Renewable Energy (Solar / Wind)',
+   'Human Waste Biodigester',
+   'Other',
+ ];
+ 
+ interface Listing {
+   id: string;
+   standard: string;
+   badgeLabel: string;
+   name: string;
+   origin: string;
+   pricePerTonne: number;
+   changePercent: number;
+   changeDirection: string;
+   status: string;
+   isAcceptingOrders: boolean;
++  registrySerial?: string;
++  registryName?: string;
++  vintageYear?: number;
+ }
+ 
+ function getBadgeStyle(standard: string, C: typeof C_DARK) {
+   if (standard === 'EU ETS' || standard === 'CORSIA') return { color: '#a855f7', borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)' };
+   if (standard === 'VCS' || standard === 'GOLD STD') return { color: C.green, borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)' };
+   return { color: C.gold, borderColor: C.goldborder, background: C.goldfaint };
+ }
+ 
+ async function sha256(message: string): Promise<string> {
+   try {
+     const msgBuffer = new TextEncoder().encode(message);
+     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+     const hashArray = Array.from(new Uint8Array(hashBuffer));
+     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+   } catch {
+     return Math.random().toString(36).repeat(4).slice(0, 64);
+   }
+ }
+ 
+ function genTradeId(mode: string): string {
+   return `UAIU-${mode.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+ }
+ 
+ export default function Exchange() {
+   const cursorRef = useRef<HTMLDivElement>(null);
+@@ -209,81 +212,85 @@ export default function Exchange() {
+   const [tradeRefStr, setTradeRefStr] = useState('');
+   const [tradeHashStr, setTradeHashStr] = useState('');
+   const [sessionTrades, setSessionTrades] = useState<any[]>([]);
+ 
+   const [showAccountModal, setShowAccountModal] = useState(false);
+   const [acctFirstName, setAcctFirstName] = useState('');
+   const [acctLastName, setAcctLastName] = useState('');
+   const [acctCompany, setAcctCompany] = useState('');
+   const [acctEmail, setAcctEmail] = useState('');
+   const [acctPhone, setAcctPhone] = useState('');
+   const [acctType, setAcctType] = useState('');
+   const [acctCo2, setAcctCo2] = useState('');
+   const [acctSubmitting, setAcctSubmitting] = useState(false);
+   const [acctSuccess, setAcctSuccess] = useState(false);
+   const [acctId, setAcctId] = useState('');
+ 
+   const [listOrgName, setListOrgName] = useState('');
+   const [listContact, setListContact] = useState('');
+   const [listEmail, setListEmail] = useState('');
+   const [listStandard, setListStandard] = useState('');
+   const [listType, setListType] = useState('');
+   const [listVolume, setListVolume] = useState('');
+   const [listPrice, setListPrice] = useState('');
+   const [listOrigin, setListOrigin] = useState('');
+   const [listSerial, setListSerial] = useState('');
++  const [listRegistryName, setListRegistryName] = useState('');
++  const [listVintageYear, setListVintageYear] = useState('');
+   const [listSubmitting, setListSubmitting] = useState(false);
+   const [listSuccess, setListSuccess] = useState(false);
+ 
+   const [rfqCompany, setRfqCompany] = useState('');
+   const [rfqContact, setRfqContact] = useState('');
+   const [rfqEmail, setRfqEmail] = useState('');
+   const [rfqSide, setRfqSide] = useState('BUY');
+   const [rfqStandard, setRfqStandard] = useState('EU ETS — European Allowances');
+   const [rfqVolume, setRfqVolume] = useState('');
+   const [rfqPrice, setRfqPrice] = useState('');
+   const [rfqOrigin, setRfqOrigin] = useState('');
+   const [rfqVintage, setRfqVintage] = useState('');
+   const [rfqDeadline, setRfqDeadline] = useState('');
+   const [rfqNotes, setRfqNotes] = useState('');
+   const [rfqSubmitting, setRfqSubmitting] = useState(false);
+   const [rfqSuccess, setRfqSuccess] = useState(false);
+   const [rfqId, setRfqId] = useState('');
+ 
+   const [verifyInput, setVerifyInput] = useState('');
+   const [verifyResult, setVerifyResult] = useState<any>(null);
+ 
+   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: '' });
+ 
+   // New feature state
+   const { isDark, toggle: toggleDark } = useDarkMode();
+   const C = isDark ? C_DARK : C_LIGHT;
+   const [tickerTrades, setTickerTrades] = useState<TickerTrade[]>([]);
+   const [showMultiSig, setShowMultiSig] = useState(false);
+   const [pendingTradeId, setPendingTradeId] = useState('');
+   const [sessionRetirements, setSessionRetirements] = useState<any[]>([]);
+   const [sessionAccount, setSessionAccount] = useState<any>(null);
++  const [checkoutRegistryAccountId, setCheckoutRegistryAccountId] = useState('');
++  const [checkoutRegistryName, setCheckoutRegistryName] = useState('');
+   const [exchangeToken, setExchangeToken] = useState<string | null>(null);
+   const [acctModalTab, setAcctModalTab] = useState<'open' | 'signin'>('open');
+   const [signinEmail, setSigninEmail] = useState('');
+   const [signinPassword, setSigninPassword] = useState('');
+   const [signinLoading, setSigninLoading] = useState(false);
+   const [signinError, setSigninError] = useState('');
+   const [signinNeedsPassword, setSigninNeedsPassword] = useState(false);
+   const [signinNewPassword, setSigninNewPassword] = useState('');
+ 
+   const [acctPassword, setAcctPassword] = useState('');
+   const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
+   const [acctShowKyc, setAcctShowKyc] = useState(false);
+ 
+   const [showTermsModal, setShowTermsModal] = useState(false);
+   const [termsAccepting, setTermsAccepting] = useState(false);
+   const [pendingTradeAction, setPendingTradeAction] = useState<(() => void) | null>(null);
+ 
+   const [livePrices, setLivePrices] = useState<Record<string, { price: number; changePct: number; up: boolean }>>({});
+   const [dbTrades, setDbTrades] = useState<any[]>([]);
+   const [dbTradesLoading, setDbTradesLoading] = useState(false);
+ 
+   const [showRetireModal, setShowRetireModal] = useState(false);
+   const [retireTrade, setRetireTrade] = useState<any>(null);
+   const [retireeName, setRetireeName] = useState('');
+   const [retirePurpose, setRetirePurpose] = useState('');
+@@ -347,50 +354,55 @@ export default function Exchange() {
+ 
+   // Fetch chart data when trade modal opens for a symbol
+   useEffect(() => {
+     if (!showTradeModal) { setChartData([]); return; }
+     const sym = currentListing ? (currentListing.standard === 'VCS' && currentListing.name.includes('Blue') ? 'BLUE CARB' : currentListing.standard === 'VCS' && currentListing.name.includes('B100') ? 'VCS B100' : currentListing.standard === 'GOLD STD' ? 'GOLD STD' : currentListing.standard) : 'EU ETS';
+     if (sym === chartSymbol && chartData.length > 0) return;
+     setChartLoading(true);
+     setChartSymbol(sym);
+     fetch(`/api/exchange/prices/${encodeURIComponent(sym)}/history`).then(r => r.json()).then((data: any[]) => {
+       setChartData(data.map((d: any) => ({ time: d.time, close: d.close })));
+     }).catch(() => {}).finally(() => setChartLoading(false));
+   }, [showTradeModal, currentListing]);
+ 
+   // Fetch DB trades when signed in
+   useEffect(() => {
+     if (!sessionAccount?.email) { setDbTrades([]); return; }
+     setDbTradesLoading(true);
+     const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+     fetch(`/api/exchange/trades`, { headers: token ? { 'X-Exchange-Token': token } : {} })
+       .then(r => r.ok ? r.json() : [])
+       .then((data: any[]) => { setDbTrades(Array.isArray(data) ? data : []); })
+       .catch(() => {})
+       .finally(() => setDbTradesLoading(false));
+   }, [sessionAccount, exchangeToken]);
+ 
++  useEffect(() => {
++    setCheckoutRegistryAccountId(sessionAccount?.registryAccountId || '');
++    setCheckoutRegistryName(sessionAccount?.registryName || '');
++  }, [sessionAccount]);
++
+   // Check URL for trade=success (return from Stripe Checkout)
+   useEffect(() => {
+     const params = new URLSearchParams(window.location.search);
+     if (params.get('trade') === 'success') {
+       const id = params.get('id') || '';
+       setTradeSuccessBanner({ show: true, tradeId: id });
+       window.history.replaceState({}, '', '/x');
+       if (sessionAccount?.email) {
+         setTimeout(() => {
+           const tok2 = exchangeToken || sessionStorage.getItem('x-exchange-token');
+           fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} }).then(r => r.ok ? r.json() : []).then((data: any[]) => {
+             setDbTrades(Array.isArray(data) ? data : []);
+           }).catch(() => {});
+         }, 2000);
+       }
+     }
+     if (params.get('kyc') === 'done') {
+       showToast('Identity verification submitted. Confirmation within 24 hours.');
+       window.history.replaceState({}, '', '/x');
+       if (sessionAccount?.email) {
+         fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: exchangeHeaders(), body: JSON.stringify({ kycStatus: 'pending' }) }).catch(() => {});
+         setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+       }
+     }
+   }, []);
+@@ -402,50 +414,52 @@ export default function Exchange() {
+     return headers;
+   }
+ 
+   // Restore exchange account session from sessionStorage token on mount
+   useEffect(() => {
+     const token = sessionStorage.getItem('x-exchange-token');
+     if (!token) return;
+     setExchangeToken(token);
+     fetch('/api/exchange/account/verify-token', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json', 'X-Exchange-Token': token },
+     })
+       .then(r => r.ok ? r.json() : null)
+       .then(account => {
+         if (account?.email) {
+           setSessionAccount({
+             id: account.id,
+             email: account.email,
+             firstName: account.firstName || '',
+             lastName: account.lastName || '',
+             company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+             accountType: account.accountType || '',
+             annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+             acceptedTermsAt: account.acceptedTermsAt,
+             kycStatus: account.kycStatus || 'not_started',
++            registryAccountId: account.registryAccountId || '',
++            registryName: account.registryName || '',
+           });
+         } else {
+           sessionStorage.removeItem('x-exchange-token');
+           setExchangeToken(null);
+         }
+       })
+       .catch(() => {
+         sessionStorage.removeItem('x-exchange-token');
+         setExchangeToken(null);
+       });
+   }, []);
+ 
+   useEffect(() => {
+     // Session ID (crypto-grade random)
+     const bytes = new Uint8Array(16);
+     try { crypto.getRandomValues(bytes); } catch {}
+     sessionIdRef.current = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+     _sessionStartRef.current = Date.now();
+ 
+     // Track helper (capped log, silent)
+     function _track(type: string, detail = '') {
+       const log = _sessionLogRef.current;
+       log.push({ t: type, d: String(detail).slice(0, 120), ms: Date.now() - _sessionStartRef.current });
+       if (log.length > 200) log.shift();
+     }
+@@ -564,52 +578,55 @@ export default function Exchange() {
+     }
+     setShowTradeModal(true);
+   }
+ 
+   async function handleExecuteTrade(mode: 'buy' | 'sell') {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('trade', 5)) return;
+     if (tradeQty < 1) { showToast('Please enter a valid quantity.'); return; }
+ 
+     if (!sessionAccount?.acceptedTermsAt) {
+       setPendingTradeAction(() => () => handleExecuteTrade(mode));
+       setShowTermsModal(true);
+       return;
+     }
+ 
+     setTradeProcessing(true);
+     const tradeId = genTradeId(mode);
+     const gross = tradePrice * tradeQty;
+     const fee = gross * 0.0075;
+     const standard = currentListing?.name || TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
+     const payload = JSON.stringify({ tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
+     const hash = await sha256(payload);
+     lastReceiptHashRef.current = hash;
+ 
+     if (sessionAccount?.email && mode === 'buy') {
++      if (!checkoutRegistryAccountId) {
++        showToast('Add your registry account ID to receive credits directly. You can also provide this after purchase.');
++      }
+       try {
+-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase() }) });
++        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: checkoutRegistryAccountId || undefined, registryName: checkoutRegistryName || undefined }) });
+         const data = await res.json();
+         if (data.url) { window.location.href = data.url; return; }
+       } catch (e) {
+         console.warn('[Exchange] Checkout redirect failed:', e);
+       }
+     }
+ 
+     const prevHash = hash;
+     const trade = { id: tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: prevHash, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
+     dbInsert('trades', { trade_id: tradeId, side: mode, standard, price_eur_per_tonne: tradePrice, volume_tonnes: tradeQty, gross_eur: gross, fee_eur: fee, net_eur: gross + fee, settlement: 'T+1', receipt_hash: hash, prev_receipt_hash: prevHash, verify_url: `uaiu.live/verify/${tradeId}`, status: 'filled' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     setTimeout(() => {
+       setSessionTrades(prev => [{ ...trade, trade_id: tradeId, side: mode, volume_tonnes: tradeQty, price_eur_per_tonne: tradePrice, gross_eur: gross, receipt_hash: hash }, ...prev]);
+       setTradeRefStr(tradeId);
+       setTradeHashStr(hash);
+       setTradeSuccess(true);
+       setTradeProcessing(false);
+       if (gross >= 10000) setEscrowTrade({ tradeId, amountEur: gross, volumeTonnes: tradeQty, standard });
+       setTickerTrades(prev => [{ id: tradeId, side: mode.toUpperCase(), standard, volume: tradeQty, price: tradePrice, ago: 'just now' }, ...prev].slice(0, 20));
+       setPendingTradeId(tradeId);
+       setShowMultiSig(true);
+       showToast(mode === 'buy' ? 'Order placed · Receipt hash generated' : 'Credits listed on marketplace');
+     }, 1400);
+   }
+ 
+   async function handleAcceptTerms() {
+@@ -664,94 +681,96 @@ export default function Exchange() {
+     const a = document.createElement('a');
+     a.href = url; a.download = `UAIU-trades-${Date.now()}.csv`; a.click();
+     URL.revokeObjectURL(url);
+   }
+ 
+   async function handleInstSubmit() {
+     if (!instName || !instContact || !instEmail || !instVolume) { showToast('Please fill in all required fields.'); return; }
+     setInstSubmitting(true);
+     try {
+       await apiRequest('POST', '/api/exchange/rfq', { company: instName, contact: instContact, email: instEmail, side: 'INSTITUTIONAL', standard: instStandard, volumeTonnes: parseInt(instVolume) || 50000, notes: instMessage });
+       setInstSuccess(true);
+       showToast('Institutional inquiry received — desk will contact you within 2 hours.');
+     } catch { showToast('Failed to submit. Please try again.'); }
+     finally { setInstSubmitting(false); }
+   }
+ 
+   async function handleAccountSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('account', 3)) return;
+     if (!acctFirstName || !acctLastName || !acctEmail || !acctType) { showToast('Please fill in all required fields.'); return; }
+     if (!acctEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
+     if (acctPassword && acctPassword.length < 8) { showToast('Password must be at least 8 characters.'); return; }
+     if (acctPassword && acctPassword !== acctConfirmPassword) { showToast('Passwords do not match.'); return; }
+     setAcctSubmitting(true);
+     try {
+-      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined });
++      const res = await apiRequest('POST', '/api/exchange/account', { firstName: acctFirstName, lastName: acctLastName, company: acctCompany, email: acctEmail, phone: acctPhone, accountType: acctType, annualCo2Exposure: acctCo2, password: acctPassword || undefined, registryAccountId: checkoutRegistryAccountId || undefined, registryName: checkoutRegistryName || undefined });
+       const data = await res.json();
+       setAcctId(data.id || ('UAIU-' + Date.now().toString().slice(-8)));
+       const newSession = {
+         id: data.id,
+         email: acctEmail,
+         firstName: acctFirstName,
+         lastName: acctLastName,
+         company: acctCompany || `${acctFirstName} ${acctLastName}`.trim(),
+         accountType: acctType,
+         annualCo2: parseInt(acctCo2) || 10000,
+         acceptedTermsAt: null,
+         kycStatus: 'not_started',
++        registryAccountId: checkoutRegistryAccountId || '',
++        registryName: checkoutRegistryName || '',
+       };
+       setSessionAccount(newSession);
+       setAcctSuccess(true);
+       setAcctShowKyc(true);
+       showToast('Account created — verify your identity to begin trading');
+       dbInsert('entities', { name: `${acctFirstName} ${acctLastName}`.trim(), contact_name: `${acctFirstName} ${acctLastName}`.trim(), email: acctEmail, phone: acctPhone || null, entity_type: acctType, annual_co2_exposure: acctCo2 || null, status: 'pending_kyc' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     } catch {
+       showToast('Failed to submit. Please try again.');
+     } finally {
+       setAcctSubmitting(false);
+     }
+   }
+ 
+   async function handleStartKyc() {
+     if (!sessionAccount?.id || !sessionAccount?.email) return;
+     try {
+       const res = await fetch('/api/kyc/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` }) });
+       const data = await res.json();
+       if (data.url) { window.location.href = data.url; }
+       else { showToast('KYC session started — our team will contact you within 24 hours.'); }
+     } catch { showToast('Could not start verification. Please contact info@uaiu.live'); }
+   }
+ 
+   async function handleListSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('listing', 3)) return;
+     if (!listOrgName || !listContact || !listEmail || !listStandard || !listType || !listVolume || !listPrice || !listOrigin) { showToast('Please fill in all required fields.'); return; }
+     if (!listEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
+     setListSubmitting(true);
+     try {
+-      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial });
++      await apiRequest('POST', '/api/exchange/list-credits', { orgName: listOrgName, contactName: listContact, email: listEmail, standard: listStandard, creditType: listType, volumeTonnes: listVolume, askingPricePerTonne: listPrice, projectOrigin: listOrigin, registrySerial: listSerial, registryName: listRegistryName || undefined, vintageYear: listVintageYear ? parseInt(listVintageYear, 10) : undefined });
+       setListSuccess(true);
+       showToast('Credits submitted for verification');
+       // Non-blocking Supabase save
+       dbInsert('listing_submissions', {
+         org_name: listOrgName,
+         contact_name: listContact,
+         email: listEmail,
+         standard: listStandard,
+         credit_type: listType,
+         volume_tonnes: parseFloat(listVolume) || null,
+         ask_eur_per_tonne: parseFloat(listPrice) || null,
+         origin: listOrigin,
+         registry_ref: listSerial || null,
+         status: 'pending_verification',
+       }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
+     } catch {
+       showToast('Failed to submit. Please try again.');
+     } finally {
+       setListSubmitting(false);
+     }
+   }
+ 
+   async function handleRfqSubmit() {
+     if (botDetected()) { showToast('Submission blocked.'); return; }
+     if (!rateOk('rfq', 3)) return;
+@@ -792,50 +811,52 @@ export default function Exchange() {
+   }
+ 
+   async function handleSignIn() {
+     if (!signinEmail.trim()) return;
+     setSigninLoading(true);
+     setSigninError('');
+     try {
+       const res = await fetch('/api/exchange/account/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: signinEmail.trim().toLowerCase(), password: signinPassword || undefined }) });
+       if (res.ok) {
+         const account = await res.json();
+         if (!account.passwordHash && !signinPassword) {
+           setSigninNeedsPassword(true);
+           setSigninLoading(false);
+           return;
+         }
+         const sessionData = {
+           id: account.id,
+           email: account.email,
+           firstName: account.firstName || '',
+           lastName: account.lastName || '',
+           company: account.orgName || `${account.firstName || ''} ${account.lastName || ''}`.trim(),
+           accountType: account.accountType || '',
+           annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
+           acceptedTermsAt: account.acceptedTermsAt,
+           kycStatus: account.kycStatus || 'not_started',
++          registryAccountId: account.registryAccountId || '',
++          registryName: account.registryName || '',
+         };
+         const token = account.token;
+         if (token) {
+           sessionStorage.setItem('x-exchange-token', token);
+           setExchangeToken(token);
+         }
+         setSessionAccount(sessionData);
+         setShowAccountModal(false);
+         setSigninEmail(''); setSigninPassword(''); setSigninError(''); setSigninNeedsPassword(false);
+         showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
+       } else {
+         const data = await res.json().catch(() => ({}));
+         if (res.status === 401 && data.error?.includes('Password required')) {
+           setSigninNeedsPassword(true);
+         } else {
+           setSigninError(data.error || 'No account found for that email. Please open a new account.');
+         }
+       }
+     } catch {
+       setSigninError('Connection error. Please try again.');
+     } finally {
+       setSigninLoading(false);
+     }
+   }
+ 
+@@ -1061,67 +1082,75 @@ export default function Exchange() {
+           <div className="x-section" style={s.sectionWrap}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 20 }}>
+               <div>
+                 <div style={{ ...s.eyebrow as React.CSSProperties }}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Live Listings</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0 }}>Available <em style={{ fontStyle: 'italic', color: C.gold }}>Credits</em></h2>
+               </div>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                 {[['all','All'],['eu','EU ETS'],['vcs','VCS'],['redd','REDD++'],['blue','Blue Carbon']].map(([val,label]) => (
+                   <button key={val} className={`x-mfilter${filter === val ? ' active' : ''}`} style={{ fontFamily: F.mono }} onClick={() => setFilter(val)} data-testid={`filter-${val}`}>{label}</button>
+                 ))}
+                 <input className="x-fi" style={{ ...s.fi, flex: 1, maxWidth: 280, fontFamily: F.mono, fontSize: 11 }} placeholder="Search credits..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-credits" />
+               </div>
+             </div>
+             <div className="x-listings-grid" style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder }}>
+               {filteredListings.map(l => {
+                 const bs = getBadgeStyle(l.standard, C);
+                 const liveKey = l.standard === 'GOLD STD' ? 'GOLD STD' : l.standard === 'VCS' && l.name.includes('Blue') ? 'BLUE CARB' : l.standard === 'VCS' && l.name.includes('B100') ? 'VCS B100' : l.standard === 'CORSIA' ? 'CORSIA' : l.standard === 'EU ETS' ? 'EU ETS' : l.standard === 'REC' ? 'REC' : l.standard;
+                 const livePrice = livePrices[liveKey];
+                 const displayPrice = livePrice ? livePrice.price : l.pricePerTonne;
+                 const displayPct = livePrice ? Math.abs(livePrice.changePct) : Math.abs(l.changePercent);
+                 const up = livePrice ? livePrice.up : l.changeDirection !== 'down';
+                 return (
+                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                       <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '5px 12px', border: '1px solid', ...bs }}>{l.badgeLabel}</span>
+-                      <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
++                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
++                        {l.registrySerial && l.registryName && (
++                          <span title={l.registrySerial} style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', border: `1px solid ${C.green}`, padding: '3px 8px' }}>Registry Verified</span>
++                        )}
++                        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.green, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><span className="x-pulse" />Live</span>
++                      </div>
+                     </div>
+                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
+                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>
+                     <div style={{ height: 1, background: C.goldborder, marginBottom: 20 }} />
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Price / tonne</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1, userSelect: 'none' }}>€{displayPrice.toFixed(2)}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: up ? C.green : C.red }}>{up ? '▲' : '▼'} {displayPct.toFixed(2)}% today</div>
+                       </div>
+                       <div>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.cream3, marginBottom: 4 }}>Standard</div>
+                         <div style={{ fontFamily: F.playfair, fontSize: 16, fontWeight: 700, color: C.cream, lineHeight: 1 }}>{l.badgeLabel}</div>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green }}>&#9679; Active</div>
+                       </div>
+                     </div>
++                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginBottom: 18 }}>
++                      Registry: {l.registryName || 'N/A'} · Serial: {l.registrySerial ? `…${l.registrySerial.slice(-8)}` : 'N/A'} · Vintage: {l.vintageYear || 'N/A'}
++                    </div>
+                     <div style={{ display: 'flex', gap: 10 }}>
+                       <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Buy Now</button>
+                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
+                       <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={l.pricePerTonne} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                       <ListingChat listingId={l.id} listingName={l.name} userHandle={chatHandle} isDark={isDark} />
+                     </div>
+                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                       <DueDiligenceReport listing={{ id: l.id, name: l.name, standard: l.standard, price: l.pricePerTonne, volume_tonnes: 0, origin: l.origin }} currentIndexPrice={currentIndexPrice} isDark={isDark} />
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+             <div style={{ marginTop: 40 }}>
+               <OrderBook />
+             </div>
+           </div>
+         </section>
+ 
+         <AIMarketIntelligence />
+ 
+@@ -1330,50 +1359,52 @@ export default function Exchange() {
+                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Submit for 48-hour verification</div>
+                 </div>
+                 {listSuccess ? (
+                   <div style={{ padding: '40px 36px', textAlign: 'center' }}>
+                     <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>
+                     <div style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, color: C.gold, marginBottom: 10 }}>Submission Received</div>
+                     <div style={{ fontSize: 14, color: C.cream3, lineHeight: 1.7 }}>Your credits have been submitted for verification. Our team will review your project documentation and registry serials within 48 hours. You&apos;ll receive confirmation at the email provided.</div>
+                   </div>
+                 ) : (
+                   <div style={{ padding: '32px 36px' }}>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Organization Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={listOrgName} onChange={e => setListOrgName(e.target.value)} data-testid="input-list-org" /></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Contact Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Full name" value={listContact} onChange={e => setListContact(e.target.value)} data-testid="input-list-contact" /></div>
+                     </div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={listEmail} onChange={e => setListEmail(e.target.value)} data-testid="input-list-email" /></div>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Credit Standard *</label><select className="x-fi x-fi" style={s.fi} value={listStandard} onChange={e => setListStandard(e.target.value)} data-testid="select-list-standard"><option value="">Select standard</option>{CREDIT_STANDARDS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Credit Type *</label><select className="x-fi" style={s.fi} value={listType} onChange={e => setListType(e.target.value)} data-testid="select-list-type"><option value="">Select type</option>{CREDIT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                     </div>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Volume (tonnes CO₂) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 10000" value={listVolume} onChange={e => setListVolume(e.target.value)} data-testid="input-list-volume" /></div>
+                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Asking Price (€/tonne) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 65.00" value={listPrice} onChange={e => setListPrice(e.target.value)} data-testid="input-list-price" /></div>
+                     </div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
+                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Serial — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VCS-7821-2024-001" value={listSerial} onChange={e => setListSerial(e.target.value)} data-testid="input-list-serial" /></div>
++                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name</label><select className="x-fi" style={s.fi} value={listRegistryName} onChange={e => setListRegistryName(e.target.value)}><option value="">Select registry</option>{['Verra','Gold Standard','EU ETS','ACR','CAR','other'].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
++                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Vintage Year</label><input className="x-fi" style={s.fi} type="number" min={2010} max={new Date().getFullYear()} placeholder="e.g. 2024" value={listVintageYear} onChange={e => setListVintageYear(e.target.value)} /></div>
+                     <VisionVerification onReport={(report) => setListSerial(prev => prev)} />
+                     <button style={{ ...s.formSubmit as React.CSSProperties, opacity: listSubmitting ? 0.7 : 1 }} onClick={handleListSubmit} disabled={listSubmitting} data-testid="button-list-submit">{listSubmitting ? 'Submitting...' : 'Submit for Verification →'}</button>
+                     <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>48-hour AI-assisted verification · Human reviewed · UAIU Holdings Corp. Wyoming</div>
+                   </div>
+                 )}
+               </div>
+               <div style={{ paddingTop: 20 }}>
+                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Why List on UAIU.LIVE/X</div>
+                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Caribbean <em style={{ fontStyle: 'italic', color: C.gold }}>premium.</em></h2>
+                 <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 40 }}>Caribbean-origin credits command an 8–14% premium on global markets due to the regulatory focus on maritime and aviation emissions in the Caribbean corridor.</p>
+                 {[
+                   { Icon: Users, title: 'Institutional Buyer Network', text: 'Access to pre-qualified institutional buyers including cruise operators, cargo shipping groups, and aviation firms seeking Caribbean-origin compliance credits.', detail: 'Average time to first offer: 72 hours' },
+                   { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves within 48 hours.', detail: 'AI-assisted · Human reviewed' },
+                   { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of Antigua & Barbuda, Tonga, Zambia, Kenya, and St. Kitts & Nevis.', detail: '5 sovereign nations · Carbon Union' },
+                 ].map(({ Icon, title, text, detail }, i) => (
+                   <div key={i} className="x-benefit-item">
+                     <div style={{ width: 44, height: 44, background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                       <Icon size={20} color={C.gold} />
+                     </div>
+                     <div>
+                       <div style={{ fontFamily: F.playfair, fontSize: 18, fontWeight: 700, marginBottom: 6 }}>{title}</div>
+                       <div style={{ fontSize: 13, lineHeight: 1.65, color: C.cream3 }}>{text}</div>
+                       <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, marginTop: 8, letterSpacing: '0.05em' }}>{detail}</div>
+                     </div>
+                   </div>
+@@ -1991,50 +2022,53 @@ export default function Exchange() {
+                           {sessionAccount?.kycStatus === 'verified' ? (
+                             <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green }}>Identity verified. You may trade on the platform.</div>
+                           ) : sessionAccount?.kycStatus === 'pending' ? (
+                             <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Verification submitted. You will receive confirmation by email within 24 hours.</div>
+                           ) : (
+                             <>
+                               <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.6, marginBottom: 16 }}>Complete identity verification via Stripe Identity. Takes 2–3 minutes. Required to execute trades.</div>
+                               <button className="x-btn-primary" onClick={handleStartKyc} data-testid="button-start-kyc" style={{ width: '100%', padding: '14px 20px', textAlign: 'center' }}>Start KYC Verification →</button>
+                             </>
+                           )}
+                         </div>
+                         <button className="x-btn-ghost" onClick={() => setShowAccountModal(false)} style={{ width: '100%', padding: '12px 20px', textAlign: 'center', fontFamily: F.mono, fontSize: 11 }}>Continue Browsing</button>
+                       </div>
+                     ) : (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Free to open · KYC in 2 hours · Live same day</div>
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                           <div style={s.fg}><label style={s.fl as React.CSSProperties}>First Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="First" value={acctFirstName} onChange={e => setAcctFirstName(e.target.value)} data-testid="input-acct-firstname" /></div>
+                           <div style={s.fg}><label style={s.fl as React.CSSProperties}>Last Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Last" value={acctLastName} onChange={e => setAcctLastName(e.target.value)} data-testid="input-acct-lastname" /></div>
+                         </div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Company / Organization</label><input className="x-fi" style={s.fi} type="text" placeholder="Legal entity name" value={acctCompany} onChange={e => setAcctCompany(e.target.value)} data-testid="input-acct-company" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Business Email *</label><input className="x-fi" style={s.fi} type="email" placeholder="you@company.com" value={acctEmail} onChange={e => setAcctEmail(e.target.value)} data-testid="input-acct-email" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Phone</label><input className="x-fi" style={s.fi} type="tel" placeholder="+1 (000) 000-0000" value={acctPhone} onChange={e => setAcctPhone(e.target.value)} data-testid="input-acct-phone" /></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Account Type *</label><select className="x-fi" style={s.fi} value={acctType} onChange={e => setAcctType(e.target.value)} data-testid="select-acct-type"><option value="">Select account type</option>{ACCOUNT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Annual CO₂ Exposure (approx.)</label><select className="x-fi" style={s.fi} value={acctCo2} onChange={e => setAcctCo2(e.target.value)} data-testid="select-acct-co2"><option value="">Select range</option>{CO2_RANGES.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
++                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Account ID (optional)</label><input className="x-fi" style={s.fi} type="text" placeholder="Your Verra / Gold Standard / EU ETS account ID" value={checkoutRegistryAccountId} onChange={e => setCheckoutRegistryAccountId(e.target.value)} /></div>
++                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, marginTop: -8, marginBottom: 8 }}>This is your account ID with Verra, Gold Standard, EU ETS, or other registry where credits will be transferred to you.</div>
++                        <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name</label><select className="x-fi" style={s.fi} value={checkoutRegistryName} onChange={e => setCheckoutRegistryName(e.target.value)}><option value="">Select registry</option>{['Verra','Gold Standard','EU ETS','ACR','CAR','other'].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+                         <div style={{ height: 1, background: C.goldborder, margin: '8px 0 16px' }} />
+                         <div style={s.fg}><label style={s.fl as React.CSSProperties}>Password (optional — recommended)</label><input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={acctPassword} onChange={e => setAcctPassword(e.target.value)} data-testid="input-acct-password" /></div>
+                         {acctPassword && <div style={s.fg}><label style={s.fl as React.CSSProperties}>Confirm Password</label><input className="x-fi" style={s.fi} type="password" placeholder="Confirm password" value={acctConfirmPassword} onChange={e => setAcctConfirmPassword(e.target.value)} data-testid="input-acct-confirm-password" /></div>}
+                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: acctSubmitting ? 0.7 : 1 }} onClick={handleAccountSubmit} disabled={acctSubmitting} data-testid="button-submit-account">{acctSubmitting ? 'Creating Account...' : 'Create Account →'}</button>
+                         <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 16, textAlign: 'center', lineHeight: 1.6, letterSpacing: '0.05em' }}>By creating an account you agree to our Terms of Service and Privacy Policy. UAIU Holdings Corp. Wyoming.</div>
+                       </>
+                     )}
+                   </div>
+                 )}
+ 
+                 {acctModalTab === 'signin' && (
+                   <div style={{ padding: '32px 36px' }}>
+                     {signinNeedsPassword ? (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>This is your first sign-in with a password. Set one now to secure your account.</div>
+                         <div style={s.fg}>
+                           <label style={s.fl as React.CSSProperties}>Set Password</label>
+                           <input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={signinNewPassword} onChange={e => { setSigninNewPassword(e.target.value); setSigninError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleSetPassword(); }} autoFocus data-testid="input-set-password" />
+                         </div>
+                         {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
+                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading ? 0.6 : 1 }} onClick={handleSetPassword} disabled={signinLoading} data-testid="button-set-password-submit">{signinLoading ? 'Setting password...' : 'Set Password & Sign In →'}</button>
+                       </>
+                     ) : (
+                       <>
+                         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 24, lineHeight: 1.6 }}>Enter your credentials to access your account.</div>
+diff --git a/server/pdf-generator.ts b/server/pdf-generator.ts
+index 119898c1096b62d87b4e38739bf64e207eeb004e..ac307f2b0b796de5bcb0e49fa78efc44ab3d60c5 100644
+--- a/server/pdf-generator.ts
++++ b/server/pdf-generator.ts
+@@ -1,114 +1,140 @@
+ import PDFDocument from "pdfkit";
+ 
+ export interface TradeForPDF {
+   trade_id: string;
+   side: string;
+   standard: string;
+   volume_tonnes: number;
+   price_eur_per_tonne: number;
+   gross_eur: number;
+   fee_eur: number;
+   receipt_hash: string;
+   prev_receipt_hash: string;
+   payment_intent_id: string;
+   stripe_charge_id: string;
+   settled_at: string;
+   buyer_email: string;
++  buyer_registry_account_id?: string;
++  buyer_registry_name?: string;
++  seller_registry_name?: string;
++  seller_registry_serial?: string;
++  vintage_year?: number;
++  retirement_status?: string;
+ }
+ 
+ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
+   return new Promise((resolve, reject) => {
+     const doc = new PDFDocument({ size: "A4", margin: 50 });
+     const chunks: Buffer[] = [];
+ 
+     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+     doc.on("end", () => resolve(Buffer.concat(chunks)));
+     doc.on("error", reject);
+ 
+     const gold = "#d4a843";
+     const ink = "#060810";
+     const cream = "#f2ead8";
+     const cream3 = "#7a7060";
+ 
+     doc.rect(0, 0, 595, 842).fill(ink);
+     doc.rect(0, 0, 595, 5).fill(gold);
+ 
+     doc.moveDown(1);
+ 
+     doc.font("Helvetica-Bold").fontSize(22).fillColor(gold).text("UAIU.LIVE/X", 50, 40);
+     doc.font("Helvetica").fontSize(11).fillColor(cream).text("Carbon Credit Trade Confirmation", 50, 68);
+ 
+     doc.moveDown(0.5);
+     doc.moveTo(50, 92).lineTo(545, 92).strokeColor(gold).lineWidth(0.5).stroke();
+ 
+     doc.font("Helvetica").fontSize(9).fillColor(cream3);
+     doc.text(`Trade ID: ${trade.trade_id}`, 50, 104);
+     doc.text(`Generated: ${new Date().toISOString()}`, 50, 117);
+     doc.text(`Settlement: T+1`, 50, 130);
+ 
+     doc.moveDown(2);
+ 
+     doc.font("Helvetica-Bold").fontSize(13).fillColor(gold).text("Trade Summary", 50, 155);
+     doc.moveTo(50, 172).lineTo(545, 172).strokeColor(gold).lineWidth(0.3).stroke();
+ 
+     const rows = [
+       ["Side",             trade.side.toUpperCase()],
+       ["Standard",         trade.standard],
+       ["Volume",           `${trade.volume_tonnes.toLocaleString()} tonnes CO₂`],
+       ["Price per Tonne",  `€${trade.price_eur_per_tonne.toFixed(2)}`],
+       ["Gross Amount",     `€${trade.gross_eur.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+       ["Platform Fee (0.75%)", `€${trade.fee_eur.toFixed(2)}`],
+       ["Net Amount",       `€${(trade.gross_eur - trade.fee_eur).toFixed(2)}`],
+       ["Settled At",       trade.settled_at || new Date().toISOString()],
+       ["Buyer",            trade.buyer_email],
++      ["Retirement Status", trade.retirement_status || 'Retirement Pending — Due within 48 hours of settlement.'],
+     ];
+ 
+     let y = 182;
+     rows.forEach(([label, value]) => {
+       doc.font("Helvetica-Bold").fontSize(9).fillColor(cream3).text(label, 50, y);
+       doc.font("Helvetica").fontSize(9).fillColor(cream).text(value, 220, y);
+       y += 18;
+     });
+ 
+     y += 12;
+     doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
+     y += 16;
+ 
+     doc.font("Helvetica-Bold").fontSize(13).fillColor(gold).text("Tamper-Evident Receipt Chain", 50, y);
+     y += 20;
+     doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
+     y += 12;
+ 
+     doc.font("Helvetica").fontSize(8).fillColor(cream3)
+       .text("This section provides cryptographic proof of trade integrity. Each hash commits to the prior trade hash, forming an immutable chain verifiable without account access.", 50, y, { width: 495 });
+     y += 30;
+ 
+     const hashRows = [
+       ["Receipt Hash (SHA-256)", trade.receipt_hash || "N/A"],
+       ["Previous Receipt Hash",  trade.prev_receipt_hash || "genesis"],
+       ["Stripe PaymentIntent ID", trade.payment_intent_id || "N/A"],
+       ["Stripe Charge ID",       trade.stripe_charge_id || "N/A"],
+     ];
+ 
+     hashRows.forEach(([label, value]) => {
+       doc.font("Helvetica-Bold").fontSize(8).fillColor(cream3).text(label, 50, y);
+       y += 12;
+       doc.font("Helvetica").fontSize(7).fillColor(gold).text(value, 50, y, { width: 495 });
+       y += 16;
+     });
+ 
+     y += 8;
++    doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
++    y += 16;
++
++    doc.font("Helvetica-Bold").fontSize(13).fillColor(gold).text("Registry Transfer Instructions", 50, y);
++    y += 18;
++    doc.font("Helvetica").fontSize(8).fillColor(cream3).text(
++      `Seller registry name and serial: ${trade.seller_registry_name || 'N/A'} / ${trade.seller_registry_serial || 'N/A'}\n` +
++      `Buyer registry account ID and registry name: ${trade.buyer_registry_account_id || 'N/A'} / ${trade.buyer_registry_name || 'N/A'}\n` +
++      `Volume in tonnes: ${trade.volume_tonnes}\nCredit standard: ${trade.standard}\nTrade ID: ${trade.trade_id}\nSettlement timestamp: ${trade.settled_at || new Date().toISOString()}\n` +
++      `Instruction: Seller to transfer ${trade.volume_tonnes} ${trade.standard} credits from registry account ${trade.seller_registry_serial || 'N/A'} to buyer registry account ${trade.buyer_registry_account_id || 'N/A'} within 48 hours of settlement date ${(trade.settled_at || new Date().toISOString()).split('T')[0]}.`,
++      50,
++      y,
++      { width: 495 }
++    );
++    y += 78;
++
++    doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
++    y += 14;
++
+     doc.moveTo(50, y).lineTo(545, y).strokeColor(gold).lineWidth(0.3).stroke();
+     y += 14;
+ 
+     doc.font("Helvetica").fontSize(8).fillColor(cream3)
+       .text("Verify this receipt independently at uaiu.live/verify/" + trade.trade_id, 50, y);
+     y += 12;
+     doc.font("Helvetica").fontSize(8).fillColor(cream3)
+       .text("UAIU.LIVE/X — Caribbean Carbon Credit Exchange — info@uaiu.live", 50, y);
+ 
+     doc.rect(0, 837, 595, 5).fill(gold);
+ 
+     doc.end();
+   });
+ }
+diff --git a/server/routes.ts b/server/routes.ts
+index aecd765c100af3e932f9149221e26de48ed7842f..994e4db2ea4d11854c38181e75e557f0167566d8 100644
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@ -1,77 +1,90 @@
+ import type { Express } from "express";
+ import express from "express";
+-import { createHash } from "crypto";
++import { createHash, randomBytes, timingSafeEqual } from "crypto";
+ import rateLimit from "express-rate-limit";
+ import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
+ import { logSecurityEvent } from "./security-utils";
+ import { createServer, type Server } from "http";
+ import { Server as SocketIOServer, Socket } from "socket.io";
+ import { storage } from "./storage";
+ import bcrypt from "bcrypt";
+ import { sql, eq, desc } from "drizzle-orm";
+ import type { GameState } from "@shared/schema";
+ import { liveMatchSessions } from "@shared/schema";
+ import { db } from "./db";
+ import { sendPayoutNotification } from "./email-config";
+ import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
+ import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
+-import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
++import { exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
+ import multer from "multer";
+ import path from "path";
+ import { registerOpsRoutes } from "./ops-routes";
+ import { registerAutonomousMarketplaceRoutes } from "./autonomous-marketplace";
+ import fs from "fs";
+ import PDFDocument from "pdfkit";
+ import { createSession, getSession, requireAuth } from "./session-middleware";
+ import { initStripe } from "./stripe-init";
+ import { WebhookHandlers } from "./webhookHandlers";
+ import { gameManager, type GameType } from "./game-manager";
+ import { nanoid } from "nanoid";
+ import { startCronJobs } from "./cron";
+ import { generateTradePDF } from "./pdf-generator";
+ import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+ import { getLivePrices, getPriceHistory } from "./exchange-prices";
+ 
+ function estimateNextStripePayoutDate(from = new Date()): string {
+   const next = new Date(from);
+   next.setDate(next.getDate() + 2);
+   return next.toISOString().split('T')[0];
+ }
+ 
+ async function sendSellerDestinationPayoutEmail(params: {
+   sellerEmail: string;
+   tradeId: string;
+   payoutAmountEur: number;
+   chargeId?: string | null;
+ }): Promise<void> {
+   if (!params.sellerEmail || !isZohoConfigured()) return;
+   const expectedPayoutDate = estimateNextStripePayoutDate();
+   const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Seller Payout Confirmed</h2><p>Your payout has been routed by Stripe.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Payout Amount:</strong> €${params.payoutAmountEur.toFixed(2)}</li><li><strong>Expected Stripe Payout Date:</strong> ${expectedPayoutDate}</li><li><strong>Charge:</strong> ${params.chargeId || 'n/a'}</li></ul><p>Funds were sent using Stripe Connect destination charges. No funds passed through UAIU's account.</p></div>`;
+   await sendZohoEmail(params.sellerEmail, `UAIU Seller Payout Confirmed — ${params.tradeId}`, html);
+ }
+ 
++const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
++
++function createRetirementUploadToken(): { token: string; tokenHash: string } {
++  const token = randomBytes(24).toString('hex');
++  const tokenHash = createHash('sha256').update(token).digest('hex');
++  return { token, tokenHash };
++}
++
++function secureTokenMatch(rawToken: string, tokenHash: string): boolean {
++  const inputHash = createHash('sha256').update(rawToken).digest('hex');
++  return timingSafeEqual(Buffer.from(inputHash), Buffer.from(tokenHash));
++}
++
+ // Legacy Pong code removed - all games now use GameManager
+ 
+ // Legacy Pong functions removed - all game logic now in GameManager
+ 
+ let stripeReady = false;
+ let stripeReadyAt: string | null = null;
+ 
+ export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+   const exchangeSigninLimiter = rateLimit({
+     windowMs: 15 * 60 * 1000,
+     max: 5,
+     standardHeaders: true,
+     legacyHeaders: false,
+     message: { error: "Too many signin attempts. Please try again later." },
+   });
+ 
+   const exchangeAccountCreateLimiter = rateLimit({
+     windowMs: 60 * 60 * 1000,
+     max: 3,
+     standardHeaders: true,
+     legacyHeaders: false,
+     message: { error: "Too many account creation attempts. Please try again later." },
+   });
+ 
+   const exchangeCheckoutLimiter = rateLimit({
+@@ -286,50 +299,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+                 const tradeId     = meta.trade_id || cs.id;
+                 const standard    = meta.standard || 'Carbon Credit';
+                 const volumeT     = parseFloat(meta.volume_tonnes || '0');
+                 const pricePerT   = parseFloat(meta.price_per_tonne || '0');
+                 const side        = meta.side || 'BUY';
+                 const email       = meta.email || cs.customer_email || '';
+                 const grossEur    = Number(meta.gross_eur || ((cs.amount_total || 0) / 100));
+                 const feeEur      = Number(meta.fee_eur || (grossEur * 0.0075));
+                 const paymentModel = String(meta.payment_model || 'platform_collect');
+                 const settled_at  = new Date().toISOString();
+                 const receiptData = `${tradeId}:${cs.id}:${grossEur}:${settled_at}`;
+                 const receiptHash = createHash('sha256').update(receiptData).digest('hex');
+ 
+                 // Store trade record in DB
+                 storage.createExchangeTrade({
+                   accountEmail:    email,
+                   tradeId,
+                   side,
+                   standard,
+                   volumeTonnes:    volumeT,
+                   pricePerTonne:   pricePerT,
+                   grossEur,
+                   feeEur,
+                   receiptHash,
+                   stripeSessionId: cs.id,
++                  buyerRegistryAccountId: meta.buyer_registry_account_id || null,
++                  buyerRegistryName: meta.buyer_registry_name || null,
++                  sellerRegistryName: meta.seller_registry_name || null,
++                  sellerRegistrySerial: meta.seller_registry_serial || null,
++                  vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
+                   status:          'completed',
+                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
+ 
+                 // Look up seller email and destination transfer if this was a destination charge
+                 let sellerEmail = '';
+                 let destinationTransferId = '';
+                 if (meta.seller_profile_id) {
+                   const sellerProfileLookup = await db.execute(sql`
+                     SELECT exchange_account_email
+                     FROM seller_profiles
+                     WHERE id = ${meta.seller_profile_id}
+                     LIMIT 1
+                   `).catch(() => ({ rows: [] } as any));
+                   sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
+                 }
+                 if (paymentModel === 'destination_charge' && cs.payment_intent) {
+                   try {
+                     const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
+                     const latestCharge: any = pi.latest_charge as any;
+                     destinationTransferId = typeof latestCharge?.transfer === 'string'
+                       ? latestCharge.transfer
+                       : latestCharge?.transfer?.id || '';
+                   } catch (err: any) {
+                     console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                   }
+@@ -364,50 +382,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+                 // Send seller payout email for destination charges
+                 if (paymentModel === 'destination_charge' && sellerEmail) {
+                   sendSellerDestinationPayoutEmail({
+                     sellerEmail,
+                     tradeId,
+                     payoutAmountEur: grossEur - feeEur,
+                     chargeId: String(cs.payment_intent || ''),
+                   }).catch((e: any) => console.error('[Seller payout email]', e.message));
+                 }
+ 
+                 // Generate and email PDF receipt
+                 generateTradePDF({
+                   trade_id:            tradeId,
+                   side,
+                   standard,
+                   volume_tonnes:       volumeT,
+                   price_eur_per_tonne: pricePerT,
+                   gross_eur:           grossEur,
+                   fee_eur:             feeEur,
+                   receipt_hash:        receiptHash,
+                   prev_receipt_hash:   '',
+                   payment_intent_id:   cs.payment_intent || '',
+                   stripe_charge_id:    '',
+                   settled_at,
+                   buyer_email:         email,
++                  buyer_registry_account_id: meta.buyer_registry_account_id || '',
++                  buyer_registry_name: meta.buyer_registry_name || '',
++                  seller_registry_name: meta.seller_registry_name || '',
++                  seller_registry_serial: meta.seller_registry_serial || '',
++                  vintage_year: meta.vintage_year ? Number(meta.vintage_year) : undefined,
+                 }).then(pdfBuffer => {
+                   const recipients = ['info@uaiu.live'];
+                   if (email && email !== 'info@uaiu.live') recipients.push(email);
+                   const attachment = [{ filename: `UAIU-Trade-${tradeId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
+                   const emailHtml = `<div style="font-family:Arial;background:#0d1220;color:#e8dcc8;padding:28px;border:1px solid #d4a843"><h2 style="color:#d4a843;font-family:Georgia">UAIU.LIVE/X — Trade Confirmed</h2><p>Your trade <strong>${tradeId}</strong> has been executed successfully.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;color:#9b9b7a">Standard:</td><td style="padding:8px;color:#e8dcc8"><strong>${standard}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Volume:</td><td style="padding:8px;color:#e8dcc8"><strong>${volumeT.toLocaleString()} tCO₂e</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Gross:</td><td style="padding:8px;color:#d4a843"><strong>€${grossEur.toLocaleString()}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Settlement:</td><td style="padding:8px;color:#e8dcc8">T+1 (next business day)</td></tr></table><p style="font-size:12px;color:#9b9b7a">Receipt Hash: ${receiptHash.slice(0, 32)}...</p><p style="font-size:12px;color:#9b9b7a">UAIU Exchange · info@uaiu.live</p></div>`;
+                   return sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
+                 }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
+ 
+                 console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: €${grossEur}`);
+               }
+ 
+               // Stripe Connect - account.updated (onboarding complete / requirements changed)
+               if (event.type === 'account.updated') {
+                 const acct = event.data.object as any;
+                 const accountId = acct.id;
+                 const detailsSubmitted = !!acct.details_submitted;
+                 const payoutsEnabled = !!acct.payouts_enabled;
+                 if (accountId) {
+                   await db.execute(sql`
+                     UPDATE seller_profiles
+                     SET connect_onboarding_complete = ${detailsSubmitted && payoutsEnabled},
+                         connect_details_submitted = ${detailsSubmitted},
+                         updated_at = NOW()
+                     WHERE stripe_connect_account_id = ${accountId}
+                   `).catch((e: any) => console.error('[Connect account.updated]', e.message));
+@@ -1548,147 +1571,194 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+       const { email, password } = req.body;
+       if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+       if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+       const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
+       if (!account) return res.status(404).json({ error: 'Account not found.' });
+       const hash = await bcrypt.hash(password, 12);
+       await storage.updateExchangeAccountPassword(email.trim().toLowerCase(), hash);
+       res.json({ success: true });
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // ── EXCHANGE: Accept terms ────────────────────────────────────────────────
+   app.patch('/api/exchange/account/accept-terms', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const account = await storage.updateExchangeAccountTerms(email);
+       await logSecurityEvent({ email, eventType: 'terms_accepted', req });
+       res.json(account);
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
++  app.patch('/api/exchange/account/registry', requireExchangeAuth, async (req, res) => {
++    try {
++      const email = (req as any).exchangeEmail;
++      const { registryAccountId, registryName } = req.body;
++      await db.execute(sql`
++        UPDATE exchange_accounts
++        SET registry_account_id = ${registryAccountId ? String(registryAccountId).trim() : null},
++            registry_name = ${registryName ? String(registryName).trim() : null}
++        WHERE email = ${email}
++      `);
++      const updated = await storage.getExchangeAccountByEmail(email);
++      res.json(updated || { success: true });
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
+   // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
+   app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+-      const { standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
++      const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName } = req.body;
+       if (!standard || !volumeTonnes || !tradeId) {
+         return res.status(400).json({ error: 'Missing required fields' });
+       }
+       const account = await storage.getExchangeAccountByEmail(email);
+       if (!account || account.kycStatus !== 'verified') {
+         return res.status(403).json({ error: 'KYC verification required before trading.' });
+       }
+       const listings = await storage.getExchangeListingsByStandard(String(standard));
+       const activeListing = listings[0];
+       if (!activeListing) {
+         return res.status(400).json({ error: 'No active listing found for that standard.' });
+       }
+       const serverPrice = Number(activeListing.pricePerTonne);
+       const submittedPrice = Number(pricePerTonne || 0);
+       if (submittedPrice > 0) {
+         const delta = Math.abs(serverPrice - submittedPrice) / serverPrice;
+         if (delta > 0.05) {
+           await logSecurityEvent({ email, eventType: 'suspicious_price', req, detail: { standard, submittedPrice, serverPrice, delta } });
+         }
+       }
+       const stripeInit = await initStripe();
+       if (!stripeInit?.stripeSync) return res.status(503).json({ error: 'Payment processor unavailable.' });
+       const stripe = stripeInit.stripeSync;
+       const gross = serverPrice * parseFloat(volumeTonnes);
+       const fee = gross * 0.0075;
+       const grossCents = Math.round(gross * 100);
+       const applicationFeeAmount = Math.round(fee * 100);
+       const connectAccountId: string | null = (activeListing as any).stripe_connect_account_id || null;
+       const connectReady: boolean = (activeListing as any).connect_onboarding_complete === true;
+       const paymentModel = connectAccountId && connectReady ? 'destination_charge' : 'platform_collect';
+       const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
++      const buyerRegistryAccountId = registryAccountId || account.registryAccountId || '';
++      const buyerRegistryName = registryName || account.registryName || '';
++      if (registryAccountId || registryName) {
++        await db.execute(sql`
++          UPDATE exchange_accounts
++          SET registry_account_id = ${buyerRegistryAccountId || null},
++              registry_name = ${buyerRegistryName || null}
++          WHERE email = ${email}
++        `);
++      }
+       const session = await stripe.checkout.sessions.create({
+         payment_method_types: ['card'],
+         mode: 'payment',
+         line_items: [{
+           price_data: {
+             currency: 'eur',
+             product_data: {
+               name: `${standard} Carbon Credits — ${volumeTonnes} tonnes`,
+               description: `${side || 'BUY'} order · Trade ID: ${tradeId}`,
+             },
+             unit_amount: grossCents,
+           },
+           quantity: 1,
+         }],
+         metadata: {
+           trade_id: tradeId,
+           standard,
+           volume_tonnes: String(volumeTonnes),
+           email,
+           side: side || 'BUY',
+           price_per_tonne: String(serverPrice),
+           gross_eur: gross.toFixed(2),
+           fee_eur: fee.toFixed(2),
++          buyer_registry_account_id: String(buyerRegistryAccountId || ''),
++          buyer_registry_name: String(buyerRegistryName || ''),
++          seller_registry_serial: String((activeListing as any).registry_serial || (activeListing as any).registrySerial || ''),
++          seller_registry_name: String((activeListing as any).registry_name || (activeListing as any).registryName || ''),
++          vintage_year: String((activeListing as any).vintage_year || (activeListing as any).vintageYear || ''),
+           seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+           seller_connect_account_id: String(connectAccountId || ''),
+           payment_model: paymentModel,
+         },
+         payment_intent_data: paymentModel === 'destination_charge' ? {
+           application_fee_amount: applicationFeeAmount,
+           transfer_data: { destination: connectAccountId as string },
+           metadata: {
+             trade_id: tradeId,
+             payment_model: paymentModel,
+             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+             seller_connect_account_id: String(connectAccountId || ''),
+           },
+         } : {
+           metadata: {
+             trade_id: tradeId,
+             payment_model: paymentModel,
+             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+           },
+         },
+         success_url: `${origin}/x?trade=success&id=${tradeId}`,
+         cancel_url: `${origin}/x`,
+         customer_email: email,
+       });
+       await logSecurityEvent({ email, eventType: 'trade_executed', req, detail: { tradeId, standard, volumeTonnes, serverPrice } });
+       res.json({ url: session.url });
+     } catch (e: any) {
+       console.error('[Spot Checkout]', e.message);
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // ── EXCHANGE: Fetch trade history ─────────────────────────────────────────
+   app.get('/api/exchange/trades', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const trades = await storage.getExchangeTradesByEmail(email);
+-      res.json(trades);
++      const enriched = await Promise.all(trades.map(async (t) => {
++        const [cert] = await db.select().from(tradeRetirementCertificates)
++          .where(eq(tradeRetirementCertificates.tradeId, t.tradeId))
++          .orderBy(desc(tradeRetirementCertificates.createdAt))
++          .limit(1);
++        const overdue = !cert && (Date.now() - new Date(t.createdAt).getTime()) > (48 * 60 * 60 * 1000);
++        return {
++          ...t,
++          retirement_status: cert
++            ? `Retirement Confirmed — ${new Date(cert.uploadedAt || cert.createdAt).toISOString()}`
++            : overdue
++              ? 'Retirement Pending — Overdue'
++              : 'Retirement Pending — Due within 48 hours of settlement.',
++        };
++      }));
++      res.json(enriched);
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   // Trade recording is handled exclusively by the Stripe webhook handler.
+   // The public /api/exchange/trade/record endpoint has been removed for security.
+ 
+   // ── EXCHANGE: Retire credits ──────────────────────────────────────────────
+   app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
+     try {
+       const email = (req as any).exchangeEmail;
+       const { tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+       if (!tradeId || !volumeTonnes || !standard || !retireeName) {
+         return res.status(400).json({ error: 'Missing required fields' });
+       }
+       const account = await storage.getExchangeAccountByEmail(email);
+       if (!account || account.kycStatus !== 'verified') {
+         return res.status(403).json({ error: 'KYC verification required before trading.' });
+       }
+       const trade = await storage.getExchangeTradeByTradeId(tradeId);
+       if (!trade || trade.accountEmail !== email) {
+         return res.status(403).json({ error: 'You do not own this trade.' });
+       }
+       if (trade.status !== 'completed') {
+@@ -1757,50 +1827,52 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+       const { kycStatus } = req.body;
+       if (!kycStatus) return res.status(400).json({ error: 'kycStatus required' });
+       await storage.updateExchangeAccountKyc(email, kycStatus);
+       await logSecurityEvent({ email, eventType: kycStatus === 'verified' ? 'kyc_verified' : 'kyc_started', req, detail: { kycStatus } });
+       res.json({ success: true });
+     } catch (e: any) {
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   app.post('/api/exchange/account', requireAuth, exchangeAccountCreateLimiter, async (req, res) => {
+     try {
+       const body = req.body;
+       if (!body.email) {
+         return res.status(400).json({ message: 'Email is required' });
+       }
+       const accountData: any = { email: body.email };
+       if (body.orgName) accountData.orgName = body.orgName;
+       if (body.contactName) accountData.contactName = body.contactName;
+       if (body.role) accountData.role = body.role;
+       if (body.firstName) accountData.firstName = body.firstName;
+       if (body.lastName) accountData.lastName = body.lastName;
+       if (body.phone) accountData.phone = body.phone;
+       if (body.accountType) accountData.accountType = body.accountType;
+       if (body.annualCo2Exposure) accountData.annualCo2Exposure = body.annualCo2Exposure;
++      if (body.registryAccountId) accountData.registryAccountId = String(body.registryAccountId);
++      if (body.registryName) accountData.registryName = String(body.registryName);
+       if (body.password) {
+         accountData.passwordHash = await bcrypt.hash(body.password, 12);
+       }
+       const account = await storage.createExchangeAccount(accountData);
+       sendExchangeEmail('Open Account Request', {
+         'Name': body.firstName ? `${body.firstName} ${body.lastName || ''}`.trim() : (body.contactName || 'N/A'),
+         'Organization': body.orgName || body.company || 'N/A',
+         'Email': body.email,
+         'Phone': body.phone || 'N/A',
+         'Account Type': body.accountType || body.role || 'N/A',
+         'Annual CO₂ Exposure': body.annualCo2Exposure || 'N/A',
+       }).catch(err => console.error('Exchange email error:', err));
+       res.json({ success: true, id: account.id });
+     } catch (error) {
+       console.error('Exchange account error:', error);
+       res.status(500).json({ message: 'Failed to submit account request' });
+     }
+   });
+ 
+   app.post('/api/exchange/rfq', requireAuth, async (req, res) => {
+     try {
+       const body = req.body;
+       if (!body.company || !body.contact || !body.email || !body.side || !body.standard || !body.volumeTonnes) {
+         return res.status(400).json({ message: 'Missing required fields: company, contact, email, side, standard, volumeTonnes' });
+       }
+@@ -1842,93 +1914,109 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
+     }
+   });
+ 
+   app.post('/api/exchange/list-credits', requireAuth, async (req, res) => {
+     try {
+       const parsed = insertExchangeCreditListingSchema.safeParse(req.body);
+       if (!parsed.success) {
+         return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
+       }
+ 
+       // Save as 'pending' — admin must approve before appearing on marketplace
+       const listing = await storage.createExchangeCreditListing(parsed.data);
+       const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
+       const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
+ 
+       sendExchangeEmail('New Credit Listing — Pending Review', {
+         'Organization':      parsed.data.orgName,
+         'Contact':           parsed.data.contactName,
+         'Email':             parsed.data.email,
+         'Standard':          parsed.data.standard,
+         'Credit Type':       parsed.data.creditType,
+         'Volume (Tonnes)':   String(volumeNum),
+         'Asking Price EUR/t': String(priceNum),
+         'Project Origin':    parsed.data.projectOrigin,
+         'Registry Serial':   parsed.data.registrySerial || 'Not provided',
++        'Registry Name':     parsed.data.registryName || 'Not provided',
++        'Vintage Year':      parsed.data.vintageYear?.toString() || 'Not provided',
+         'Status':            'PENDING REVIEW — Go to /admin to approve or reject',
+         'Submission ID':     listing.id,
+       }).catch(err => console.error('Exchange email error:', err));
+ 
+       res.json({
+         success:   true,
+         id:        listing.id,
+         published: false,
+         message:   'Your listing is under review. You will be notified once approved.',
+       });
+     } catch (error) {
+       console.error('Exchange list credits error:', error);
+       res.status(500).json({ message: 'Failed to submit credit listing' });
+     }
+   });
+ 
+   // ── PARTNER API — Swiss X REDD UK Limited live inventory push ─────────────
+   // POST /api/partner/listings
+   // Authenticated by PARTNER_API_KEY secret. Alki's team calls this to push
+   // live credit inventory directly into the marketplace in real time.
+   app.post('/api/partner/listings', async (req, res) => {
+     try {
+       const { api_key, listings } = req.body;
+       const validKey = process.env.PARTNER_API_KEY;
+       if (!validKey) return res.status(500).json({ error: 'PARTNER_API_KEY not configured in Replit Secrets' });
+       if (!api_key || api_key !== validKey) return res.status(401).json({ error: 'Invalid API key' });
+       if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
+       if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
+ 
+       const inserted: string[] = [];
+       const errors: string[]   = [];
+ 
+       for (const item of listings) {
+         try {
+           if (!item.name || !item.standard || !item.pricePerTonne) {
+             errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
+             continue;
+           }
++          if (!item.registry_serial || !String(item.registry_serial).trim()) {
++            return res.status(400).json({ error: 'Validation failed: registry_serial is required for each listing.' });
++          }
++          if (!item.registry_name || !ALLOWED_REGISTRY_NAMES.includes(item.registry_name)) {
++            return res.status(400).json({ error: `Validation failed: registry_name must be one of ${ALLOWED_REGISTRY_NAMES.join(', ')}.` });
++          }
++          const vintageYear = Number(item.vintage_year);
++          const currentYear = new Date().getFullYear();
++          if (!Number.isInteger(vintageYear) || vintageYear < 2010 || vintageYear > currentYear) {
++            return res.status(400).json({ error: `Validation failed: vintage_year must be an integer between 2010 and ${currentYear}.` });
++          }
+           await storage.seedExchangeListings([{
+             standard:          item.standard,
+             badgeLabel:        item.badgeLabel || item.standard,
+             name:              item.name,
+             origin:            item.origin || 'Caribbean Basin',
++            registrySerial:    String(item.registry_serial),
++            registryName:      String(item.registry_name),
++            vintageYear,
+             pricePerTonne:     parseFloat(item.pricePerTonne),
+             changePercent:     parseFloat(item.changePercent) || 0,
+             changeDirection:   item.changeDirection || 'up',
+             status:            'active',
+             isAcceptingOrders: true,
+           }]);
+           inserted.push(item.name);
+         } catch (itemErr: any) {
+           errors.push(`Failed: ${item.name} — ${itemErr.message}`);
+         }
+       }
+ 
+       sendExchangeEmail('Partner Inventory Push — Marketplace Updated', {
+         'Partner':          'Swiss X REDD UK Limited',
+         'Listings Pushed':  String(inserted.length),
+         'Errors':           errors.length > 0 ? errors.join('; ') : 'None',
+         'Timestamp':        new Date().toISOString(),
+       }).catch((e: any) => console.error('[Partner Email]', e.message));
+ 
+       res.json({
+         success:  true,
+         inserted: inserted.length,
+         listings: inserted,
+         errors:   errors.length > 0 ? errors : undefined,
+         message:  `${inserted.length} listing(s) are now live on marketplace.`,
+@@ -3103,50 +3191,160 @@ Respond with a JSON object (no markdown) with these exact fields:
+   "confidence": number (0-100)
+ }`;
+ 
+       const { default: Anthropic } = await import('@anthropic-ai/sdk');
+       const client = new Anthropic({ apiKey });
+       const msg = await client.messages.create({
+         model: 'claude-sonnet-4-5',
+         max_tokens: 512,
+         messages: [{ role: 'user', content: prompt }],
+       });
+ 
+       const text = (msg.content[0] as any).text?.trim() || '{}';
+       let recommendation: any;
+       try {
+         recommendation = JSON.parse(text);
+       } catch {
+         recommendation = { action: 'ACCEPT', counter_price: (market?.indexPrice || 67.43) * 0.97, counter_volume: rfq.volume_tonnes, rationale: text, risk_assessment: 'LOW', settlement_days: 5, confidence: 75 };
+       }
+       res.json({ recommendation });
+     } catch (err: any) {
+       console.error('Negotiate error:', err?.message);
+       res.status(500).json({ error: 'Negotiation engine error' });
+     }
+   });
+ 
++  const retirementUpload = multer({
++    storage: multer.memoryStorage(),
++    limits: { fileSize: 15 * 1024 * 1024 },
++  });
++
++  async function sendRetirementUploadRequest(params: {
++    tradeId: string;
++    volumeTonnes?: number;
++    standard?: string;
++    sellerEmail: string;
++    uploadedBy?: string;
++    pdfBuffer?: Buffer;
++  }): Promise<void> {
++    if (!params.sellerEmail || !isZohoConfigured()) return;
++    const { token, tokenHash } = createRetirementUploadToken();
++    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
++    await db.insert(retirementUploadTokens).values({
++      tradeId: params.tradeId,
++      tokenHash,
++      sellerEmail: params.sellerEmail,
++      expiresAt,
++    });
++    const uploadLink = `https://uaiu.live/retire/${params.tradeId}?token=${token}`;
++    const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Retirement Certificate Upload Required</h2><p>Trade ${params.tradeId} has settled successfully.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Volume:</strong> ${params.volumeTonnes || 0} tonnes</li><li><strong>Standard:</strong> ${params.standard || 'N/A'}</li></ul><p>Please upload the registry retirement certificate within 48 hours:</p><p><a href="${uploadLink}" style="color:#d4a843">${uploadLink}</a></p></div>`;
++    const attachments = params.pdfBuffer ? [{ filename: `UAIU-Trade-${params.tradeId}.pdf`, content: params.pdfBuffer, contentType: 'application/pdf' as const }] : undefined;
++    await sendZohoEmail(params.sellerEmail, `Action Required: Upload retirement certificate for ${params.tradeId}`, html, attachments);
++  }
++
++  setInterval(async () => {
++    try {
++      if (!isZohoConfigured()) return;
++      const rows = await db.execute(sql`
++        SELECT id, trade_id, seller_email
++        FROM retirement_upload_tokens
++        WHERE used_at IS NULL
++          AND created_at <= NOW() - INTERVAL '24 hours'
++          AND created_at > NOW() - INTERVAL '25 hours'
++      `);
++      for (const row of (rows as any).rows || []) {
++        if (!row.seller_email) continue;
++        await sendZohoEmail(
++          row.seller_email,
++          `Reminder: retirement certificate due for ${row.trade_id}`,
++          `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">24-hour Reminder</h2><p>Trade ${row.trade_id} still requires a retirement certificate upload.</p></div>`
++        );
++      }
++    } catch (e: any) {
++      console.error('[Retirement reminder]', e.message);
++    }
++  }, 60 * 60 * 1000);
++
++  app.post('/api/retire/:trade_id', retirementUpload.single('file'), async (req, res) => {
++    try {
++      const tradeId = req.params.trade_id;
++      const token = String(req.body?.token || req.query?.token || '');
++      const file = req.file;
++      if (!token) return res.status(400).json({ error: 'token is required' });
++      if (!file) return res.status(400).json({ error: 'file is required' });
++      if (!['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)) {
++        return res.status(400).json({ error: 'Only PDF or image uploads are allowed.' });
++      }
++
++      const [tokenRow] = await db.select().from(retirementUploadTokens)
++        .where(eq(retirementUploadTokens.tradeId, tradeId))
++        .orderBy(desc(retirementUploadTokens.createdAt))
++        .limit(1);
++      if (!tokenRow || tokenRow.usedAt || new Date(tokenRow.expiresAt) < new Date() || !secureTokenMatch(token, tokenRow.tokenHash)) {
++        return res.status(401).json({ error: 'Invalid or expired token.' });
++      }
++
++      const sb = req.app.locals.supabase as any;
++      if (!sb) return res.status(500).json({ error: 'Supabase not configured.' });
++      const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
++      const storagePath = `retirement-certificates/${tradeId}/${safeName}`;
++      const { error: uploadError } = await sb.storage.from('retirement-certificates').upload(storagePath, file.buffer, {
++        contentType: file.mimetype,
++        upsert: false,
++      });
++      if (uploadError) return res.status(500).json({ error: `Upload failed: ${uploadError.message}` });
++
++      await db.insert(tradeRetirementCertificates).values({
++        tradeId,
++        uploadUrl: storagePath,
++        uploadedAt: new Date(),
++        uploadedBy: tokenRow.sellerEmail || null,
++        certificateFilename: file.originalname,
++        supabaseStoragePath: storagePath,
++      });
++      await db.update(retirementUploadTokens).set({ usedAt: new Date() }).where(eq(retirementUploadTokens.id, tokenRow.id));
++
++      res.status(200).send(`<html><body style="font-family:Arial;background:#060810;color:#f2ead8;padding:32px"><h2 style="color:#d4a843">Retirement certificate uploaded</h2><p>Trade ${tradeId} is now marked as retirement confirmed.</p></body></html>`);
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
++  app.get('/api/retire/:trade_id/status', async (req, res) => {
++    try {
++      const tradeId = req.params.trade_id;
++      const [cert] = await db.select().from(tradeRetirementCertificates)
++        .where(eq(tradeRetirementCertificates.tradeId, tradeId))
++        .orderBy(desc(tradeRetirementCertificates.createdAt))
++        .limit(1);
++      if (!cert) return res.json({ uploaded: false, status: 'Retirement Pending — Due within 48 hours of settlement.' });
++      return res.json({ uploaded: true, uploadedAt: cert.uploadedAt, filename: cert.certificateFilename, status: `Retirement Confirmed — ${cert.uploadedAt?.toISOString?.() || cert.uploadedAt}` });
++    } catch (e: any) {
++      res.status(500).json({ error: safeError(e) });
++    }
++  });
++
+   // ─── Wave 3: Stripe Escrow Routes ────────────────────────────────
+ 
+   app.post('/api/escrow/create', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
+       if (!trade_id || !amount_eur || amount_eur < 100) {
+         return res.status(400).json({ error: 'Invalid escrow parameters' });
+       }
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+ 
+       let escrowSellerProfileId = '';
+       let escrowConnectAccountId: string = seller_connect_account_id || '';
+       let escrowPaymentModel: 'destination_charge' | 'platform_collect' = 'platform_collect';
+       if (listing_id) {
+         const listingLookup = await db.execute(sql`
+           SELECT el.seller_profile_id, sp.stripe_connect_account_id, sp.connect_onboarding_complete
+           FROM exchange_listings el
+           LEFT JOIN seller_profiles sp ON sp.id = el.seller_profile_id
+           WHERE el.id = ${listing_id}
+           LIMIT 1
+         `).catch(() => ({ rows: [] } as any));
+@@ -3199,50 +3397,77 @@ Respond with a JSON object (no markdown) with these exact fields:
+   });
+ 
+   app.post('/api/escrow/release', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { payment_intent_id, trade_id } = req.body;
+       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+       const captured = await stripe.paymentIntents.capture(payment_intent_id);
+       const gross = captured.amount / 100;
+       const uaiu_fee = gross * 0.0075;
+       const seller_net = gross - uaiu_fee;
+       const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
+       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
+       if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
+         const escrowSellerLookup = await db.execute(sql`
+           SELECT exchange_account_email FROM seller_profiles
+           WHERE id = ${(captured.metadata as any).seller_profile_id} LIMIT 1
+         `).catch(() => ({ rows: [] } as any));
+         const escrowSellerEmail = (escrowSellerLookup as any).rows?.[0]?.exchange_account_email || '';
+         if (escrowSellerEmail) {
+           sendSellerDestinationPayoutEmail({ sellerEmail: escrowSellerEmail, tradeId: trade_id, payoutAmountEur: seller_net, chargeId: String(captured.latest_charge || '') }).catch(() => {});
++          const tradePdf = await generateTradePDF({
++            trade_id,
++            side: 'BUY',
++            standard: String((captured.metadata as any)?.standard || ''),
++            volume_tonnes: Number((captured.metadata as any)?.volume_tonnes || 0),
++            price_eur_per_tonne: Number((gross / Math.max(Number((captured.metadata as any)?.volume_tonnes || 1), 1)).toFixed(2)),
++            gross_eur: gross,
++            fee_eur: uaiu_fee,
++            receipt_hash: String(captured.id || ''),
++            prev_receipt_hash: '',
++            payment_intent_id: captured.id,
++            stripe_charge_id: String(captured.latest_charge || ''),
++            settled_at: new Date().toISOString(),
++            buyer_email: String((captured.metadata as any)?.buyer_email || ''),
++            seller_registry_name: String((captured.metadata as any)?.seller_registry_name || ''),
++            seller_registry_serial: String((captured.metadata as any)?.seller_registry_serial || ''),
++            buyer_registry_account_id: String((captured.metadata as any)?.buyer_registry_account_id || ''),
++            buyer_registry_name: String((captured.metadata as any)?.buyer_registry_name || ''),
++            retirement_status: 'Retirement Pending — Due within 48 hours of settlement.',
++          });
++          await sendRetirementUploadRequest({
++            tradeId: trade_id,
++            volumeTonnes: Number((captured.metadata as any)?.volume_tonnes || 0),
++            standard: String((captured.metadata as any)?.standard || ''),
++            sellerEmail: escrowSellerEmail,
++            pdfBuffer: tradePdf,
++          });
+         }
+       }
+       try {
+         const { sendExchangeEmail } = await import('./email-service');
+         await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Settlement Model': escrowPaymentModel, 'Stripe Charge': captured.latest_charge as string });
+       } catch (emailError) { console.error('Settlement email error:', emailError); }
+       res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, payment_model: escrowPaymentModel, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
+     } catch (e: any) {
+       console.error('Escrow release error:', e);
+       res.status(500).json({ error: safeError(e) });
+     }
+   });
+ 
+   app.post('/api/escrow/cancel', async (req, res) => {
+     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
+     try {
+       const { payment_intent_id, trade_id, reason } = req.body;
+       if (!payment_intent_id) return res.status(400).json({ error: 'Missing payment intent ID' });
+       const stripeKey = process.env.STRIPE_SECRET_KEY;
+       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
+       const { default: Stripe } = await import('stripe');
+       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+       await stripe.paymentIntents.cancel(payment_intent_id, { cancellation_reason: 'abandoned' });
+       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: reason || 'trade_cancelled' }).eq('payment_intent_id', payment_intent_id);
+       res.json({ success: true, status: 'cancelled', message: 'Escrow cancelled. Funds will be released back to buyer within 5-10 business days.' });
+diff --git a/server/storage.ts b/server/storage.ts
+index 2877c65c00be735f6e23f15567a95b78613d5822..0e12519cec683bba88b97d3dd84613f711e11cca 100644
+--- a/server/storage.ts
++++ b/server/storage.ts
+@@ -605,50 +605,53 @@ export class DbStorage implements IStorage {
+     const standardMap: Record<string, string> = {
+       'EU ETS — European Union Allowances': 'EU ETS',
+       'VCS — Verified Carbon Standard':     'VCS',
+       'Gold Standard':                       'GOLD STD',
+       'CORSIA — Aviation Offsets':           'CORSIA',
+       'Blue Carbon / VCS':                   'VCS',
+       'Other':                               'VCS',
+     };
+     const badge = standardMap[submission.standard] || 'VCS';
+     const priceNum = parseFloat(String(submission.askingPricePerTonne)) || 0;
+ 
+     const sellerProfileResult = await db.execute(sql`
+       SELECT id
+       FROM seller_profiles
+       WHERE exchange_account_email = ${submission.email}
+       LIMIT 1
+     `);
+     const sellerProfileId: string | null = (sellerProfileResult as any).rows?.[0]?.id ?? null;
+ 
+     const [newListing] = await db.insert(exchangeListings).values({
+       standard:          badge,
+       badgeLabel:        badge,
+       name:              `${submission.creditType} — ${submission.orgName}`,
+       origin:            submission.projectOrigin,
+       sellerProfileId,
++      registrySerial:    submission.registrySerial,
++      registryName:      submission.registryName,
++      vintageYear:       submission.vintageYear,
+       pricePerTonne:     priceNum,
+       changePercent:     0,
+       changeDirection:   'up',
+       status:            'active',
+       isAcceptingOrders: true,
+     }).returning();
+     return newListing;
+   }
+ 
+   async rejectCreditListing(id: string): Promise<ExchangeCreditListing> {
+     const [updated] = await db.update(exchangeCreditListings)
+       .set({ status: 'rejected' })
+       .where(eq(exchangeCreditListings.id, id))
+       .returning();
+     if (!updated) throw new Error(`Credit listing ${id} not found`);
+     return updated;
+   }
+ 
+   async logWebhookFailure(failure: InsertWebhookFailure): Promise<WebhookFailure> {
+     const [result] = await db.insert(webhookFailures).values({
+       ...failure,
+       lastAttemptedAt: new Date(),
+     }).returning();
+     return result;
+   }
+diff --git a/shared/schema.ts b/shared/schema.ts
+index ac7801680383c7054e1592e8fa01fa06529aa6c0..178b198a41189f31193ec8dd60e3b362a743a981 100644
+--- a/shared/schema.ts
++++ b/shared/schema.ts
+@@ -272,124 +272,157 @@ export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+ export type Friendship = typeof friendships.$inferSelect;
+ export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
+ export type Achievement = typeof achievements.$inferSelect;
+ export type InsertDailyMission = z.infer<typeof insertDailyMissionSchema>;
+ export type DailyMission = typeof dailyMissions.$inferSelect;
+ export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+ export type Notification = typeof notifications.$inferSelect;
+ export type InsertPost = z.infer<typeof insertPostSchema>;
+ export type Post = typeof posts.$inferSelect;
+ export type InsertLike = z.infer<typeof insertLikeSchema>;
+ export type Like = typeof likes.$inferSelect;
+ export type InsertComment = z.infer<typeof insertCommentSchema>;
+ export type Comment = typeof comments.$inferSelect;
+ export type InsertReferralPayout = z.infer<typeof insertReferralPayoutSchema>;
+ export type ReferralPayout = typeof referralPayouts.$inferSelect;
+ export type InsertLiveMatchSession = z.infer<typeof insertLiveMatchSessionSchema>;
+ export type LiveMatchSession = typeof liveMatchSessions.$inferSelect;
+ 
+ export const exchangeListings = pgTable("exchange_listings", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   standard: varchar("standard").notNull(),
+   badgeLabel: varchar("badge_label").notNull(),
+   name: varchar("name").notNull(),
+   origin: varchar("origin").notNull(),
+   sellerProfileId: varchar("seller_profile_id"),
++  registrySerial: varchar("registry_serial"),
++  registryName: varchar("registry_name"),
++  vintageYear: integer("vintage_year"),
+   pricePerTonne: real("price_per_tonne").notNull(),
+   changePercent: real("change_percent").notNull().default(0),
+   changeDirection: varchar("change_direction").notNull().default('up'),
+   status: varchar("status").notNull().default('active'),
+   isAcceptingOrders: boolean("is_accepting_orders").notNull().default(true),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeAccounts = pgTable("exchange_accounts", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orgName: varchar("org_name"),
+   contactName: varchar("contact_name"),
+   email: varchar("email").notNull(),
+   role: varchar("role"),
+   firstName: varchar("first_name"),
+   lastName: varchar("last_name"),
+   phone: varchar("phone"),
+   accountType: varchar("account_type"),
+   annualCo2Exposure: varchar("annual_co2_exposure"),
++  registryAccountId: varchar("registry_account_id"),
++  registryName: varchar("registry_name"),
+   passwordHash: varchar("password_hash"),
+   acceptedTermsAt: timestamp("accepted_terms_at"),
+   kycStatus: varchar("kyc_status").notNull().default('not_started'),
+   failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+   lockedUntil: timestamp("locked_until"),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeTrades = pgTable("exchange_trades", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   accountEmail: varchar("account_email").notNull(),
+   tradeId: varchar("trade_id").notNull().unique(),
+   side: varchar("side").notNull(),
+   standard: varchar("standard").notNull(),
+   volumeTonnes: real("volume_tonnes").notNull(),
+   pricePerTonne: real("price_per_tonne").notNull(),
+   grossEur: real("gross_eur").notNull(),
+   feeEur: real("fee_eur").notNull().default(0),
+   receiptHash: varchar("receipt_hash"),
+   stripeSessionId: varchar("stripe_session_id"),
++  buyerRegistryAccountId: varchar("buyer_registry_account_id"),
++  buyerRegistryName: varchar("buyer_registry_name"),
++  sellerRegistryName: varchar("seller_registry_name"),
++  sellerRegistrySerial: varchar("seller_registry_serial"),
++  vintageYear: integer("vintage_year"),
+   status: varchar("status").notNull().default('completed'),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeRfqs = pgTable("exchange_rfqs", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   company: varchar("company").notNull(),
+   contact: varchar("contact").notNull(),
+   email: varchar("email").notNull(),
+   side: varchar("side").notNull(),
+   standard: varchar("standard").notNull(),
+   volumeTonnes: integer("volume_tonnes").notNull(),
+   targetPrice: real("target_price"),
+   preferredOrigin: varchar("preferred_origin"),
+   vintageYear: integer("vintage_year"),
+   deadline: varchar("deadline"),
+   notes: varchar("notes"),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeCreditListings = pgTable("exchange_credit_listings", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orgName: varchar("org_name").notNull(),
+   contactName: varchar("contact_name").notNull(),
+   email: varchar("email").notNull(),
+   standard: varchar("standard").notNull(),
+   creditType: varchar("credit_type").notNull(),
+   volumeTonnes: varchar("volume_tonnes").notNull(),
+   askingPricePerTonne: varchar("asking_price_per_tonne").notNull(),
+   projectOrigin: varchar("project_origin").notNull(),
+   registrySerial: varchar("registry_serial"),
++  registryName: varchar("registry_name"),
++  vintageYear: integer("vintage_year"),
+   status: varchar("status").notNull().default('pending'),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
++export const tradeRetirementCertificates = pgTable("trade_retirement_certificates", {
++  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
++  tradeId: varchar("trade_id").notNull(),
++  uploadUrl: text("upload_url"),
++  uploadedAt: timestamp("uploaded_at"),
++  uploadedBy: varchar("uploaded_by"),
++  certificateFilename: varchar("certificate_filename"),
++  supabaseStoragePath: varchar("supabase_storage_path"),
++  createdAt: timestamp("created_at").notNull().defaultNow(),
++});
++
++export const retirementUploadTokens = pgTable("retirement_upload_tokens", {
++  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
++  tradeId: varchar("trade_id").notNull(),
++  tokenHash: varchar("token_hash").notNull(),
++  sellerEmail: varchar("seller_email"),
++  expiresAt: timestamp("expires_at").notNull(),
++  usedAt: timestamp("used_at"),
++  createdAt: timestamp("created_at").notNull().defaultNow(),
++});
++
+ export const webhookFailures = pgTable("webhook_failures", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventId: varchar("event_id"),
+   eventType: varchar("event_type").notNull(),
+   tradeId: varchar("trade_id"),
+   paymentIntentId: varchar("payment_intent_id"),
+   payload: text("payload"),
+   errorMessage: text("error_message"),
+   retryCount: integer("retry_count").notNull().default(0),
+   lastAttemptedAt: timestamp("last_attempted_at").notNull().defaultNow(),
+   resolved: boolean("resolved").notNull().default(false),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeSessions = pgTable("exchange_sessions", {
+   id: serial("id").primaryKey(),
+   email: varchar("email").notNull(),
+   token: varchar("token").notNull().unique(),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+   expiresAt: timestamp("expires_at").notNull(),
+ });
+ 
+ export const exchangeSecurityLog = pgTable("exchange_security_log", {
+   id: serial("id").primaryKey(),
+   email: varchar("email"),
+@@ -415,62 +448,69 @@ export const insertExchangeAccountSchema = createInsertSchema(exchangeAccounts).
+   id: true,
+   createdAt: true,
+ });
+ export const insertExchangeRfqSchema = createInsertSchema(exchangeRfqs).omit({
+   id: true,
+   createdAt: true,
+ });
+ export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
+   id: true,
+   status: true,
+   createdAt: true,
+ });
+ 
+ export const insertWebhookFailureSchema = createInsertSchema(webhookFailures).omit({
+   id: true,
+   retryCount: true,
+   resolved: true,
+   createdAt: true,
+ });
+ 
+ export const insertExchangeTradeSchema = createInsertSchema(exchangeTrades).omit({
+   id: true,
+   createdAt: true,
+ });
+ 
++export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRetirementCertificates).omit({
++  id: true,
++  createdAt: true,
++});
++
+ export type ExchangeListing = typeof exchangeListings.$inferSelect;
+ export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
+ export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
+ export type InsertExchangeAccount = z.infer<typeof insertExchangeAccountSchema>;
+ export type ExchangeRfq = typeof exchangeRfqs.$inferSelect;
+ export type InsertExchangeRfq = z.infer<typeof insertExchangeRfqSchema>;
+ export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
+ export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
+ export type WebhookFailure = typeof webhookFailures.$inferSelect;
+ export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
+ export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
+ export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
++export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inferSelect;
++export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
+ 
+ // ── Backup & Disaster Recovery ──────────────────────────────────────────────
+ export const backupLogs = pgTable("backup_logs", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   filename: text("filename").notNull(),
+   fileSizeBytes: integer("file_size_bytes"),
+   checksumSha256: text("checksum_sha256"),
+   storagePath: text("storage_path"),
+   storageProvider: text("storage_provider").default("local"),
+   uploadStatus: text("upload_status").default("pending"),
+   backupType: text("backup_type").default("scheduled"),
+   triggeredBy: text("triggered_by").default("cron"),
+   errorMessage: text("error_message"),
+   verifiedAt: timestamp("verified_at"),
+   verifyStatus: text("verify_status"),
+   createdAt: timestamp("created_at").defaultNow(),
+ });
+ 
+ export const insertBackupLogSchema = createInsertSchema(backupLogs).omit({
+   id: true,
+   createdAt: true,
+ });
+ 
+ export type BackupLog = typeof backupLogs.$inferSelect;
+ export type InsertBackupLog = z.infer<typeof insertBackupLogSchema>;

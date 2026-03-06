@@ -307,6 +307,8 @@ export default function Admin() {
                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Volume</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.annualVolume || l.annual_volume} t/yr</span></div>
                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Price</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>€{l.askingPricePerTonne || l.asking_price_per_tonne}/t</span></div>
                     <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Serial</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registrySerial || l.registry_serial}</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Registry</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.registryName || l.registry_name || '—'}</span></div>
+                    <div className="kv"><span style={{ fontSize: '10px', color: C.muted, textTransform: 'uppercase' }}>Vintage Year</span><span style={{ fontSize: '13px', color: C.text, fontFamily: F.mono }}>{l.vintageYear || l.vintage_year || '—'}</span></div>
                   </div>
                 </div>
               ))

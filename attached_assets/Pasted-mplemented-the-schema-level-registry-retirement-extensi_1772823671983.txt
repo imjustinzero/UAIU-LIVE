@@ -1,0 +1,39 @@
+mplemented the schema-level registry/retirement extensions: added registry fields to exchange listings, buyer registry fields to exchange accounts and trades, and created trade_retirement_certificates plus one-time retirement_upload_tokens tables for secure retirement upload flow support. 
+
+Enforced Partner API registry validation on POST /api/partner/listings so each listing now requires registry_serial, registry_name (allowlist), and vintage_year (2010..current year), with explicit 400 error responses on invalid input. 
+
+Wired buyer registry capture into exchange account/profile + checkout metadata and persisted registry snapshot fields into trades at execution time (for immutable trade linkage). 
+
+Added retirement certificate post-settlement flow:
+
+secure token generation/validation helpers,
+
+tokenized seller email request + 24-hour reminder loop,
+
+POST /api/retire/:trade_id file upload (PDF/images) to Supabase Storage path retirement-certificates/{trade_id}/{filename},
+
+GET /api/retire/:trade_id/status API,
+
+settlement-time trigger in escrow release path with attached audit PDF. 
+
+Extended audit-pack PDF generation with retirement status + a dedicated “Registry Transfer Instructions” section containing seller/buyer registry instructions and transfer wording. 
+
+Updated marketplace/admin/portfolio UI:
+
+marketplace listing cards now show a green “Registry Verified” badge (tooltip full serial), plus registry row with name, last-8 serial, and vintage year,
+
+admin pending-listing cards now show registry name/serial/vintage,
+
+portfolio trade rows now include retirement status. 
+
+Added onboarding/checkout prompt support for buyer registry account ID and registry name (including helper text in account flow and non-blocking checkout prompt behavior). 
+
+Testing
+
+⚠️ npm run db:push (failed in environment because DATABASE_URL is not set).
+
+✅ npm run check
+
+✅ npm run build
+
+⚠️ npm run dev (could not run app/screenshot due missing DATABASE_URL, so screenshot capture was attempted but blocked by environment).

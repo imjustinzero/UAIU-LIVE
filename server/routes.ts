@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import express from "express";
-import { createHash } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import rateLimit from "express-rate-limit";
 import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
 import { logSecurityEvent } from "./security-utils";
@@ -15,7 +15,7 @@ import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
 import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
-import { exchangeCreditListings, exchangeRfqs } from "@shared/schema";
+import { exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import { registerOpsRoutes } from "./ops-routes";
@@ -31,6 +31,52 @@ import { startCronJobs } from "./cron";
 import { generateTradePDF } from "./pdf-generator";
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
+
+const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
+
+function createRetirementUploadToken(): { token: string; tokenHash: string } {
+  const token = randomBytes(24).toString('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  return { token, tokenHash };
+}
+
+function secureTokenMatch(rawToken: string, tokenHash: string): boolean {
+  const inputHash = createHash('sha256').update(rawToken).digest('hex');
+  return timingSafeEqual(Buffer.from(inputHash), Buffer.from(tokenHash));
+}
+
+async function sendRetirementUploadRequest(params: {
+  tradeId: string;
+  volumeTonnes: number;
+  standard: string;
+  sellerEmail: string;
+  pdfBuffer?: Buffer;
+  registrySerial?: string;
+  registryName?: string;
+  vintageYear?: number;
+}): Promise<void> {
+  if (!params.sellerEmail || !isZohoConfigured()) return;
+  try {
+    const { token, tokenHash } = createRetirementUploadToken();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await db.insert(retirementUploadTokens).values({
+      tradeId: params.tradeId,
+      tokenHash,
+      sellerEmail: params.sellerEmail,
+      expiresAt,
+    }).catch(() => {});
+    const uploadUrl = `https://uaiu.live/retire/${params.tradeId}?token=${token}`;
+    const regDetails = [
+      params.registryName ? `<li><strong>Registry:</strong> ${params.registryName}</li>` : '',
+      params.registrySerial ? `<li><strong>Serial:</strong> ${params.registrySerial}</li>` : '',
+      params.vintageYear ? `<li><strong>Vintage Year:</strong> ${params.vintageYear}</li>` : '',
+    ].join('');
+    const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Retirement Certificate Required</h2><p>Trade <strong>${params.tradeId}</strong> has settled. Please upload your carbon credit retirement certificate within 48 hours.</p><ul><li><strong>Trade ID:</strong> ${params.tradeId}</li><li><strong>Volume:</strong> ${params.volumeTonnes.toLocaleString()} tonnes ${params.standard}</li>${regDetails}<li><strong>Deadline:</strong> ${expiresAt.toISOString().split('T')[0]}</li></ul><p><a href="${uploadUrl}" style="color:#d4a843">Upload Retirement Certificate →</a></p><p style="font-size:11px;color:rgba(242,234,216,0.4)">Link expires in 24 hours. Contact desk@uaiu.live for assistance.</p></div>`;
+    await sendZohoEmail(params.sellerEmail, `UAIU Retirement Certificate Required — ${params.tradeId}`, html);
+  } catch (e: any) {
+    console.error('[sendRetirementUploadRequest]', e.message);
+  }
+}
 
 function estimateNextStripePayoutDate(from = new Date()): string {
   const next = new Date(from);
@@ -308,6 +354,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   feeEur,
                   receiptHash,
                   stripeSessionId: cs.id,
+                  buyerRegistryAccountId: meta.buyer_registry_account_id || null,
+                  buyerRegistryName: meta.buyer_registry_name || null,
+                  sellerRegistryName: meta.seller_registry_name || null,
+                  sellerRegistrySerial: meta.seller_registry_serial || null,
+                  vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
                   status:          'completed',
                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
 
@@ -386,6 +437,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   stripe_charge_id:    '',
                   settled_at,
                   buyer_email:         email,
+                  buyer_registry_account_id: meta.buyer_registry_account_id || '',
+                  buyer_registry_name: meta.buyer_registry_name || '',
+                  seller_registry_name: meta.seller_registry_name || '',
+                  seller_registry_serial: meta.seller_registry_serial || '',
+                  vintage_year: meta.vintage_year ? Number(meta.vintage_year) : undefined,
                 }).then(pdfBuffer => {
                   const recipients = ['info@uaiu.live'];
                   if (email && email !== 'info@uaiu.live') recipients.push(email);
@@ -1570,17 +1626,45 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  // ── EXCHANGE: Update buyer registry account ───────────────────────────────
+  app.patch('/api/exchange/account/registry', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = (req as any).exchangeEmail;
+      const { registryAccountId, registryName } = req.body;
+      await db.execute(sql`
+        UPDATE exchange_accounts
+        SET registry_account_id = ${registryAccountId ? String(registryAccountId).trim() : null},
+            registry_name = ${registryName ? String(registryName).trim() : null}
+        WHERE email = ${email}
+      `);
+      const updated = await storage.getExchangeAccountByEmail(email);
+      res.json(updated || { success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
   // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
   app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
     try {
       const email = (req as any).exchangeEmail;
-      const { standard, volumeTonnes, pricePerTonne, tradeId, side } = req.body;
+      const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName } = req.body;
       if (!standard || !volumeTonnes || !tradeId) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account || account.kycStatus !== 'verified') {
         return res.status(403).json({ error: 'KYC verification required before trading.' });
+      }
+      const buyerRegistryAccountId = registryAccountId || (account as any).registryAccountId || '';
+      const buyerRegistryName = registryName || (account as any).registryName || '';
+      if (registryAccountId || registryName) {
+        await db.execute(sql`
+          UPDATE exchange_accounts
+          SET registry_account_id = ${buyerRegistryAccountId || null},
+              registry_name = ${buyerRegistryName || null}
+          WHERE email = ${email}
+        `).catch(() => {});
       }
       const listings = await storage.getExchangeListingsByStandard(String(standard));
       const activeListing = listings[0];
@@ -1631,6 +1715,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           fee_eur: fee.toFixed(2),
           seller_profile_id: String((activeListing as any).seller_profile_id || ''),
           seller_connect_account_id: String(connectAccountId || ''),
+          seller_registry_name: String((activeListing as any).registry_name || ''),
+          seller_registry_serial: String((activeListing as any).registry_serial || ''),
+          buyer_registry_account_id: buyerRegistryAccountId,
+          buyer_registry_name: buyerRegistryName,
           payment_model: paymentModel,
         },
         payment_intent_data: paymentModel === 'destination_charge' ? {
@@ -1783,6 +1871,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         accountData.passwordHash = await bcrypt.hash(body.password, 12);
       }
       const account = await storage.createExchangeAccount(accountData);
+      if (body.registryAccountId || body.registryName) {
+        await db.execute(sql`
+          UPDATE exchange_accounts
+          SET registry_account_id = ${body.registryAccountId ? String(body.registryAccountId).trim() : null},
+              registry_name = ${body.registryName ? String(body.registryName).trim() : null}
+          WHERE id = ${account.id}
+        `).catch(() => {});
+      }
       sendExchangeEmail('Open Account Request', {
         'Name': body.firstName ? `${body.firstName} ${body.lastName || ''}`.trim() : (body.contactName || 'N/A'),
         'Organization': body.orgName || body.company || 'N/A',
@@ -1896,10 +1992,24 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const inserted: string[] = [];
       const errors: string[]   = [];
 
+      const currentYear = new Date().getFullYear();
       for (const item of listings) {
         try {
           if (!item.name || !item.standard || !item.pricePerTonne) {
             errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
+            continue;
+          }
+          if (!item.registry_serial) {
+            errors.push(`Skipped (missing registry_serial): ${item.name}`);
+            continue;
+          }
+          if (!item.registry_name || !(ALLOWED_REGISTRY_NAMES as readonly string[]).includes(item.registry_name)) {
+            errors.push(`Skipped (invalid registry_name '${item.registry_name}'): ${item.name}. Allowed: ${ALLOWED_REGISTRY_NAMES.join(', ')}`);
+            continue;
+          }
+          const vintageYearNum = parseInt(item.vintage_year);
+          if (!vintageYearNum || vintageYearNum < 2010 || vintageYearNum > currentYear) {
+            errors.push(`Skipped (invalid vintage_year '${item.vintage_year}'): ${item.name}. Must be 2010–${currentYear}`);
             continue;
           }
           await storage.seedExchangeListings([{
@@ -3227,6 +3337,27 @@ Respond with a JSON object (no markdown) with these exact fields:
         const { sendExchangeEmail } = await import('./email-service');
         await sendExchangeEmail(`Trade ${trade_id} — Settlement Confirmed`, { 'Gross': `€${gross.toLocaleString()}`, 'UAIU Fee (0.75%)': `€${uaiu_fee.toFixed(2)}`, 'Net Settled': `€${seller_net.toFixed(2)}`, 'Settlement Model': escrowPaymentModel, 'Stripe Charge': captured.latest_charge as string });
       } catch (emailError) { console.error('Settlement email error:', emailError); }
+      if (trade_id) {
+        const tradeRow = await db.execute(sql`
+          SELECT seller_registry_name, seller_registry_serial, vintage_year
+          FROM exchange_trades WHERE trade_id = ${trade_id} LIMIT 1
+        `).catch(() => ({ rows: [] } as any));
+        const trow = (tradeRow as any).rows?.[0];
+        const escrowSellerLookup2 = await db.execute(sql`
+          SELECT exchange_account_email FROM seller_profiles
+          WHERE id = ${(captured.metadata as any)?.seller_profile_id || ''} LIMIT 1
+        `).catch(() => ({ rows: [] } as any));
+        const escrowSellerEmail2 = (escrowSellerLookup2 as any).rows?.[0]?.exchange_account_email || 'seller@uaiu.live';
+        sendRetirementUploadRequest({
+          tradeId: trade_id,
+          sellerEmail: escrowSellerEmail2,
+          volumeTonnes: gross / Math.max(1, seller_net / (gross - uaiu_fee)),
+          standard: String((captured.metadata as any)?.standard || 'Carbon Credit'),
+          registrySerial: trow?.seller_registry_serial || '',
+          registryName: trow?.seller_registry_name || '',
+          vintageYear: trow?.vintage_year || undefined,
+        }).catch(() => {});
+      }
       res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, payment_model: escrowPaymentModel, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
     } catch (e: any) {
       console.error('Escrow release error:', e);

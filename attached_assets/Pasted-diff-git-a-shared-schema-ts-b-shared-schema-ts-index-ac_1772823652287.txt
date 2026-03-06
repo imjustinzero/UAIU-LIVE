@@ -1,0 +1,232 @@
+diff --git a/shared/schema.ts b/shared/schema.ts
+index ac7801680383c7054e1592e8fa01fa06529aa6c0..178b198a41189f31193ec8dd60e3b362a743a981 100644
+--- a/shared/schema.ts
++++ b/shared/schema.ts
+@@ -272,124 +272,157 @@ export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+ export type Friendship = typeof friendships.$inferSelect;
+ export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
+ export type Achievement = typeof achievements.$inferSelect;
+ export type InsertDailyMission = z.infer<typeof insertDailyMissionSchema>;
+ export type DailyMission = typeof dailyMissions.$inferSelect;
+ export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+ export type Notification = typeof notifications.$inferSelect;
+ export type InsertPost = z.infer<typeof insertPostSchema>;
+ export type Post = typeof posts.$inferSelect;
+ export type InsertLike = z.infer<typeof insertLikeSchema>;
+ export type Like = typeof likes.$inferSelect;
+ export type InsertComment = z.infer<typeof insertCommentSchema>;
+ export type Comment = typeof comments.$inferSelect;
+ export type InsertReferralPayout = z.infer<typeof insertReferralPayoutSchema>;
+ export type ReferralPayout = typeof referralPayouts.$inferSelect;
+ export type InsertLiveMatchSession = z.infer<typeof insertLiveMatchSessionSchema>;
+ export type LiveMatchSession = typeof liveMatchSessions.$inferSelect;
+ 
+ export const exchangeListings = pgTable("exchange_listings", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   standard: varchar("standard").notNull(),
+   badgeLabel: varchar("badge_label").notNull(),
+   name: varchar("name").notNull(),
+   origin: varchar("origin").notNull(),
+   sellerProfileId: varchar("seller_profile_id"),
++  registrySerial: varchar("registry_serial"),
++  registryName: varchar("registry_name"),
++  vintageYear: integer("vintage_year"),
+   pricePerTonne: real("price_per_tonne").notNull(),
+   changePercent: real("change_percent").notNull().default(0),
+   changeDirection: varchar("change_direction").notNull().default('up'),
+   status: varchar("status").notNull().default('active'),
+   isAcceptingOrders: boolean("is_accepting_orders").notNull().default(true),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeAccounts = pgTable("exchange_accounts", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orgName: varchar("org_name"),
+   contactName: varchar("contact_name"),
+   email: varchar("email").notNull(),
+   role: varchar("role"),
+   firstName: varchar("first_name"),
+   lastName: varchar("last_name"),
+   phone: varchar("phone"),
+   accountType: varchar("account_type"),
+   annualCo2Exposure: varchar("annual_co2_exposure"),
++  registryAccountId: varchar("registry_account_id"),
++  registryName: varchar("registry_name"),
+   passwordHash: varchar("password_hash"),
+   acceptedTermsAt: timestamp("accepted_terms_at"),
+   kycStatus: varchar("kyc_status").notNull().default('not_started'),
+   failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+   lockedUntil: timestamp("locked_until"),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeTrades = pgTable("exchange_trades", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   accountEmail: varchar("account_email").notNull(),
+   tradeId: varchar("trade_id").notNull().unique(),
+   side: varchar("side").notNull(),
+   standard: varchar("standard").notNull(),
+   volumeTonnes: real("volume_tonnes").notNull(),
+   pricePerTonne: real("price_per_tonne").notNull(),
+   grossEur: real("gross_eur").notNull(),
+   feeEur: real("fee_eur").notNull().default(0),
+   receiptHash: varchar("receipt_hash"),
+   stripeSessionId: varchar("stripe_session_id"),
++  buyerRegistryAccountId: varchar("buyer_registry_account_id"),
++  buyerRegistryName: varchar("buyer_registry_name"),
++  sellerRegistryName: varchar("seller_registry_name"),
++  sellerRegistrySerial: varchar("seller_registry_serial"),
++  vintageYear: integer("vintage_year"),
+   status: varchar("status").notNull().default('completed'),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeRfqs = pgTable("exchange_rfqs", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   company: varchar("company").notNull(),
+   contact: varchar("contact").notNull(),
+   email: varchar("email").notNull(),
+   side: varchar("side").notNull(),
+   standard: varchar("standard").notNull(),
+   volumeTonnes: integer("volume_tonnes").notNull(),
+   targetPrice: real("target_price"),
+   preferredOrigin: varchar("preferred_origin"),
+   vintageYear: integer("vintage_year"),
+   deadline: varchar("deadline"),
+   notes: varchar("notes"),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeCreditListings = pgTable("exchange_credit_listings", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orgName: varchar("org_name").notNull(),
+   contactName: varchar("contact_name").notNull(),
+   email: varchar("email").notNull(),
+   standard: varchar("standard").notNull(),
+   creditType: varchar("credit_type").notNull(),
+   volumeTonnes: varchar("volume_tonnes").notNull(),
+   askingPricePerTonne: varchar("asking_price_per_tonne").notNull(),
+   projectOrigin: varchar("project_origin").notNull(),
+   registrySerial: varchar("registry_serial"),
++  registryName: varchar("registry_name"),
++  vintageYear: integer("vintage_year"),
+   status: varchar("status").notNull().default('pending'),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
++export const tradeRetirementCertificates = pgTable("trade_retirement_certificates", {
++  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
++  tradeId: varchar("trade_id").notNull(),
++  uploadUrl: text("upload_url"),
++  uploadedAt: timestamp("uploaded_at"),
++  uploadedBy: varchar("uploaded_by"),
++  certificateFilename: varchar("certificate_filename"),
++  supabaseStoragePath: varchar("supabase_storage_path"),
++  createdAt: timestamp("created_at").notNull().defaultNow(),
++});
++
++export const retirementUploadTokens = pgTable("retirement_upload_tokens", {
++  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
++  tradeId: varchar("trade_id").notNull(),
++  tokenHash: varchar("token_hash").notNull(),
++  sellerEmail: varchar("seller_email"),
++  expiresAt: timestamp("expires_at").notNull(),
++  usedAt: timestamp("used_at"),
++  createdAt: timestamp("created_at").notNull().defaultNow(),
++});
++
+ export const webhookFailures = pgTable("webhook_failures", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventId: varchar("event_id"),
+   eventType: varchar("event_type").notNull(),
+   tradeId: varchar("trade_id"),
+   paymentIntentId: varchar("payment_intent_id"),
+   payload: text("payload"),
+   errorMessage: text("error_message"),
+   retryCount: integer("retry_count").notNull().default(0),
+   lastAttemptedAt: timestamp("last_attempted_at").notNull().defaultNow(),
+   resolved: boolean("resolved").notNull().default(false),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+ });
+ 
+ export const exchangeSessions = pgTable("exchange_sessions", {
+   id: serial("id").primaryKey(),
+   email: varchar("email").notNull(),
+   token: varchar("token").notNull().unique(),
+   createdAt: timestamp("created_at").notNull().defaultNow(),
+   expiresAt: timestamp("expires_at").notNull(),
+ });
+ 
+ export const exchangeSecurityLog = pgTable("exchange_security_log", {
+   id: serial("id").primaryKey(),
+   email: varchar("email"),
+@@ -415,62 +448,69 @@ export const insertExchangeAccountSchema = createInsertSchema(exchangeAccounts).
+   id: true,
+   createdAt: true,
+ });
+ export const insertExchangeRfqSchema = createInsertSchema(exchangeRfqs).omit({
+   id: true,
+   createdAt: true,
+ });
+ export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
+   id: true,
+   status: true,
+   createdAt: true,
+ });
+ 
+ export const insertWebhookFailureSchema = createInsertSchema(webhookFailures).omit({
+   id: true,
+   retryCount: true,
+   resolved: true,
+   createdAt: true,
+ });
+ 
+ export const insertExchangeTradeSchema = createInsertSchema(exchangeTrades).omit({
+   id: true,
+   createdAt: true,
+ });
+ 
++export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRetirementCertificates).omit({
++  id: true,
++  createdAt: true,
++});
++
+ export type ExchangeListing = typeof exchangeListings.$inferSelect;
+ export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
+ export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
+ export type InsertExchangeAccount = z.infer<typeof insertExchangeAccountSchema>;
+ export type ExchangeRfq = typeof exchangeRfqs.$inferSelect;
+ export type InsertExchangeRfq = z.infer<typeof insertExchangeRfqSchema>;
+ export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
+ export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
+ export type WebhookFailure = typeof webhookFailures.$inferSelect;
+ export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
+ export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
+ export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
++export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inferSelect;
++export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
+ 
+ // ── Backup & Disaster Recovery ──────────────────────────────────────────────
+ export const backupLogs = pgTable("backup_logs", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   filename: text("filename").notNull(),
+   fileSizeBytes: integer("file_size_bytes"),
+   checksumSha256: text("checksum_sha256"),
+   storagePath: text("storage_path"),
+   storageProvider: text("storage_provider").default("local"),
+   uploadStatus: text("upload_status").default("pending"),
+   backupType: text("backup_type").default("scheduled"),
+   triggeredBy: text("triggered_by").default("cron"),
+   errorMessage: text("error_message"),
+   verifiedAt: timestamp("verified_at"),
+   verifyStatus: text("verify_status"),
+   createdAt: timestamp("created_at").defaultNow(),
+ });
+ 
+ export const insertBackupLogSchema = createInsertSchema(backupLogs).omit({
+   id: true,
+   createdAt: true,
+ });
+ 
+ export type BackupLog = typeof backupLogs.$inferSelect;
+ export type InsertBackupLog = z.infer<typeof insertBackupLogSchema>;

@@ -1,0 +1,118 @@
+diff --git a/client/src/components/exchange/InstitutionalFeatures.tsx b/client/src/components/exchange/InstitutionalFeatures.tsx
+index 95ccd7170b512d0172f0bd49f47dc2f46a27f47e..536c35ddb923b60c3f8da33c4910befc35c0b276 100644
+--- a/client/src/components/exchange/InstitutionalFeatures.tsx
++++ b/client/src/components/exchange/InstitutionalFeatures.tsx
+@@ -1,39 +1,39 @@
+ import { useState } from "react";
+ 
+ const C = {
+   ink: '#060810', ink2: '#0d1220', ink3: '#141e30',
+   gold: '#d4a843', gold2: '#f0c96a', goldfaint: 'rgba(212,168,67,0.12)',
+   goldborder: 'rgba(212,168,67,0.22)', cream: '#f2ead8',
+   cream2: 'rgba(242,234,216,0.7)', cream3: 'rgba(242,234,216,0.35)',
+   cream4: 'rgba(242,234,216,0.1)', green: '#22c55e', red: '#ef4444',
+ };
+ const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif", playfair: "'Playfair Display', serif" };
+ const fi: React.CSSProperties = { width: '100%', background: C.ink2, border: `1px solid ${C.goldborder}`, color: C.cream, padding: '13px 16px', fontFamily: F.mono, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
+ const fl: React.CSSProperties = { fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3, display: 'block', marginBottom: 8 };
+ 
+-interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; }
++interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; retirement_status?: string; }
+ interface Retirement { cert_id?: string; trade_id?: string; tonnes_retired?: number; beneficiary?: string; receipt_hash?: string; }
+ 
+ interface PortfolioProps {
+   trades?: Trade[];
+   retirements?: Retirement[];
+   accountName?: string;
+   annualTarget?: number;
+ }
+ 
+ export function PortfolioDashboard({ trades = [], retirements = [], accountName = 'Your Account', annualTarget = 10000 }: PortfolioProps) {
+   const [activeTab, setActiveTab] = useState<'overview' | 'trades' | 'retirements'>('overview');
+ 
+   const totalTonnes = trades.reduce((s, t) => s + (t.volume_tonnes || 0), 0);
+   const totalSpend = trades.reduce((s, t) => s + (t.gross_eur || 0), 0);
+   const totalRetired = retirements.reduce((s, r) => s + (r.tonnes_retired || 0), 0);
+   const compliancePct = annualTarget > 0 ? Math.min(100, (totalRetired / annualTarget) * 100) : 0;
+   const complianceColor = compliancePct >= 100 ? C.green : compliancePct >= 60 ? '#f59e0b' : C.red;
+ 
+   function downloadPDF() {
+     generatePDFReport({ accountName, trades, retirements, annualTarget });
+   }
+ 
+   return (
+     <section id="dashboard" style={{ background: C.ink2, borderTop: `1px solid ${C.goldborder}`, borderBottom: `1px solid ${C.goldborder}` }}>
+       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '100px 52px' }}>
+@@ -69,67 +69,71 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+             <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3 }}>EU ETS Compliance Status</div>
+             <div style={{ fontFamily: F.mono, fontSize: 10, color: complianceColor }}>{compliancePct.toFixed(0)}% — {totalRetired.toLocaleString()} / {annualTarget.toLocaleString()} t retired</div>
+           </div>
+           <div style={{ height: 8, background: C.ink3, position: 'relative' }}>
+             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${compliancePct}%`, background: complianceColor, transition: 'width 1s ease' }} />
+           </div>
+           <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginTop: 10 }}>
+             {compliancePct >= 100 ? '✓ Fully compliant for reporting period' : `${(annualTarget - totalRetired).toLocaleString()} tonnes remaining to meet annual target`}
+           </div>
+         </div>
+ 
+         <div style={{ display: 'flex', gap: 0, marginBottom: 24 }}>
+           {(['overview','trades','retirements'] as const).map(tab => (
+             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '12px 24px', fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', border: `1px solid ${C.goldborder}`, cursor: 'pointer', background: activeTab === tab ? C.goldfaint : 'transparent', color: activeTab === tab ? C.gold : C.cream3, borderBottom: activeTab === tab ? `2px solid ${C.gold}` : `1px solid ${C.goldborder}` }}>
+               {tab}
+             </button>
+           ))}
+         </div>
+ 
+         {activeTab === 'trades' && (
+           <div>
+             {trades.length === 0 ? (
+               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, padding: '40px 0', textAlign: 'center' }}>No trades yet. Execute a trade to see your history here.</div>
+             ) : trades.map((t, i) => (
+-              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
++              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Trade ID</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 11, color: t.side === 'buy' ? C.green : C.red }}>{t.trade_id}</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Volume</div>
+                   <div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>{(t.volume_tonnes || 0).toLocaleString()} t</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Gross</div>
+                   <div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>€{(t.gross_eur || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                 </div>
+                 <div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Receipt</div>
+                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.gold }}>{(t.receipt_hash || '').slice(0, 20)}...</div>
+                 </div>
++                <div>
++                  <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Retirement Status</div>
++                  <div style={{ fontFamily: F.mono, fontSize: 9, color: (t.retirement_status || '').includes('Confirmed') ? C.green : C.red }}>{t.retirement_status || 'Pending / Overdue'}</div>
++                </div>
+               </div>
+             ))}
+           </div>
+         )}
+ 
+         {activeTab === 'retirements' && (
+           <div>
+             {retirements.length === 0 ? (
+               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, padding: '40px 0', textAlign: 'center' }}>No retirements yet.</div>
+             ) : retirements.map((r, i) => (
+               <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Cert ID</div><div style={{ fontFamily: F.mono, fontSize: 11, color: C.gold }}>{r.cert_id}</div></div>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Tonnes Retired</div><div style={{ fontFamily: F.syne, fontSize: 13, color: C.green }}>{(r.tonnes_retired || 0).toLocaleString()} t</div></div>
+                 <div><div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Beneficiary</div><div style={{ fontFamily: F.syne, fontSize: 13, color: C.cream }}>{r.beneficiary}</div></div>
+               </div>
+             ))}
+           </div>
+         )}
+ 
+         {activeTab === 'overview' && (
+           <div style={{ padding: '20px 0' }}>
+             {trades.length === 0 && retirements.length === 0 ? (
+               <div style={{ textAlign: 'center', padding: '60px 24px', border: `1px solid ${C.goldborder}` }}>
+                 <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, color: C.cream2, marginBottom: 12 }}>No trades yet</div>
+                 <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, lineHeight: 1.7 }}>Execute a trade in the marketplace to begin building your carbon portfolio.<br />Your position, spend, and compliance status will appear here.</div>

@@ -11,7 +11,7 @@ const F = { mono: "'JetBrains Mono', monospace", syne: "'Syne', sans-serif", pla
 const fi: React.CSSProperties = { width: '100%', background: C.ink2, border: `1px solid ${C.goldborder}`, color: C.cream, padding: '13px 16px', fontFamily: F.mono, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
 const fl: React.CSSProperties = { fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.cream3, display: 'block', marginBottom: 8 };
 
-interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; }
+interface Trade { trade_id: string; side: string; standard?: string; volume_tonnes?: number; price_eur_per_tonne?: number; gross_eur?: number; receipt_hash?: string; verify_url?: string; prev_receipt_hash?: string; payment_intent_id?: string; settled_at?: string; retirement_status?: string; }
 interface Retirement { cert_id?: string; trade_id?: string; tonnes_retired?: number; beneficiary?: string; receipt_hash?: string; }
 
 interface PortfolioProps {
@@ -91,7 +91,7 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName 
             {trades.length === 0 ? (
               <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, padding: '40px 0', textAlign: 'center' }}>No trades yet. Execute a trade to see your history here.</div>
             ) : trades.map((t, i) => (
-              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
+              <div key={i} style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: '20px 24px', marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, alignItems: 'center' }}>
                 <div>
                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Trade ID</div>
                   <div style={{ fontFamily: F.mono, fontSize: 11, color: t.side === 'buy' ? C.green : C.red }}>{t.trade_id}</div>
@@ -107,6 +107,10 @@ export function PortfolioDashboard({ trades = [], retirements = [], accountName 
                 <div>
                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Receipt</div>
                   <div style={{ fontFamily: F.mono, fontSize: 9, color: C.gold }}>{(t.receipt_hash || '').slice(0, 20)}...</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream3, marginBottom: 4 }}>Retirement Status</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: (t.retirement_status || '').includes('Confirmed') ? C.green : C.red }}>{t.retirement_status || 'Pending / Overdue'}</div>
                 </div>
               </div>
             ))}

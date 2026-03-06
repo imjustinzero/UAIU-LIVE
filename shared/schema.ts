@@ -294,6 +294,9 @@ export const exchangeListings = pgTable("exchange_listings", {
   name: varchar("name").notNull(),
   origin: varchar("origin").notNull(),
   sellerProfileId: varchar("seller_profile_id"),
+  registrySerial: varchar("registry_serial"),
+  registryName: varchar("registry_name"),
+  vintageYear: integer("vintage_year"),
   pricePerTonne: real("price_per_tonne").notNull(),
   changePercent: real("change_percent").notNull().default(0),
   changeDirection: varchar("change_direction").notNull().default('up'),
@@ -313,6 +316,8 @@ export const exchangeAccounts = pgTable("exchange_accounts", {
   phone: varchar("phone"),
   accountType: varchar("account_type"),
   annualCo2Exposure: varchar("annual_co2_exposure"),
+  registryAccountId: varchar("registry_account_id"),
+  registryName: varchar("registry_name"),
   passwordHash: varchar("password_hash"),
   acceptedTermsAt: timestamp("accepted_terms_at"),
   kycStatus: varchar("kyc_status").notNull().default('not_started'),
@@ -333,6 +338,11 @@ export const exchangeTrades = pgTable("exchange_trades", {
   feeEur: real("fee_eur").notNull().default(0),
   receiptHash: varchar("receipt_hash"),
   stripeSessionId: varchar("stripe_session_id"),
+  buyerRegistryAccountId: varchar("buyer_registry_account_id"),
+  buyerRegistryName: varchar("buyer_registry_name"),
+  sellerRegistryName: varchar("seller_registry_name"),
+  sellerRegistrySerial: varchar("seller_registry_serial"),
+  vintageYear: integer("vintage_year"),
   status: varchar("status").notNull().default('completed'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -364,7 +374,30 @@ export const exchangeCreditListings = pgTable("exchange_credit_listings", {
   askingPricePerTonne: varchar("asking_price_per_tonne").notNull(),
   projectOrigin: varchar("project_origin").notNull(),
   registrySerial: varchar("registry_serial"),
+  registryName: varchar("registry_name"),
+  vintageYear: integer("vintage_year"),
   status: varchar("status").notNull().default('pending'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const tradeRetirementCertificates = pgTable("trade_retirement_certificates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tradeId: varchar("trade_id").notNull(),
+  uploadUrl: text("upload_url"),
+  uploadedAt: timestamp("uploaded_at"),
+  uploadedBy: varchar("uploaded_by"),
+  certificateFilename: varchar("certificate_filename"),
+  supabaseStoragePath: varchar("supabase_storage_path"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const retirementUploadTokens = pgTable("retirement_upload_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tradeId: varchar("trade_id").notNull(),
+  tokenHash: varchar("token_hash").notNull(),
+  sellerEmail: varchar("seller_email"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -437,6 +470,11 @@ export const insertExchangeTradeSchema = createInsertSchema(exchangeTrades).omit
   createdAt: true,
 });
 
+export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRetirementCertificates).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
 export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
@@ -449,6 +487,8 @@ export type WebhookFailure = typeof webhookFailures.$inferSelect;
 export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
 export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
 export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
+export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inferSelect;
+export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
 
 // ── Backup & Disaster Recovery ──────────────────────────────────────────────
 export const backupLogs = pgTable("backup_logs", {
