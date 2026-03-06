@@ -669,8 +669,10 @@ export class DbStorage implements IStorage {
   }
 
   async createExchangeTrade(trade: InsertExchangeTrade): Promise<ExchangeTrade> {
-    const [result] = await db.insert(exchangeTrades).values(trade).returning();
-    return result;
+    const [result] = await db.insert(exchangeTrades).values(trade).onConflictDoNothing().returning();
+    if (result) return result;
+    const [existing] = await db.select().from(exchangeTrades).where(eq(exchangeTrades.tradeId, trade.tradeId));
+    return existing;
   }
 
   async getExchangeTradesByEmail(email: string): Promise<ExchangeTrade[]> {

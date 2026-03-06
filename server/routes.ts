@@ -8,7 +8,7 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, desc } from "drizzle-orm";
 import type { GameState } from "@shared/schema";
 import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
@@ -1425,7 +1425,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       await storage.updateExchangeAccountPassword(email.trim().toLowerCase(), hash);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -1466,7 +1466,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           await logSecurityEvent({ email, eventType: 'suspicious_price', req, detail: { standard, submittedPrice, serverPrice, delta } });
         }
       }
-      const stripe = initStripe();
+      const stripeInit = await initStripe();
+      if (!stripeInit?.stripeSync) return res.status(503).json({ error: 'Payment processor unavailable.' });
+      const stripe = stripeInit.stripeSync;
       const gross = serverPrice * parseFloat(volumeTonnes);
       const fee = gross * 0.0075;
       const totalCents = Math.round((gross + fee) * 100);
@@ -1577,7 +1579,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (isZohoConfigured()) {
         sendZohoEmail(email, `Carbon Credit Retirement Certificate — ${certId}`,
           `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Retirement Certificate</h2><p>Dear ${retireeName},</p><p>Your carbon credit retirement has been permanently recorded. Certificate: <strong>${certId}</strong></p><p>Volume: <strong>${volumeTonnes} tCO₂e</strong> of ${standard}</p><p>Please find your PDF certificate attached.</p></div>`,
-          [{ filename: `UAIU-Retirement-${certId}.pdf`, content: pdfBuffer.toString('base64'), encoding: 'base64', contentType: 'application/pdf' }]
+          [{ filename: `UAIU-Retirement-${certId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
         ).catch(e => console.error('[Retire Email]', e.message));
       }
       res.json({ success: true, certificateId: certId, hash });
@@ -1780,7 +1782,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   // GET /api/seller/dashboard — authenticated seller view of their own data
   app.get('/api/seller/dashboard', requireAuth, async (req, res) => {
     try {
-      const sessionUser = await storage.getUser((req.session as any).userId);
+      const sessionUser = await storage.getUser((req as any).userId);
       if (!sessionUser) return res.status(401).json({ error: 'User not found' });
       const e = sessionUser.email.trim().toLowerCase();
 
@@ -1803,7 +1805,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         .catch(() => ({ data: [] }));
 
       res.json({
-        email,
+        email: e,
         listings,
         rfqs,
         escrows:  escrows?.data || [],
@@ -1823,7 +1825,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.delete('/api/seller/listing/:id', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const sessionUser = await storage.getUser((req.session as any).userId);
+      const sessionUser = await storage.getUser((req as any).userId);
       if (!sessionUser) return res.status(401).json({ error: 'User not found' });
       const email = sessionUser.email.trim().toLowerCase();
       await db.delete(exchangeCreditListings)
@@ -2000,7 +2002,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const listings = await storage.getPendingCreditListings();
       res.json(listings);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -2021,7 +2023,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
       res.json({ success: true, listing: newListing });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -2036,7 +2038,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
       res.json({ success: true, id: req.params.id });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -2046,7 +2048,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const failures = await storage.getWebhookFailures(false);
       res.json(failures);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -2082,7 +2084,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       await storage.resolveWebhookFailure(req.params.id);
       res.json({ success: true, action: 'resolved_no_capture' });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -2988,7 +2990,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.json({ client_secret: paymentIntent.client_secret, payment_intent_id: paymentIntent.id, escrow_status: 'held', message: 'Funds held in escrow. Release triggered at T+1 settlement confirmation.' });
     } catch (e: any) {
       console.error('Escrow create error:', e);
-      res.status(500).json({ error: e.message || 'Escrow creation failed' });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -3009,7 +3011,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.json({ success: true, status: 'verified', message: 'Credits verified. T+1 settlement will release funds automatically.', next_step: 'Call /api/escrow/release within 24 hours to complete settlement.' });
     } catch (e: any) {
       console.error('Escrow verify error:', e);
-      res.status(500).json({ error: e.message || 'Verification failed' });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -3034,7 +3036,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.json({ success: true, status: 'settled', gross_eur: gross, uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge, message: `Trade ${trade_id} settled. €${gross.toLocaleString()} captured.` });
     } catch (e: any) {
       console.error('Escrow release error:', e);
-      res.status(500).json({ error: e.message || 'Settlement release failed' });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
@@ -3052,7 +3054,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.json({ success: true, status: 'cancelled', message: 'Escrow cancelled. Funds will be released back to buyer within 5-10 business days.' });
     } catch (e: any) {
       console.error('Escrow cancel error:', e);
-      res.status(500).json({ error: e.message || 'Cancellation failed' });
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
