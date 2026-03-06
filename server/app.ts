@@ -125,28 +125,55 @@ export default async function runApp(
   process.once('SIGTERM', () => shutdown('SIGTERM'));
   process.once('SIGINT',  () => shutdown('SIGINT'));
 
-  // Retry listen on EADDRINUSE — the previous process may not have vacated the
-  // port yet when tsx/nodemon restarts quickly.
-  const MAX_RETRIES = 10;
-  const RETRY_DELAY_MS = 500;
-  let retries = 0;
+  // Retry listen on EADDRINUSE — deployments can take longer than a few
+  // seconds to fully release the previous process and socket.
+  const MAX_RETRIES = 30;
+  const RETRY_DELAY_MS = 1000;
 
-  const tryListen = () => {
-    server.listen({ port, host: '0.0.0.0', reusePort: true }, () => {
-      log(`serving on port ${port}`);
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const tryListenOnce = () =>
+    new Promise<boolean>((resolve, reject) => {
+      const onError = (err: NodeJS.ErrnoException) => {
+        cleanup();
+        if (err.code === 'EADDRINUSE') {
+          resolve(false);
+          return;
+        }
+        reject(err);
+      };
+
+      const onListening = () => {
+        cleanup();
+        resolve(true);
+      };
+
+      const cleanup = () => {
+        server.off('error', onError);
+        server.off('listening', onListening);
+      };
+
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen({ port, host: '0.0.0.0' });
     });
-  };
 
-  server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE' && retries < MAX_RETRIES) {
-      retries++;
-      log(`Port ${port} in use — retry ${retries}/${MAX_RETRIES} in ${RETRY_DELAY_MS}ms`);
-      server.close();
-      setTimeout(tryListen, RETRY_DELAY_MS);
-    } else {
-      throw err;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const isListening = await tryListenOnce();
+    if (isListening) {
+      log(`serving on port ${port}`);
+      return;
     }
-  });
 
-  tryListen();
+    if (attempt === MAX_RETRIES) {
+      throw new Error(
+        `Port ${port} remained in use after ${MAX_RETRIES + 1} attempts`,
+      );
+    }
+
+    log(
+      `Port ${port} in use — retry ${attempt + 1}/${MAX_RETRIES + 1} in ${RETRY_DELAY_MS}ms`,
+    );
+    await wait(RETRY_DELAY_MS);
+  }
 }

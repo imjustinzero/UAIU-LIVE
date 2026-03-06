@@ -1,4 +1,5 @@
 import type { Express, Request } from "express";
+import rateLimit from "express-rate-limit";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
@@ -124,8 +125,16 @@ async function raiseException(entityType: string, entityId: string, code: string
 }
 
 export function registerAutonomousMarketplaceRoutes(app: Express) {
+  const sellerOnboardLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many onboarding attempts. Please try again later." },
+  });
+
   // Seller onboarding profile + KYB/KYC bootstrap
-  app.post("/api/seller/onboard/automatic", requireExchangeAuth, async (req, res) => {
+  app.post("/api/seller/onboard/automatic", requireExchangeAuth, sellerOnboardLimiter, async (req, res) => {
     try {
       const email = String((req as any).exchangeEmail || "").toLowerCase();
       const {

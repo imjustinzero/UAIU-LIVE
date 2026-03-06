@@ -100,6 +100,14 @@ let stripeReady = false;
 let stripeReadyAt: string | null = null;
 
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+  const authLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 8,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many login attempts. Please try again later.' },
+  });
+
   const exchangeSigninLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
@@ -684,7 +692,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     res.status(404).json({ message: 'Email verification is no longer required' });
   });
 
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', authLoginLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
 

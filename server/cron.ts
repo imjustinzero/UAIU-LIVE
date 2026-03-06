@@ -16,6 +16,33 @@ import {
 const BACKUP_DIR = "/tmp/uaiu_backups";
 const BACKUP_KEEP = 7;
 const S3_BACKUP_KEEP = 30;
+const BACKUP_ALERT_EMAIL = process.env.BACKUP_ALERT_EMAIL || "info@uaiu.live";
+
+async function sendBackupFailureAlert(params: {
+  filename: string;
+  message: string;
+  code?: string;
+  detail?: string;
+}): Promise<void> {
+  const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Backup Upload Failed</h2><ul><li><strong>Filename:</strong> ${params.filename}</li><li><strong>Error:</strong> ${params.message}</li><li><strong>Code:</strong> ${params.code || "unknown"}</li><li><strong>Detail:</strong> ${params.detail || "n/a"}</li><li><strong>Timestamp:</strong> ${new Date().toISOString()}</li></ul><p>Immediate action required: validate S3/R2 bucket + credentials and trigger a manual backup.</p></div>`;
+
+  if (isZohoConfigured()) {
+    const sent = await sendZohoEmail(
+      BACKUP_ALERT_EMAIL,
+      "[UAIU.LIVE/X] Backup Upload Failed",
+      html,
+    );
+    if (sent) return;
+  }
+
+  await sendExchangeEmail("🚨 Backup Upload Failed", {
+    Filename: params.filename,
+    Error: params.message,
+    Code: params.code || "unknown",
+    Detail: params.detail || "n/a",
+    Timestamp: new Date().toISOString(),
+  });
+}
 
 export interface BackupResult {
   success: boolean;
@@ -157,6 +184,15 @@ export async function triggerDatabaseBackup(
               `)
               .catch(() => {});
           }
+
+          await sendBackupFailureAlert({
+            filename,
+            message: String(s3Err.message || "unknown error"),
+            code:    String(errCode),
+            detail:  errDetail,
+          }).catch((emailErr: any) => {
+            console.error("[Backup S3] Failed to send backup failure alert:", emailErr.message);
+          });
         }
       } else {
         console.log(
