@@ -2,6 +2,11 @@ import type { Express } from 'express';
 import { getOpsState, recordOpsEvent } from './ops-monitoring';
 import { requireAdminHeader } from './exchange-auth';
 import { triggerDatabaseBackup } from './cron';
+import { isS3Configured, getS3BucketName, headS3Object } from './backup-storage';
+import { db } from './db';
+import { sql } from 'drizzle-orm';
+import { existsSync, readFileSync } from 'fs';
+import { createHash } from 'crypto';
 
 export function registerOpsRoutes(app: Express) {
   app.get('/api/admin/ops/overview', requireAdminHeader, (_req, res) => {
@@ -26,13 +31,138 @@ export function registerOpsRoutes(app: Express) {
     res.json({ success: true, enabled });
   });
 
+  // ── Backup: List all backup records ─────────────────────────────────────────
+  app.get('/api/admin/backup/list', requireAdminHeader, async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT id, filename, file_size_bytes, checksum_sha256,
+               storage_path, storage_provider, upload_status,
+               backup_type, triggered_by, error_message,
+               verified_at, verify_status, created_at
+        FROM backup_logs
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
+      const backups = (result as any).rows || [];
+      return res.json({
+        backups,
+        s3Configured: isS3Configured(),
+        bucketName: getS3BucketName(),
+        totalCount: backups.length,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Backup: Trigger a manual backup ─────────────────────────────────────────
   app.post('/api/admin/backup/trigger', requireAdminHeader, async (_req, res) => {
-    const result = await triggerDatabaseBackup();
-    recordOpsEvent('manual_backup_triggered', { success: result.success });
+    const result = await triggerDatabaseBackup('admin', 'manual');
+    recordOpsEvent('manual_backup_triggered', {
+      success: result.success,
+      filename: result.filename,
+      uploadStatus: result.uploadStatus,
+      storageProvider: result.storageProvider,
+      fileSizeBytes: result.fileSizeBytes,
+    });
     if (result.success) {
-      return res.json({ success: true, file: result.file });
+      return res.json({
+        success: true,
+        filename: result.filename,
+        file: result.file,
+        checksumSha256: result.checksumSha256,
+        fileSizeBytes: result.fileSizeBytes,
+        s3Key: result.s3Key || null,
+        storageProvider: result.storageProvider,
+        uploadStatus: result.uploadStatus,
+        logId: result.logId,
+      });
     }
     return res.status(500).json({ success: false, error: result.error });
+  });
+
+  // ── Backup: Verify a specific backup's integrity ─────────────────────────────
+  app.post('/api/admin/backup/verify/:id', requireAdminHeader, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const logResult = await db.execute(sql`
+        SELECT * FROM backup_logs WHERE id = ${id} LIMIT 1
+      `);
+      const backup = (logResult as any).rows?.[0];
+      if (!backup) return res.status(404).json({ error: 'Backup record not found.' });
+
+      let verifyStatus = 'unknown';
+      let details: Record<string, any> = {
+        id: backup.id,
+        filename: backup.filename,
+        storageProvider: backup.storage_provider,
+        storagePath: backup.storage_path,
+        expectedChecksum: backup.checksum_sha256,
+        expectedSize: backup.file_size_bytes,
+      };
+
+      if (backup.storage_provider === 's3' && backup.storage_path) {
+        // S3 verification: confirm object exists + size matches
+        if (!isS3Configured()) {
+          verifyStatus = 'skipped_no_s3';
+          details.reason = 'S3 not configured in this environment.';
+        } else {
+          try {
+            const head = await headS3Object(backup.storage_path);
+            if (!head) {
+              verifyStatus = 'missing';
+              details.reason = 'Object not found in S3.';
+            } else {
+              const sizeMatch = !backup.file_size_bytes || head.size === backup.file_size_bytes;
+              verifyStatus = sizeMatch ? 'ok' : 'size_mismatch';
+              details.s3Size = head.size;
+              details.s3Etag = head.etag;
+              details.sizeMatch = sizeMatch;
+            }
+          } catch (s3Err: any) {
+            verifyStatus = 'error';
+            details.error = s3Err.message;
+          }
+        }
+      } else if (backup.storage_provider === 'local' && backup.storage_path) {
+        // Local verification: check file exists + recompute checksum
+        if (!existsSync(backup.storage_path)) {
+          verifyStatus = 'missing';
+          details.reason = 'Local file not found (may have been pruned or lost on redeploy).';
+        } else {
+          try {
+            const buf = readFileSync(backup.storage_path);
+            const actualChecksum = createHash('sha256').update(buf).digest('hex');
+            const checksumMatch = !backup.checksum_sha256 || actualChecksum === backup.checksum_sha256;
+            const sizeMatch = !backup.file_size_bytes || buf.length === backup.file_size_bytes;
+            verifyStatus = checksumMatch && sizeMatch ? 'ok' : 'checksum_mismatch';
+            details.actualChecksum = actualChecksum;
+            details.actualSize = buf.length;
+            details.checksumMatch = checksumMatch;
+            details.sizeMatch = sizeMatch;
+          } catch (fsErr: any) {
+            verifyStatus = 'error';
+            details.error = fsErr.message;
+          }
+        }
+      } else {
+        verifyStatus = 'no_storage_path';
+        details.reason = 'No storage path recorded for this backup.';
+      }
+
+      // Persist verification result
+      await db.execute(sql`
+        UPDATE backup_logs
+        SET verified_at = NOW(), verify_status = ${verifyStatus}
+        WHERE id = ${id}
+      `).catch((e: any) => console.warn('[Backup verify] Could not update backup_logs:', e.message));
+
+      recordOpsEvent('backup_verified', { id, verifyStatus });
+
+      return res.json({ id, verifyStatus, details });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
   });
 
   app.get('/api/status/public', (_req, res) => {
@@ -57,6 +187,7 @@ export function registerOpsRoutes(app: Express) {
         { name: 'Trading Auth', status: 'operational' },
         { name: 'Webhooks', status: 'operational' },
         { name: 'AI Services', status: process.env.ANTHROPIC_API_KEY ? 'operational' : 'unavailable' },
+        { name: 'Backup Storage', status: isS3Configured() ? 'operational' : 'local_only' },
       ],
     });
   });

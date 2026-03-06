@@ -4,6 +4,7 @@ import { EnterpriseOpsDashboard } from "@/components/admin/EnterpriseOpsDashboar
 import { LaunchChecklist } from "@/components/admin/LaunchChecklist";
 import { IncidentBanner } from "@/components/admin/IncidentBanner";
 import { AutonomousMarketplaceAdmin } from "@/components/admin/AutonomousMarketplaceAdmin";
+import { BackupAdmin } from "@/components/admin/BackupAdmin";
 
 const C = {
   bg: '#05080f',
@@ -61,7 +62,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
@@ -242,7 +243,8 @@ export default function Admin() {
             { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
             { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
             { id: 'health', label: 'System Health', count: null },
-            { id: 'autonomy', label: 'Autonomous Marketplace', count: null }
+            { id: 'autonomy', label: 'Autonomous Marketplace', count: null },
+            { id: 'backup', label: 'Backup & DR', count: null }
           ].map(tab => (
             <button
               key={tab.id}
@@ -393,6 +395,20 @@ export default function Admin() {
               <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Review queue, RFQ matches, payout pipeline, and exception triage.</p>
             </div>
             <AutonomousMarketplaceAdmin adminKey={adminKey} />
+          </div>
+        )}
+
+        {/* Panel 5: Backup & DR */}
+        {activeTab === 'backup' && (
+          <div style={{ animation: 'fadeIn .3s ease', color: C.text, fontFamily: F.syne }}>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Backup & Disaster Recovery</h2>
+              <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>
+                Daily automated backups with SHA-256 integrity verification. S3-compatible off-site storage.
+                See <code style={{ color: C.gold, fontSize: '11px' }}>docs/BACKUP_ROLLBACK_RUNBOOK.md</code> for the full DR policy, restore procedure, and test checklist.
+              </p>
+            </div>
+            <BackupAdmin adminKey={adminKey} />
           </div>
         )}
 

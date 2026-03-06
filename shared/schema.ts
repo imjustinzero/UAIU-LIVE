@@ -449,6 +449,31 @@ export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
 export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
 export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
 
+// ── Backup & Disaster Recovery ──────────────────────────────────────────────
+export const backupLogs = pgTable("backup_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filename: text("filename").notNull(),
+  fileSizeBytes: integer("file_size_bytes"),
+  checksumSha256: text("checksum_sha256"),
+  storagePath: text("storage_path"),
+  storageProvider: text("storage_provider").default("local"),
+  uploadStatus: text("upload_status").default("pending"),
+  backupType: text("backup_type").default("scheduled"),
+  triggeredBy: text("triggered_by").default("cron"),
+  errorMessage: text("error_message"),
+  verifiedAt: timestamp("verified_at"),
+  verifyStatus: text("verify_status"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBackupLogSchema = createInsertSchema(backupLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BackupLog = typeof backupLogs.$inferSelect;
+export type InsertBackupLog = z.infer<typeof insertBackupLogSchema>;
+
 export interface GameState {
   matchId: string;
   player1: { id: string; name: string; y: number; score: number };
