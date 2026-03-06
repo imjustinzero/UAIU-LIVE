@@ -1019,7 +1019,7 @@ export default function Exchange() {
           <div style={{ position: 'relative', zIndex: 2, ...CONTAINER_STYLE, paddingBlock: 'clamp(40px, 8vh, 80px)' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '8px 18px', marginBottom: 36 }}>
               <span className="x-pulse" />
-              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Exchange · Est. 2025</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Platform · Est. 2025</span>
             </div>
             <h1 style={{ fontFamily: F.playfair, fontSize: 'clamp(42px, 8vw, 110px)', fontWeight: 900, lineHeight: 0.95, letterSpacing: '-0.03em', marginBottom: 40, maxWidth: 900 }}>
               <span style={{ fontWeight: 400, color: C.cream2 }}>Carbon compliance</span><br />
@@ -1040,7 +1040,7 @@ export default function Exchange() {
             </div>
             <div className="x-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: `1px solid ${C.goldborder}`, background: 'rgba(13,18,32,0.8)', backdropFilter: 'blur(12px)', gap: 1 }}>
               {[
-                { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate' },
+                { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate · Licensed provider feed' },
                 { val: '€100', label: 'EU Fine Per Tonne', sub: 'Cost of non-compliance' },
                 { val: '2027', label: '100% EU ETS Mandate', sub: 'Maritime full coverage deadline' },
                 { val: '5', label: 'Sovereign Nations', sub: 'Carbon Union · Registry backed' },
@@ -1638,7 +1638,7 @@ export default function Exchange() {
             <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 60 }}>
               {[
                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
-                { Icon: Clock, title: 'T+1 Settlement', text: 'Credits transfer to your registry account within one business day of trade execution. Full settlement confirmation with audit trail.' },
+                { Icon: Clock, title: 'T+1 Settlement', text: 'Settlement instructions are completed within one business day of trade execution, with full audit trail confirmation. Direct registry API transfer rails (Verra, Gold Standard, EU ETS, ACR) are being rolled out.' },
                 { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves.' },
                 { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of 5 Carbon Union nations.' },
               ].map(({ Icon, title, text }, i) => (
@@ -1783,7 +1783,9 @@ export default function Exchange() {
           <div style={{ maxWidth: 1440, margin: '0 auto', paddingTop: 32, borderTop: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 32, flexWrap: 'wrap' }}>
             <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, lineHeight: 1.8, letterSpacing: '0.03em' }}>
               © 2025 UAIU Holdings Corp. Registered in Wyoming, USA. Caribbean Basin Operations.<br />
+              Platform: uaiu.live/x.<br />
               Carbon credits are financial instruments. Trading involves risk. Past performance does not guarantee future results.<br />
+              AI-generated analysis is informational only and does not constitute financial, legal, or compliance advice.<br />
               All credits verified per applicable international standards. For institutional and corporate use.
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

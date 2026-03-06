@@ -157,7 +157,7 @@ export function EscrowSettlement({
               border:'1px solid rgba(96,165,250,0.2)',
               borderRadius:'8px', padding:'12px', marginBottom:'20px' }}>
               <p style={{ margin:0, fontSize:'12px', color:'#93c5fd', lineHeight:1.6 }}>
-                🔒 <strong>Stripe Escrow:</strong> Funds are held by Stripe — not UAIU. Released automatically at T+1 settlement confirmation. UAIU never holds your money.
+                🔒 <strong>Settlement-hold powered by Stripe Connect:</strong> Funds are held by Stripe — not UAIU. Released automatically at T+1 settlement confirmation. UAIU never holds your money.
               </p>
             </div>
             {error && <p style={{ color:'#f87171', fontSize:'12px', marginBottom:'12px' }}>{error}</p>}
