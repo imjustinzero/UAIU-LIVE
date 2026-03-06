@@ -353,7 +353,7 @@ export default function Home() {
                 <div className="max-w-5xl mx-auto text-center space-y-8">
                   <Badge variant="secondary" className="text-sm px-4 py-2 animate-pulse" data-testid="badge-live">
                     <Sparkles className="w-4 h-4 mr-2 inline" />
-                    Live Multiplayer Arcade
+                    Multiplayer Arcade
                   </Badge>
                   
                   <h1 className="text-6xl md:text-8xl font-display font-black bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent leading-tight">
@@ -361,7 +361,7 @@ export default function Home() {
                   </h1>
                   
                   <p className="text-xl md:text-3xl text-muted-foreground max-w-3xl mx-auto font-medium">
-                    Play live against others around the world.
+                    Playing Games from anywhere.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
@@ -406,7 +406,7 @@ export default function Home() {
                     Choose Your Game
                   </h2>
                   <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                    Six classic arcade games. Real-time multiplayer. Skill-based competition.
+                    Six classic arcade games. Multiplayer. Skill-based competition.
                   </p>
                 </div>
 
