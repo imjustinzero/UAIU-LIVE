@@ -158,7 +158,9 @@ interface Listing {
   badgeLabel: string;
   name: string;
   origin: string;
-  sellerProfileId?: string | null;
+  pricePerTonne: number;
+  changePercent: number;
+  changeDirection: string;
   status: string;
   isAcceptingOrders: boolean;
   registrySerial?: string;

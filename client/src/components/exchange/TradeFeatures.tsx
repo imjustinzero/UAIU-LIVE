@@ -22,14 +22,10 @@ export function VideoTradeRoom({
   const createRoom = async () => {
     setState('creating');
     try {
-      const token = sessionStorage.getItem('x-exchange-token');
       // Use existing Daily.co room creation endpoint
       const res = await fetch('/api/daily/create-room', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'X-Exchange-Token': token } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           listing_id: listingId,
           listing_name: listingName,
@@ -200,7 +196,7 @@ export function AITradeNegotiator({
         body: JSON.stringify({
           rfq: rfqData,
           market: {
-            indexPrice: currentIndexPrice,
+            index_price: currentIndexPrice,
             supply_available: currentSupply,
             timestamp: new Date().toISOString()
           }
