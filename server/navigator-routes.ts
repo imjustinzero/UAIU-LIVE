@@ -42,8 +42,8 @@ const vvbs = [
 const memory = new Map<string, any>();
 
 function getSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_KEY;
   if (!url || !key) return null;
   return createClient(url, key);
 }
