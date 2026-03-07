@@ -1047,8 +1047,8 @@ export default function Exchange() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
               <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
-                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
-                  <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
+                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify'],['/navigator','Navigator']].map(([id,label]) => (
+                  <a key={id} href={String(id).startsWith('/') ? String(id) : `#${id}`} className="x-nav-link" onClick={e => { if(String(id).startsWith('/')) return; e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
                 ))}
               </div>
               <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
