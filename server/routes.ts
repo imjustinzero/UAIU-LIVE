@@ -31,6 +31,7 @@ import { startCronJobs } from "./cron";
 import { generateTradePDF } from "./pdf-generator";
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
+import { registerNavigatorRoutes } from "./navigator-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -3763,6 +3764,9 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.status(500).json({ error: 'Subscription failed' });
     }
   });
+
+  // ── Navigator routes ───────────────────────────────────────────────────────
+  registerNavigatorRoutes(app);
 
   // ── Ops monitoring routes ──────────────────────────────────────────────────
   registerOpsRoutes(app);
