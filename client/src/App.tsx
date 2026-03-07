@@ -18,6 +18,7 @@ import ZStop from "@/pages/ZStop";
 import SellerConnect from "@/pages/SellerConnect";
 import RetireUpload from "@/pages/RetireUpload";
 import VerifyTrade from "@/pages/VerifyTrade";
+import Blog from "@/pages/Blog";
 import NotFound from "@/pages/not-found";
 import NavigatorLanding from "@/pages/navigator/Landing";
 import NavigatorIntake from "@/pages/navigator/Intake";
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/feed" component={Feed} />
       <Route path="/live" component={LiveVideo} />
       <Route path="/x/verify/:hash" component={VerifyTrade} />
+      <Route path="/blog" component={Blog} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />
       <Route path="/security" component={Security} />
