@@ -71,7 +71,7 @@ export function TradeTicker({ newTrades = [] }: Props) {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
         }}>
-          Awaiting first trade — submit an RFQ to start
+          Awaiting first trade — submit an RFQ to start.
         </div>
       ) : (
         <div style={{ overflow: 'hidden', flex: 1 }}>

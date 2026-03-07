@@ -131,7 +131,7 @@ export function VoiceRFQ({ onParsed, isDark = true }: VoiceRFQProps) {
       const res = await fetch('/api/ai/parse-rfq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ text }),
         signal: AbortSignal.timeout(12000)
       });
 
