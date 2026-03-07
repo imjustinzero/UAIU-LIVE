@@ -7,6 +7,7 @@ import express, {
   NextFunction,
 } from "express";
 import helmet from "helmet";
+import { createClient } from "@supabase/supabase-js";
 
 import { registerRoutes } from "./routes";
 import { createOpsMonitoringMiddleware } from "./ops-monitoring";
@@ -23,6 +24,13 @@ export function log(message: string, source = "express") {
 }
 
 export const app = express();
+
+// Initialize Supabase client and attach to app.locals for use throughout routes
+const _sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const _sbKey = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+if (_sbUrl && _sbKey) {
+  try { app.locals.supabase = createClient(_sbUrl, _sbKey); } catch {}
+}
 
 app.use(helmet({
   contentSecurityPolicy: {
