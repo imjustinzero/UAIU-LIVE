@@ -1,3 +1,4 @@
+import { useLocation, Link } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -1048,7 +1049,7 @@ export default function Exchange() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
               <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
                 {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify'],['/navigator','Navigator']].map(([id,label]) => (
-                  <a key={id} href={String(id).startsWith('/') ? String(id) : `#${id}`} className="x-nav-link" onClick={e => { if(String(id).startsWith('/')) return; e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
+                  <Link key={id} href={String(id).startsWith('/') ? String(id) : `#${id}`} className="x-nav-link" onClick={e => { if(String(id).startsWith('/')) return; e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</Link>
                 ))}
               </div>
               <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
