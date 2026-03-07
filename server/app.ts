@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import { registerRoutes } from "./routes";
 import { createOpsMonitoringMiddleware } from "./ops-monitoring";
+import { isS3Configured, validateS3Access } from "./backup-storage";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -108,6 +109,19 @@ export default async function runApp(
     res.status(status).json({ message });
     throw err;
   });
+
+  // S3 startup connectivity check — visible in console immediately on boot
+  if (isS3Configured()) {
+    validateS3Access().then(result => {
+      if (result.ok) {
+        log(`[Backup S3] Connected — bucket: ${result.bucket}`);
+      } else {
+        log(`[Backup S3] UNREACHABLE — bucket: ${result.bucket} | code: ${result.code} | ${result.detail || result.message}`);
+      }
+    }).catch(() => {});
+  } else {
+    log('[Backup S3] Not configured — set S3_BACKUP_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY');
+  }
 
   // importantly run the final setup after setting up all the other routes so
   // the catch-all route doesn't interfere with the other routes
