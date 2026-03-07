@@ -187,56 +187,67 @@ export function registerOpsRoutes(app: Express) {
   });
 
   app.get('/api/status/public', async (_req, res) => {
-    const ops = getOpsState();
-    const platformStatus = process.env.PLATFORM_STATUS || 'ok';
-    const tradingEnabled = process.env.TRADING_ENABLED !== 'false' && process.env.TRADING_DISABLED !== '1';
-    const message =
-      platformStatus === 'ok'
-        ? 'Platform operating normally.'
-        : platformStatus === 'maintenance'
-        ? 'Platform is under scheduled maintenance.'
-        : 'Platform status requires operator attention.';
+    try {
+      const ops = getOpsState();
+      const platformStatus = process.env.PLATFORM_STATUS || 'ok';
+      const tradingEnabled = process.env.TRADING_ENABLED !== 'false' && process.env.TRADING_DISABLED !== '1';
+      const message =
+        platformStatus === 'ok'
+          ? 'Platform operating normally.'
+          : platformStatus === 'maintenance'
+          ? 'Platform is under scheduled maintenance.'
+          : 'Platform status requires operator attention.';
 
-    // Derive backup storage status from the last real backup attempt — not
-    // just whether the env vars are set.
-    let backupStorageStatus = 'local_only';
-    if (isS3Configured()) {
-      try {
-        const result = await db.execute(sql`
-          SELECT upload_status FROM backup_logs
-          ORDER BY created_at DESC LIMIT 1
-        `);
-        const lastRow = ((result as any).rows || [])[0];
-        if (!lastRow) {
-          // S3 is configured but no backup has run yet
-          backupStorageStatus = 'pending_first_run';
-        } else if (lastRow.upload_status === 'uploaded') {
-          backupStorageStatus = 'operational';
-        } else if (lastRow.upload_status === 'upload_failed') {
-          backupStorageStatus = 'degraded';
-        } else {
-          // local-only row (upload_status = 'local')
-          backupStorageStatus = 'local_only';
+      // Derive backup storage status from the last real backup attempt — not
+      // just whether the env vars are set.
+      let backupStorageStatus = 'local_only';
+      if (isS3Configured()) {
+        try {
+          const result = await db.execute(sql`
+            SELECT upload_status FROM backup_logs
+            ORDER BY created_at DESC LIMIT 1
+          `);
+          const lastRow = ((result as any).rows || [])[0];
+          if (!lastRow) {
+            // S3 is configured but no backup has run yet
+            backupStorageStatus = 'pending_first_run';
+          } else if (lastRow.upload_status === 'uploaded') {
+            backupStorageStatus = 'operational';
+          } else if (lastRow.upload_status === 'upload_failed') {
+            backupStorageStatus = 'degraded';
+          } else {
+            // local-only row (upload_status = 'local')
+            backupStorageStatus = 'local_only';
+          }
+        } catch {
+          backupStorageStatus = 'unknown';
         }
-      } catch {
-        backupStorageStatus = 'unknown';
       }
-    }
 
-    res.json({
-      platform: 'UAIU.LIVE/X',
-      status: platformStatus === 'ok' ? 'operational' : platformStatus,
-      tradingEnabled,
-      message,
-      updatedAt: new Date().toISOString(),
-      uptimeSec: ops.uptimeSec,
-      components: [
-        { name: 'Exchange API', status: 'operational' },
-        { name: 'Trading Auth', status: 'operational' },
-        { name: 'Webhooks', status: 'operational' },
-        { name: 'AI Services', status: process.env.ANTHROPIC_API_KEY ? 'operational' : 'unavailable' },
-        { name: 'Backup Storage', status: backupStorageStatus },
-      ],
-    });
+      res.setHeader('cache-control', 'no-store');
+      res.json({
+        platform: 'UAIU.LIVE/X',
+        status: platformStatus === 'ok' ? 'operational' : platformStatus,
+        tradingEnabled,
+        message,
+        updatedAt: new Date().toISOString(),
+        uptimeSec: ops.uptimeSec,
+        components: [
+          { name: 'Exchange API', status: 'operational' },
+          { name: 'Trading Auth', status: 'operational' },
+          { name: 'Webhooks', status: 'operational' },
+          { name: 'AI Services', status: process.env.ANTHROPIC_API_KEY ? 'operational' : 'unavailable' },
+          { name: 'Backup Storage', status: backupStorageStatus },
+        ],
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        platform: 'UAIU.LIVE/X',
+        status: 'degraded',
+        message: error?.message || 'Status endpoint failed',
+        updatedAt: new Date().toISOString(),
+        components: [],
+      });
+    }
   });
 }

@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { randomUUID } from "node:crypto";
 
 import express, {
   type Express,
@@ -30,7 +31,11 @@ export const app = express();
 const _sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const _sbKey = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 if (_sbUrl && _sbKey) {
-  try { app.locals.supabase = createClient(_sbUrl, _sbKey); } catch {}
+  try {
+    app.locals.supabase = createClient(_sbUrl, _sbKey);
+  } catch (error) {
+    log(`Supabase initialization failed: ${(error as Error).message}`, "startup");
+  }
 }
 
 app.use(helmet({
@@ -64,6 +69,18 @@ app.use(createOpsMonitoringMiddleware());
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
+  const requestId = req.header("x-request-id") || randomUUID();
+  req.headers["x-request-id"] = requestId;
+  res.setHeader("x-request-id", requestId);
+  next();
+});
+
+app.get("/api/healthz", (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  res.status(200).json({ ok: true, uptimeSeconds: Math.round(process.uptime()) });
+});
+
+app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
@@ -93,21 +110,48 @@ app.use((req, res, next) => {
   next();
 });
 
+
+let globalErrorHandlersRegistered = false;
+
+function registerGlobalErrorHandlers() {
+  if (globalErrorHandlersRegistered) return;
+  globalErrorHandlersRegistered = true;
+
+  process.on("unhandledRejection", (reason) => {
+    log(`Unhandled promise rejection: ${String(reason)}`, "process");
+  });
+
+  process.on("uncaughtException", (error) => {
+    log(`Uncaught exception: ${error.message}`, "process");
+  });
+}
+
 export default async function runApp(
   setup: (app: Express, server: Server) => Promise<void>,
 ) {
+  registerGlobalErrorHandlers();
+
   // Create the HTTP server ONCE here
   const server = createServer(app);
   
   // Pass the server to registerRoutes to attach Socket.IO
   await registerRoutes(app, server);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+    const requestId = req.header("x-request-id") || "n/a";
 
-    res.status(status).json({ message });
-    throw err;
+    log(`Unhandled error on ${req.method} ${req.path} [${requestId}]: ${message}`, "error");
+
+    if (res.headersSent) {
+      return;
+    }
+
+    res.status(status).json({
+      message: status >= 500 ? "Internal Server Error" : message,
+      requestId,
+    });
   });
 
   // S3 startup connectivity check — visible in console immediately on boot
