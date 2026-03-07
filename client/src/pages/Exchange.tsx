@@ -85,7 +85,7 @@ const F = {
 
 const TICKER_DATA = [
   { n: 'EU ETS', p: '€63.40', c: '+2.3%', up: true },
-  { n: 'Biofuel B100', p: '€71.80', c: '+4.2%', up: true },
+  { n: 'SwissX B100', p: '€71.80', c: '+4.2%', up: true },
   { n: 'REDD++', p: '€58.20', c: '+1.1%', up: true },
   { n: 'Blue Carbon', p: '€45.60', c: '-0.8%', up: false },
   { n: 'CORSIA', p: '€29.70', c: '+3.1%', up: true },
@@ -98,8 +98,8 @@ const TICKER_DATA = [
 
 const TRADE_TYPES = [
   { label: 'EU ETS Compliance — VCS Verified', value: '63.40' },
-  { label: 'Biofuel Carbon Credits', value: '71.80' },
-  { label: 'REDD++ — Gold Standard', value: '58.20' },
+  { label: 'SwissX B100 Biofuel Credits', value: '71.80' },
+  { label: 'REDD++ Caribbean — Gold Standard', value: '58.20' },
   { label: 'Blue Carbon — Coral/Seagrass Fields', value: '45.60' },
   { label: 'CORSIA Aviation Offset Credits', value: '29.70' },
 ];
@@ -111,7 +111,7 @@ const ACCOUNT_TYPES = [
   'Credit Generator / Producer',
   'Institutional Investor / Fund',
   'Broker / Intermediary',
-  'Government / Public Entity',
+  'Government / Sovereign Entity',
 ];
 
 const CO2_RANGES = [
@@ -129,7 +129,7 @@ const RFQ_STANDARDS = [
   'CORSIA — Aviation Offsets',
   'Blue Carbon — Seagrass / Coral',
   'REDD++ — Forest Conservation',
-  'Biofuel Credits — B100',
+  'SwissX B100 — Caribbean Biofuel',
 ];
 
 const CREDIT_STANDARDS = [
@@ -158,7 +158,6 @@ interface Listing {
   badgeLabel: string;
   name: string;
   origin: string;
-  pricePerTonne: number;
   sellerProfileId?: string | null;
   status: string;
   isAcceptingOrders: boolean;
@@ -1048,8 +1047,8 @@ export default function Exchange() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
               <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
-                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify']].map(([id,label]) => (
-                  <a key={id} href={`#${id}`} className="x-nav-link" onClick={e => { e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
+                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify'],['/navigator','Navigator']].map(([id,label]) => (
+                  <a key={id} href={String(id).startsWith('/') ? String(id) : `#${id}`} className="x-nav-link" onClick={e => { if(String(id).startsWith('/')) return; e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</a>
                 ))}
               </div>
               <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
@@ -1089,13 +1088,13 @@ export default function Exchange() {
           <div style={{ position: 'relative', zIndex: 2, ...CONTAINER_STYLE, paddingBlock: 'clamp(40px, 8vh, 80px)' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '8px 18px', marginBottom: 36 }}>
               <span className="x-pulse" />
-              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Carbon Credit Platform · Est. 2025</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Caribbean Carbon Platform · Est. 2025</span>
             </div>
             <h1 style={{ fontFamily: F.playfair, fontSize: 'clamp(42px, 8vw, 110px)', fontWeight: 900, lineHeight: 0.95, letterSpacing: '-0.03em', marginBottom: 40, maxWidth: 900 }}>
               <span style={{ fontWeight: 400, color: C.cream2 }}>Carbon compliance</span><br />
               <em style={{ fontStyle: 'italic', color: C.gold, display: 'block' }}>is the market.</em>
             </h1>
-            <p style={{ fontSize: 'clamp(14px, 1.8vw, 16px)', lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated global carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a advantage.</p>
+            <p style={{ fontSize: 'clamp(14px, 1.8vw, 16px)', lineHeight: 1.75, color: C.cream3, maxWidth: 560, marginBottom: 52, fontWeight: 400 }}>UAIU.LIVE/X is the world&apos;s first dedicated Caribbean carbon credit marketplace. Buy EU ETS-compliant credits, list verified offsets, and turn mandatory compliance into a advantage.</p>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 48 }}>
               <button className="x-btn-primary" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('marketplace')}>Browse Credits →</button>
               <button className="x-btn-ghost" style={{ padding: 'clamp(14px, 2vw, 18px) clamp(24px, 4vw, 44px)' }} onClick={() => scrollTo('list')}>List Your Credits</button>
@@ -1113,7 +1112,7 @@ export default function Exchange() {
                 { val: '€63.40', label: 'EU ETS Spot Price', sub: 'Live market reference rate · Licensed provider feed' },
                 { val: '€100', label: 'EU Fine Per Tonne', sub: 'Cost of non-compliance' },
                 { val: '2027', label: '100% EU ETS Mandate', sub: 'Maritime full coverage deadline' },
-                { val: '', label: 'Multi-Registry', sub: 'Verified Registry Projects' },
+                { val: '5', label: 'Sovereign Nations', sub: 'Carbon Union · Registry backed' },
               ].map((m, i) => (
                 <div key={i} style={{ padding: '28px 32px', background: C.ink2 }}>
                   <div style={{ fontFamily: F.playfair, fontSize: 'clamp(32px, 4vw, 42px)', fontWeight: 700, color: C.gold, lineHeight: 1, marginBottom: 6 }}>{m.val}</div>
@@ -1215,7 +1214,7 @@ export default function Exchange() {
               <div>
                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Process</div>
                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>Buying credits.<br /><em style={{ fontStyle: 'italic', color: C.gold }}>Simplified.</em></h2>
-                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>From registration to settlement in under 24 hours. The fastest compliant carbon credit transaction on the market.</p>
+                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>From registration to settlement in under 24 hours. The fastest compliant carbon credit transaction in the Caribbean basin.</p>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {[
                     { n: '01', title: 'Open Your Account', text: 'Register as a corporate buyer, credit generator, or broker. KYC verification typically completes within 2 business hours. All account types accepted globally.', tag: 'Free · 2hrs' },
@@ -1277,15 +1276,15 @@ export default function Exchange() {
           <div className="x-section" style={s.sectionWrap}>
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Citizens</div>
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Citizens <em style={{ fontStyle: 'italic', color: C.gold }}>Portal.</em></h2>
-            <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>Verified registry projects from environmental programs generating credits that trade on global markets.</p>
+            <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 56 }}>Five sovereign nations participate in the Carbon Union, generating verified credits from environmental programs that trade on global markets.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginBottom: 64 }}>
               {[
-                { code: 'VR', name: 'Verra Registry', role: 'Verified Carbon Standard' },
-                { code: 'GS', name: 'Gold Standard', role: 'Blue Carbon Projects' },
-                { code: 'AC', name: 'ACR Registry', role: 'Forestry Projects' },
-                { code: 'EU', name: 'EU ETS', role: 'Compliance Credits' },
-                { code: 'CA', name: 'CAR Registry', role: 'Biofuel Credits' },
+                { code: 'AG', name: 'Antigua & Barbuda', role: 'Registry HQ' },
+                { code: 'TO', name: 'Tonga', role: 'Pacific Blue Carbon' },
+                { code: 'ZM', name: 'Zambia', role: 'REDD++ Forestry' },
+                { code: 'KE', name: 'Kenya', role: 'Regenerative Agriculture' },
+                { code: 'KN', name: 'St. Kitts & Nevis', role: 'Caribbean Biofuel' },
               ].map(n => (
                 <div key={n.code} style={{ background: C.ink2, padding: '28px 20px', textAlign: 'center' }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
@@ -1302,12 +1301,12 @@ export default function Exchange() {
               <div>
                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />How It Works</div>
                 <h3 style={{ fontFamily: F.playfair, fontSize: 'clamp(28px,3vw,44px)', fontWeight: 700, lineHeight: 1.1, marginBottom: 20 }}>Waste becomes <em style={{ color: C.gold, fontStyle: 'italic' }}>wealth.</em></h3>
-                <p style={{ fontSize: 14, lineHeight: 1.75, color: C.cream3, marginBottom: 40 }}>Verified registry projects participate in environmental programs — turning agricultural waste, human waste, degraded land, and CO₂-averting activity into measurable climate assets that trade on global markets.</p>
+                <p style={{ fontSize: 14, lineHeight: 1.75, color: C.cream3, marginBottom: 40 }}>Communities in Carbon Union nations participate in verified environmental programs — turning agricultural waste, human waste, degraded land, and CO₂-averting activity into measurable climate assets that trade on global markets.</p>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {[
                     { Icon: Leaf, title: 'Join a Green Project', text: 'Register via the Citizens Portal. Choose from local programs: biofuel production, coral restoration, reforestation, agricultural waste conversion, or regenerative soil building.' },
-                    { Icon: FileText, title: 'Earn Verified Credits', text: 'Your participation is measured against recognized carbon standards. Every tonne of CO₂ averted or sequestered generates one verified carbon credit issued by verified registry partners.' },
-                    { Icon: Shield, title: 'Secure Credit Custody', text: 'Credits are held in your registry account. Bank them, hold them as the price rises, or convert them immediately. Integrated with verified registry systems.' },
+                    { Icon: FileText, title: 'Earn Verified Credits', text: 'Your participation is measured against recognized carbon standards. Every tonne of CO₂ averted or sequestered generates one verified carbon credit issued by the SwissX Carbon Registry in Antigua.' },
+                    { Icon: Shield, title: 'Bank at SwissX', text: 'Credits are held in your SwissX wallet. Bank them, hold them as the price rises, or convert them immediately. Integrated with tokenized carbon wealth systems.' },
                     { Icon: Globe, title: 'Sell on UAIU.LIVE/X', text: 'List your credits directly on the exchange. Institutional buyers — cruise lines, airlines, corporations — purchase your credits to meet their mandatory EU ETS compliance obligations.' },
                   ].map(({ Icon, title, text }, i) => (
                     <div key={i} style={{ display: 'flex', gap: 20, padding: '24px 0', borderBottom: i < 3 ? `1px solid ${C.goldborder}` : 'none' }}>
@@ -1327,16 +1326,16 @@ export default function Exchange() {
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }} />
                   <div style={{ padding: '32px 36px', borderBottom: `1px solid ${C.goldborder}` }}>
                     <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700, marginBottom: 4 }}>Citizens Portal</div>
-                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Verified Carbon Registry · Multi-Standard</div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>SwissX Carbon Registry · Antigua</div>
                   </div>
                   <div style={{ padding: '32px 36px' }}>
                     <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 14 }}>Open Programs — Accepting Participants</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
                       {[
-                        { name: 'B100 Biofuel Production', detail: 'Verified Registry · 1 credit per 90 gal' },
-                        { name: 'Coral Restoration — Pacific', detail: 'Pacific Basin · Blue Carbon VCS · 28M+ acres' },
+                        { name: 'B100 Biofuel Production', detail: 'Antigua · SwissX Verified · 1 credit per 90 gal' },
+                        { name: 'Coral Restoration — Pacific', detail: 'Tonga · Blue Carbon VCS · 28M+ acres' },
                         { name: 'Agricultural Waste → Biogas', detail: 'Kenya · Gold Standard · per tonne CO₂ averted' },
-                        { name: 'REDD++ Forest Conservation', detail: 'Registry-Backed · Gold Standard · annual sequestration' },
+                        { name: 'REDD++ Forest Conservation', detail: 'Zambia · Gold Standard · annual sequestration' },
                       ].map((p, i) => (
                         <div key={i} style={{ background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
@@ -1358,7 +1357,7 @@ export default function Exchange() {
                       </div>
                     </div>
                     <button style={s.formSubmit as React.CSSProperties} onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-join-portal">Join Citizens Portal →</button>
-                    <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 12, textAlign: 'center', letterSpacing: '0.05em' }}>Backed by Verified Registry Partners · Multi-Standard</div>
+                    <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, marginTop: 12, textAlign: 'center', letterSpacing: '0.05em' }}>Backed by SwissX Sovereign Wealth Fund · Carbon Union Nations</div>
                   </div>
                 </div>
               </div>
@@ -1367,12 +1366,12 @@ export default function Exchange() {
             <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />What Generates Credits</div>
             <div style={{ display: 'grid', gridTemplateColumns: GRID_REFLOW as any, gap: 1, background: C.goldborder, border: `1px solid ${C.goldborder}`, marginTop: 20 }}>
               {[
-                { Icon: Waves, title: 'Sargassum Seaweed', text: 'Harvested from coastal areas, converted into B100 biofuel. 93% lower emissions than diesel.', detail: '1 credit per 90 gallons produced' },
-                { Icon: Leaf, title: 'Agricultural Waste', text: 'Crop residues, manure, and organic waste converted to biogas and regenerative soil products across registry-backed projects.', detail: 'Measured per tonne CO₂ averted' },
-                { Icon: Waves, title: 'Coral & Seagrass', text: '28M+ acre restoration initiative across global coastal regions. Blue carbon sequestration verified by VCS standard.', detail: 'Sequestration measured annually' },
+                { Icon: Waves, title: 'Sargassum Seaweed', text: 'Harvested from Caribbean beaches, converted into SwissX B100 biofuel. 93% lower emissions than diesel.', detail: '1 credit per 90 gallons produced' },
+                { Icon: Leaf, title: 'Agricultural Waste', text: 'Crop residues, manure, and organic waste converted to biogas and regenerative soil products across Kenya and Zambia.', detail: 'Measured per tonne CO₂ averted' },
+                { Icon: Waves, title: 'Coral & Seagrass', text: '28M+ acre restoration initiative across Pacific and Caribbean. Blue carbon sequestration verified by VCS standard.', detail: 'Sequestration measured annually' },
                 { Icon: Building2, title: 'Green Economy Zones', text: 'Communities rebuild using regenerative materials. The rebuilding itself generates credits that fund further recovery.', detail: 'Self-financing community model' },
                 { Icon: Droplets, title: 'Human Waste Systems', text: 'Biodigester programs convert human and municipal waste into clean energy and fertilizer, eliminating methane emissions.', detail: 'Methane avoidance credits issued' },
-                { Icon: Trees, title: 'REDD++ Forestry', text: 'Verified forest conservation and reforestation programs generating Gold Standard credits across registry-backed projects.', detail: 'Gold Standard certified' },
+                { Icon: Trees, title: 'REDD++ Forestry', text: 'Verified forest conservation and reforestation programs in Honduras, Zambia, and Antigua generating Gold Standard credits.', detail: 'Gold Standard certified' },
               ].map(({ Icon, title, text, detail }, i) => (
                 <div key={i} style={{ background: C.ink2, padding: '28px 24px' }}>
                   <div style={{ marginBottom: 12 }}><Icon size={28} color={C.gold} /></div>
@@ -1390,7 +1389,7 @@ export default function Exchange() {
                 <div style={{ fontFamily: F.playfair, fontSize: 'clamp(24px,3.5vw,48px)', fontWeight: 700, lineHeight: 1.15, marginBottom: 20, letterSpacing: '-0.02em' }}>
                   Every act of environmental repair<br />becomes a <em style={{ fontStyle: 'italic', color: C.gold }}>financial asset.</em>
                 </div>
-                <div style={{ fontSize: 15, color: C.cream3, maxWidth: 640, margin: '0 auto 36px', lineHeight: 1.75 }}>Verified registry programs underwrite environmental and regenerative energy projects built on sustainability — transforming natural waste into measurable climate assets that flow back to the communities that created them.</div>
+                <div style={{ fontSize: 15, color: C.cream3, maxWidth: 640, margin: '0 auto 36px', lineHeight: 1.75 }}>The SwissX Sovereign Wealth Fund underwrites environmental and regenerative energy projects built on sustainability — transforming natural waste into measurable climate assets that flow back to the communities that created them.</div>
                 <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button className="x-btn-primary" onClick={() => { setAcctSuccess(false); setShowAccountModal(true); }} data-testid="button-join-karmic">Join Citizens Portal →</button>
                   <button className="x-btn-ghost" onClick={() => scrollTo('marketplace')} data-testid="button-view-exchange">View Exchange</button>
@@ -1432,7 +1431,7 @@ export default function Exchange() {
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Volume (tonnes CO₂) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 10000" value={listVolume} onChange={e => setListVolume(e.target.value)} data-testid="input-list-volume" /></div>
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Asking Price (€/tonne) *</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 65.00" value={listPrice} onChange={e => setListPrice(e.target.value)} data-testid="input-list-price" /></div>
                     </div>
-                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Europe, Asia-Pacific" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
+                    <div style={s.fg}><label style={s.fl as React.CSSProperties}>Project Origin / Country *</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={listOrigin} onChange={e => setListOrigin(e.target.value)} data-testid="input-list-origin" /></div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Serial — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. VCS-7821-2024-001" value={listSerial} onChange={e => setListSerial(e.target.value)} data-testid="input-list-serial" /></div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Registry Name — optional</label><select className="x-fi" style={s.fi} value={listRegistryName} onChange={e => setListRegistryName(e.target.value)} data-testid="select-list-registry-name"><option value="">Select registry…</option><option value="Verra">Verra (VCS)</option><option value="Gold Standard">Gold Standard</option><option value="EU ETS">EU ETS</option><option value="ACR">American Carbon Registry (ACR)</option><option value="CAR">Climate Action Reserve (CAR)</option><option value="other">Other</option></select></div>
                     <div style={s.fg}><label style={s.fl as React.CSSProperties}>Vintage Year — optional</label><input className="x-fi" style={s.fi} type="number" placeholder={`e.g. ${new Date().getFullYear() - 1}`} value={listVintageYear} onChange={e => setListVintageYear(e.target.value)} min="2010" max={new Date().getFullYear()} data-testid="input-list-vintage-year" /></div>
@@ -1445,12 +1444,12 @@ export default function Exchange() {
               </div>
               <div style={{ paddingTop: 20 }}>
                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Why List on UAIU.LIVE/X</div>
-                <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The registry <em style={{ fontStyle: 'italic', color: C.gold }}>premium.</em></h2>
-                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 40 }}>Registry-grade credits command an 8–14% premium on global markets due to the regulatory focus on maritime and aviation emissions across international corridors.</p>
+                <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>The Caribbean <em style={{ fontStyle: 'italic', color: C.gold }}>premium.</em></h2>
+                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.7, maxWidth: 560, marginBottom: 40 }}>Caribbean-origin credits command an 8–14% premium on global markets due to the regulatory focus on maritime and aviation emissions in the Caribbean corridor.</p>
                 {[
-                  { Icon: Users, title: 'Institutional Buyer Network', text: 'Access to pre-qualified institutional buyers including cruise operators, cargo shipping groups, and aviation firms seeking registry-grade compliance credits.', detail: 'Average time to first offer: 72 hours' },
+                  { Icon: Users, title: 'Institutional Buyer Network', text: 'Access to pre-qualified institutional buyers including cruise operators, cargo shipping groups, and aviation firms seeking Caribbean-origin compliance credits.', detail: 'Average time to first offer: 72 hours' },
                   { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves within 48 hours.', detail: 'AI-assisted · Human reviewed' },
-                  { Icon: Shield, title: 'Registry-Grade Provenance', text: 'Credits originate from verified registry programs operating under recognized international carbon standards.', detail: 'Multi-registry · Verified supply' },
+                  { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of Antigua & Barbuda, Tonga, Zambia, Kenya, and St. Kitts & Nevis.', detail: '5 sovereign nations · Carbon Union' },
                 ].map(({ Icon, title, text, detail }, i) => (
                   <div key={i} className="x-benefit-item">
                     <div style={{ width: 44, height: 44, background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1507,9 +1506,9 @@ export default function Exchange() {
             <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(38px,4.5vw,64px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 16 }}>Why institutions<br /><em style={{ fontStyle: 'italic', color: C.gold }}>choose UAIU.</em></h2>
             <div className="x-proof-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: C.goldborder, marginTop: 48 }}>
               {[
-                { quote: '"We needed EU ETS-compliant credits for our international routing fleet. UAIU.LIVE/X had verified inventory, competitive pricing, and our compliance team had the documentation they needed in under 24 hours."', name: 'Head of Sustainability', role: 'Major Cruise Operator' },
-                { quote: '"Listing our REDD++ forest conservation credits on UAIU took 48 hours. Within a week we had three institutional buyers. The registry-grade origin premium is real — we\'re selling at 11% above what we\'d get on other platforms."', name: 'Director of Carbon Programs', role: 'Conservation Trust' },
-                { quote: '"The compliance calculator alone was worth the call. We didn\'t realize how much EU ETS exposure our international routes were generating. UAIU showed us the number and had a solution ready in the same conversation."', name: 'CFO', role: 'Regional Maritime Logistics Group' },
+                { quote: '"We needed EU ETS-compliant credits for our Caribbean routing fleet. UAIU.LIVE/X had verified inventory, competitive pricing, and our compliance team had the documentation they needed in under 24 hours."', name: 'Head of Sustainability', role: 'Major Caribbean Cruise Operator' },
+                { quote: '"Listing our REDD++ forest conservation credits on UAIU took 48 hours. Within a week we had three institutional buyers. The Caribbean origin premium is real — we\'re selling at 11% above what we\'d get on other platforms."', name: 'Director of Carbon Programs', role: 'Caribbean Conservation Trust' },
+                { quote: '"The compliance calculator alone was worth the call. We didn\'t realize how much EU ETS exposure our Caribbean routes were generating. UAIU showed us the number and had a solution ready in the same conversation."', name: 'CFO', role: 'Regional Maritime Logistics Group' },
               ].map((t, i) => (
                 <div key={i} className="x-proof-card">
                   <div style={{ color: C.gold, fontSize: 13, marginBottom: 16, letterSpacing: 2 }}>&#9733;&#9733;&#9733;&#9733;&#9733;</div>
@@ -1546,7 +1545,7 @@ export default function Exchange() {
                 ) : (
                   <div style={{ padding: '32px 36px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Organization / Company *</label><input className="x-fi" style={s.fi} type="text" placeholder="Carnival Corp / MSC Cruises..." value={rfqCompany} onChange={e => setRfqCompany(e.target.value)} data-testid="input-rfq-company" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Organization / Company *</label><input className="x-fi" style={s.fi} type="text" placeholder="Carnival Corp / Royal Caribbean..." value={rfqCompany} onChange={e => setRfqCompany(e.target.value)} data-testid="input-rfq-company" /></div>
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Contact Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Full name" value={rfqContact} onChange={e => setRfqContact(e.target.value)} data-testid="input-rfq-contact" /></div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -1559,7 +1558,7 @@ export default function Exchange() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Target Price (€/tonne) — optional</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 63.00" min={0} step={0.01} value={rfqPrice} onChange={e => setRfqPrice(e.target.value)} data-testid="input-rfq-price" /></div>
-                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Preferred Origin — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Europe, Asia-Pacific" value={rfqOrigin} onChange={e => setRfqOrigin(e.target.value)} data-testid="input-rfq-origin" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Preferred Origin — optional</label><input className="x-fi" style={s.fi} type="text" placeholder="e.g. Antigua, Caribbean" value={rfqOrigin} onChange={e => setRfqOrigin(e.target.value)} data-testid="input-rfq-origin" /></div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Vintage Year — optional</label><input className="x-fi" style={s.fi} type="number" placeholder="e.g. 2024" min={2020} max={2030} value={rfqVintage} onChange={e => setRfqVintage(e.target.value)} data-testid="input-rfq-vintage" /></div>
@@ -1585,10 +1584,10 @@ export default function Exchange() {
                 <h3 style={{ fontFamily: F.playfair, fontSize: 'clamp(28px,3vw,40px)', fontWeight: 700, lineHeight: 1.1, marginBottom: 20 }}>Built for <em style={{ color: C.gold, fontStyle: 'italic' }}>institutions.</em></h3>
                 <p style={{ fontSize: 14, lineHeight: 1.75, color: C.cream3, marginBottom: 40 }}>The RFQ desk handles structured transactions that don&apos;t fit the standard marketplace flow. Minimum volume: 1,000 tonnes. No maximum. Priced quote packs include full regulatory documentation, compliance certificates, and settlement terms.</p>
                 {[
-                  { Icon: Waves, title: 'Maritime Operators', text: 'Cruise lines, cargo shipping groups, and port operators facing EU ETS compliance obligations from international routing.' },
-                  { Icon: Globe, title: 'Aviation Companies', text: 'Airlines and charter operators seeking CORSIA-eligible offsets for international routes.' },
-                  { Icon: Building2, title: 'Industrial Corporates', text: 'Manufacturing and energy companies seeking voluntary or mandatory carbon offset positions.' },
-                  { Icon: Shield, title: 'Investment Funds', text: 'Carbon-focused ESG funds and institutional investors building long-term positions in registry-grade credit inventory.' },
+                  { Icon: Waves, title: 'Maritime Operators', text: 'Cruise lines, cargo shipping groups, and port operators facing EU ETS compliance obligations from Caribbean routing.' },
+                  { Icon: Globe, title: 'Aviation Companies', text: 'Airlines and charter operators seeking CORSIA-eligible offsets for international routes touching Caribbean airspace.' },
+                  { Icon: Building2, title: 'Industrial Corporates', text: 'Manufacturing and energy companies with Caribbean operations seeking voluntary or mandatory carbon offset positions.' },
+                  { Icon: Shield, title: 'Investment Funds', text: 'Carbon-focused ESG funds and institutional investors building long-term positions in Caribbean-origin credit inventory.' },
                 ].map(({ Icon, title, text }, i) => (
                   <div key={i} style={{ display: 'flex', gap: 20, padding: '20px 0', borderBottom: i < 3 ? `1px solid ${C.goldborder}` : 'none' }}>
                     <div style={{ width: 40, height: 40, background: C.goldfaint, border: `1px solid ${C.goldborder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1638,7 +1637,7 @@ export default function Exchange() {
               <div>
                 <div style={s.eyebrow as React.CSSProperties}><span style={{ width: 28, height: 1, background: C.gold, display: 'inline-block' }} />Bulk Offtake · 50,000+ Tonnes</div>
                 <h2 style={{ fontFamily: F.playfair, fontSize: 'clamp(32px,3.5vw,52px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 24 }}>Direct Desk<br /><em style={{ fontStyle: 'italic', color: C.gold }}>Access.</em></h2>
-                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.75, marginBottom: 40 }}>For institutional funds, aviation majors, and industrial corporates requiring more than 50,000 tCO₂e. Bespoke pricing, dedicated relationship manager, and T+0 settlement available.</p>
+                <p style={{ fontSize: 15, color: C.cream3, lineHeight: 1.75, marginBottom: 40 }}>For sovereign funds, aviation majors, and industrial corporates requiring more than 50,000 tCO₂e. Bespoke pricing, dedicated relationship manager, and T+0 settlement available.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {[
                     ['Bespoke Pricing', 'Volume discount pricing negotiated directly with sellers and our desk team'],
@@ -1669,7 +1668,7 @@ export default function Exchange() {
                     <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Institutional Inquiry</div>
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 28, lineHeight: 1.6 }}>Our desk responds within 4 business hours</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Institution Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Institutional Fund / Corporation" value={instName} onChange={e => setInstName(e.target.value)} data-testid="input-inst-name" /></div>
+                      <div style={s.fg}><label style={s.fl as React.CSSProperties}>Institution Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Sovereign Wealth Fund" value={instName} onChange={e => setInstName(e.target.value)} data-testid="input-inst-name" /></div>
                       <div style={s.fg}><label style={s.fl as React.CSSProperties}>Contact Name *</label><input className="x-fi" style={s.fi} type="text" placeholder="Your full name" value={instContact} onChange={e => setInstContact(e.target.value)} data-testid="input-inst-contact" /></div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -1725,7 +1724,7 @@ export default function Exchange() {
                 { Icon: Link2, title: 'Blockchain Provenance', text: 'Every trade generates a SHA-256 chained receipt. Independent verification without account access. Hash chain is publicly auditable.' },
                 { Icon: Clock, title: 'T+1 Settlement', text: 'Settlement instructions are completed within one business day of trade execution, with full audit trail confirmation. Direct registry API transfer rails (Verra, Gold Standard, EU ETS, ACR) are being rolled out.' },
                 { Icon: Zap, title: '48-Hour Seller Verification', text: 'No credit lists without AI-assisted verification. Sellers submit project docs, registry serials, and vintage year. AI reviews and approves.' },
-                { Icon: Shield, title: 'Registry-Grade Provenance', text: 'Credits originate from verified registry programs operating under recognized international carbon standards.' },
+                { Icon: Shield, title: 'Sovereign Backing', text: 'Credits originate from SwissX Sovereign Wealth Fund programs operating under the laws of 5 Carbon Union nations.' },
               ].map(({ Icon, title, text }, i) => (
                 <div key={i} className="x-trust-card">
                   <div style={{ marginBottom: 16 }}><Icon size={32} color={C.gold} /></div>
@@ -1744,9 +1743,9 @@ export default function Exchange() {
                 </div>
                 <div style={{ background: C.ink, border: `1px solid ${C.goldborder}`, padding: 24, fontFamily: F.mono, fontSize: 11, lineHeight: 1.9 }}>
                   <div style={{ color: C.gold, marginBottom: 12, fontSize: 9, letterSpacing: '0.2em' }}>UAIU TRADE RECEIPT · VERIFIED</div>
-                  <div style={{ color: C.cream3 }}>Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>SAMPLE-RECEIPT-000001</span></div>
-                  <div style={{ color: C.cream3 }}>Standard: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>B100 Biofuel / VCS</span></div>
-                  <div style={{ color: C.cream3 }}>Origin: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>Verified Registry</span></div>
+                  <div style={{ color: C.cream3 }}>Trade ID: &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>UAIU-BUY-829341</span></div>
+                  <div style={{ color: C.cream3 }}>Standard: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>SwissX B100 / VCS</span></div>
+                  <div style={{ color: C.cream3 }}>Origin: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>Antigua, Caribbean</span></div>
                   <div style={{ color: C.cream3 }}>Volume: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>50,000 tCO₂</span></div>
                   <div style={{ color: C.cream3 }}>Price: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>€71.80/tonne</span></div>
                   <div style={{ color: C.cream3 }}>Gross: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>€3,590,000.00</span></div>
@@ -1756,7 +1755,7 @@ export default function Exchange() {
                     <div style={{ color: C.cream3 }}>Registry: &nbsp;&nbsp;&nbsp;<span style={{ color: C.cream }}>VCS-7821-2024-001</span></div>
                     <div style={{ color: C.cream3 }}>Receipt Hash:</div>
                     <div style={{ color: C.gold, wordBreak: 'break-all', fontSize: 10 }}>a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6</div>
-                    <div style={{ color: C.cream4, marginTop: 4, fontSize: 9 }}>Verify: uaiu.live/x/verify/a3f9c2e1b4d87f6c5e2a1b9d8c7f4e3a2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6</div>
+                    <div style={{ color: C.cream4, marginTop: 4, fontSize: 9 }}>Verify: uaiu.live/verify/UAIU-BUY-829341</div>
                   </div>
                 </div>
               </div>
@@ -1767,7 +1766,7 @@ export default function Exchange() {
               <h3 style={{ fontFamily: F.playfair, fontSize: 28, fontWeight: 700, marginBottom: 12 }}>Enter a Trade ID to verify.</h3>
               <p style={{ fontSize: 14, color: C.cream3, marginBottom: 24 }}>Any counterparty, regulator, or auditor can independently verify any UAIU trade — no account required.</p>
               <div style={{ display: 'flex', maxWidth: 560, margin: '0 auto' }}>
-                <input className="x-fi" style={{ ...s.fi, flex: 1, fontFamily: F.mono, borderRight: 'none' }} type="text" placeholder="Enter receipt hash or trade ID" value={verifyInput} onChange={e => setVerifyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupTrade()} data-testid="input-verify-trade" />
+                <input className="x-fi" style={{ ...s.fi, flex: 1, fontFamily: F.mono, borderRight: 'none' }} type="text" placeholder="e.g. UAIU-BUY-829341" value={verifyInput} onChange={e => setVerifyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupTrade()} data-testid="input-verify-trade" />
                 <button style={{ background: C.gold, color: C.ink, border: 'none', padding: '0 28px', fontFamily: F.mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }} onClick={lookupTrade} data-testid="button-verify-trade">Verify →</button>
               </div>
               {verifyResult && (
@@ -1834,7 +1833,7 @@ export default function Exchange() {
           <div className="x-footer-grid" style={{ maxWidth: 1440, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(32px, 5vw, 60px)', marginBottom: 52 }}>
             <div>
               <div style={{ fontFamily: F.playfair, fontSize: 24, fontWeight: 700, marginBottom: 16 }}>UAIU<sup style={{ color: C.gold, fontSize: 12, fontFamily: F.mono, fontWeight: 400, letterSpacing: '0.15em' }}>.LIVE/X</sup></div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, color: C.cream3, maxWidth: 300 }}>The Global Carbon Credit Marketplace. Connecting compliant credit supply with mandatory institutional demand since 2025. UAIU Holdings Corp, Wyoming.</div>
+              <div style={{ fontSize: 13, lineHeight: 1.7, color: C.cream3, maxWidth: 300 }}>The Caribbean Carbon Credit Marketplace. Connecting compliant credit supply with mandatory institutional demand since 2025. UAIU Holdings Corp, Wyoming.</div>
             </div>
             <div>
               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Marketplace</div>
@@ -1845,8 +1844,8 @@ export default function Exchange() {
             </div>
             <div>
               <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold, marginBottom: 20 }}>Programs</div>
-              <span className="x-footer-link" style={{ cursor: 'default' }}>Biofuel B100</span>
-              <span className="x-footer-link" style={{ cursor: 'default' }}>REDD++ Global</span>
+              <span className="x-footer-link" style={{ cursor: 'default' }}>SwissX B100</span>
+              <span className="x-footer-link" style={{ cursor: 'default' }}>REDD++ Caribbean</span>
               <span className="x-footer-link" style={{ cursor: 'default' }}>Blue Carbon</span>
               <span className="x-footer-link" style={{ cursor: 'default' }}>Maritime Solutions</span>
               <span className="x-footer-link" style={{ cursor: 'default' }}>Aviation CORSIA</span>
@@ -1867,7 +1866,7 @@ export default function Exchange() {
           </div>
           <div style={{ maxWidth: 1440, margin: '0 auto', paddingTop: 32, borderTop: `1px solid ${C.goldborder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 32, flexWrap: 'wrap' }}>
             <div style={{ fontFamily: F.mono, fontSize: 9, color: C.cream4, lineHeight: 1.8, letterSpacing: '0.03em' }}>
-              © 2025 UAIU Holdings Corp. Registered in Wyoming, USA. Global Operations.<br />
+              © 2025 UAIU Holdings Corp. Registered in Wyoming, USA. Caribbean Basin Operations.<br />
               Platform: uaiu.live/x.<br />
               Carbon credits are financial instruments. Trading involves risk. Past performance does not guarantee future results.<br />
               AI-generated analysis is informational only and does not constitute financial, legal, or compliance advice.<br />

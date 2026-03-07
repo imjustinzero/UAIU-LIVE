@@ -59,9 +59,9 @@ const MOCK_TRADES: TerminalTrade[] = [
 
 export function TerminalMode({
   listings = MOCK_LISTINGS,
-  trades = [],
-  indexPrice = 0,
-  etsPrice = 0
+  trades = MOCK_TRADES,
+  indexPrice = 64.20,
+  etsPrice = 63.10
 }: TerminalModeProps) {
   const [active, setActive] = useState(false);
   const [bootLines, setBootLines] = useState<string[]>([]);

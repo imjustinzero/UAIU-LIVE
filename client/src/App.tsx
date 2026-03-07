@@ -19,6 +19,14 @@ import SellerConnect from "@/pages/SellerConnect";
 import RetireUpload from "@/pages/RetireUpload";
 import VerifyTrade from "@/pages/VerifyTrade";
 import NotFound from "@/pages/not-found";
+import NavigatorLanding from "@/pages/navigator/Landing";
+import NavigatorIntake from "@/pages/navigator/Intake";
+import NavigatorProject from "@/pages/navigator/ProjectDashboard";
+import NavigatorDocuments from "@/pages/navigator/Documents";
+import NavigatorGenerate from "@/pages/navigator/Generate";
+import NavigatorVvb from "@/pages/navigator/Vvb";
+import NavigatorTracker from "@/pages/navigator/Tracker";
+import NavigatorProjects from "@/pages/navigator/Projects";
 
 function Router() {
   return (
@@ -36,6 +44,14 @@ function Router() {
       <Route path="/x/zstop" component={ZStop} />
       <Route path="/x/seller" component={SellerConnect} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
+      <Route path="/navigator" component={NavigatorLanding} />
+      <Route path="/navigator/intake" component={NavigatorIntake} />
+      <Route path="/navigator/projects" component={NavigatorProjects} />
+      <Route path="/navigator/project/:id" component={NavigatorProject} />
+      <Route path="/navigator/project/:id/documents" component={NavigatorDocuments} />
+      <Route path="/navigator/project/:id/generate" component={NavigatorGenerate} />
+      <Route path="/navigator/project/:id/vvb" component={NavigatorVvb} />
+      <Route path="/navigator/project/:id/tracker" component={NavigatorTracker} />
       <Route component={NotFound} />
     </Switch>
   );
