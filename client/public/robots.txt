@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /navigator/project/
+Disallow: /api/
+Sitemap: https://uaiu.live/sitemap.xml

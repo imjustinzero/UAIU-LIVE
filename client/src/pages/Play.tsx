@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
 import { useLocation } from "wouter";
+import { useSEO } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +38,17 @@ interface Game {
 }
 
 export default function Play() {
+  useSEO({
+    title: 'UAIU.LIVE — Multiplayer Gaming & Carbon Markets',
+    description: 'Institutional carbon procurement platform with EU ETS-ready audit packs, SHA-256 tamper-evident receipts, and T+1 Stripe escrow on every trade. 0.75% execution fee. Free to list.',
+    path: '/',
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "UAIU.LIVE",
+      "url": "https://uaiu.live",
+    },
+  });
   const [, navigate] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);

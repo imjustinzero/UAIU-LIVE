@@ -3,8 +3,14 @@ import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { NavigatorLayout } from "@/components/navigator/NavigatorLayout";
+import { useSEO } from "@/lib/seo";
 
 export default function NavigatorLanding() {
+  useSEO({
+    title: 'Carbon Credit Registration Navigator',
+    description: 'Free AI-guided Verra VCS carbon credit registration tool. Step-by-step guidance from raw land to issued credits. Built for project developers, landowners, and sovereign carbon offices.',
+    path: '/navigator',
+  });
   return <NavigatorLayout>
     <section className="rounded-2xl bg-white p-8 shadow-sm">
       <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[#D1FAE5] px-3 py-1 text-sm text-[#0D4F2F]"><Compass className="h-4 w-4"/> UAIU Navigator</p>

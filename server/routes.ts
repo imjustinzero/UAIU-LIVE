@@ -3765,6 +3765,33 @@ Respond with a JSON object (no markdown) with these exact fields:
     }
   });
 
+  // ── Sitemap & Robots SEO ──────────────────────────────────────────────────
+  app.get('/sitemap.xml', (_req, res) => {
+    const now = new Date().toISOString().split('T')[0];
+    const pages = [
+      { path: '/', priority: '1.0', freq: 'weekly' },
+      { path: '/x', priority: '0.9', freq: 'weekly' },
+      { path: '/blog', priority: '0.8', freq: 'weekly' },
+      { path: '/navigator', priority: '0.8', freq: 'weekly' },
+      { path: '/navigator/intake', priority: '0.6', freq: 'monthly' },
+      { path: '/navigator/projects', priority: '0.6', freq: 'monthly' },
+      { path: '/security', priority: '0.5', freq: 'monthly' },
+      { path: '/status', priority: '0.5', freq: 'weekly' },
+      { path: '/legal', priority: '0.5', freq: 'monthly' },
+    ];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${pages.map(p => `  <url>
+    <loc>https://uaiu.live${p.path}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>${p.freq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
+    res.set('Content-Type', 'application/xml');
+    res.send(xml);
+  });
+
   // ── Navigator routes ───────────────────────────────────────────────────────
   registerNavigatorRoutes(app);
 

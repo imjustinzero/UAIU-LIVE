@@ -1,4 +1,5 @@
 import { useLocation, Link } from "wouter";
+import { useSEO } from "@/lib/seo";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -281,6 +282,11 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
 }
 
 export default function Exchange() {
+  useSEO({
+    title: 'Carbon Credit Exchange',
+    description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
+    path: '/x',
+  });
   const cursorRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const lastReceiptHashRef = useRef<string>('GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE');

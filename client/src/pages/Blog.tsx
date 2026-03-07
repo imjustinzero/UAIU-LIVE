@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { jsPDF } from "jspdf";
+import { useSEO } from "@/lib/seo";
 
 const C = {
   ink: '#060810',
@@ -182,7 +183,34 @@ function downloadPDF() {
   doc.save('UAIU_Carbon_Editorial_2026.pdf');
 }
 
+const ARTICLE_DATE = "2026-03-07";
+const ARTICLE_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Carbon Markets Are Entering a New Era of Proof",
+  "description": "Why buyers in shipping, aviation, government, and ESG are moving away from broker promises and toward verifiable trade infrastructure",
+  "author": {
+    "@type": "Organization",
+    "name": "UAIU Holdings Corp",
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "UAIU Holdings Corp",
+    "url": "https://uaiu.live",
+  },
+  "datePublished": ARTICLE_DATE,
+  "dateModified": ARTICLE_DATE,
+  "url": "https://uaiu.live/blog",
+};
+
 export default function Blog() {
+  useSEO({
+    title: 'Carbon Markets Are Entering a New Era of Proof',
+    description: 'Carbon market insights, EU ETS compliance updates, Verra VCS registration guides, and institutional procurement news from UAIU Holdings.',
+    path: '/blog',
+    ogType: 'article',
+    jsonLd: ARTICLE_SCHEMA,
+  });
   return (
     <div style={{ minHeight: '100vh', background: C.ink, color: C.cream, fontFamily: "'Syne', sans-serif" }}>
       <style>{`

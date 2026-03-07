@@ -1,0 +1,171 @@
+Add comprehensive SEO to the entire UAIU.LIVE site 
+including the blog. Surgical additions only — do NOT 
+redesign or restructure any pages.
+
+════════════════════════════════════════
+GLOBAL SEO — ADD TO EVERY PAGE
+════════════════════════════════════════
+Add these meta tags to the <head> of every page:
+
+<meta name="description" content="UAIU.LIVE/X is 
+an institutional carbon procurement platform with 
+audit-ready documentation, SHA-256 receipts, and 
+Stripe escrow settlement on every trade.">
+
+<meta name="keywords" content="carbon credits, 
+carbon procurement, EU ETS compliance, CORSIA, 
+IMO CII, Verra VCS, carbon audit, carbon escrow, 
+institutional carbon market, carbon credit exchange,
+carbon compliance software, CSRD carbon, 
+carbon credit registration, net zero procurement">
+
+<meta name="author" content="UAIU Holdings Corp">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://uaiu.live/[page-path]">
+
+Open Graph tags (for LinkedIn and social sharing):
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="UAIU.LIVE">
+<meta property="og:title" content="[Page Title] — UAIU.LIVE">
+<meta property="og:description" content="[Page description]">
+<meta property="og:url" content="https://uaiu.live/[page-path]">
+<meta property="og:image" content="https://uaiu.live/og-image.png">
+
+Twitter card tags:
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="[Page Title] — UAIU.LIVE">
+<meta name="twitter:description" content="[Page description]">
+<meta name="twitter:image" content="https://uaiu.live/og-image.png">
+
+════════════════════════════════════════
+PAGE-SPECIFIC META DESCRIPTIONS
+════════════════════════════════════════
+/ (homepage):
+"Institutional carbon procurement platform with 
+EU ETS-ready audit packs, SHA-256 tamper-evident 
+receipts, and T+1 Stripe escrow on every trade. 
+0.75% execution fee. Free to list."
+
+/x (exchange):
+"Buy and sell verified carbon credits on 
+UAIU.LIVE/X — the only exchange with standardized 
+audit artifacts, escrow settlement, and AI due 
+diligence on every listing."
+
+/navigator:
+"Free AI-guided Verra VCS carbon credit 
+registration tool. Step-by-step guidance from 
+raw land to issued credits. Built for project 
+developers, landowners, and sovereign carbon 
+offices."
+
+/blog:
+"Carbon market insights, EU ETS compliance 
+updates, Verra VCS registration guides, and 
+institutional procurement news from UAIU Holdings."
+
+════════════════════════════════════════
+BLOG-SPECIFIC SEO
+════════════════════════════════════════
+Each individual blog post must have:
+
+1. Unique <title> tag: 
+   "[Post Title] — UAIU Navigator Blog"
+
+2. Unique meta description pulled from 
+   first 160 characters of post content
+
+3. Canonical URL:
+   https://uaiu.live/blog/[post-slug]
+
+4. Article schema markup:
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "[Post Title]",
+  "author": {
+    "@type": "Organization",
+    "name": "UAIU Holdings Corp"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "UAIU Holdings Corp",
+    "url": "https://uaiu.live"
+  },
+  "datePublished": "[ISO date]",
+  "dateModified": "[ISO date]",
+  "url": "https://uaiu.live/blog/[post-slug]"
+}
+</script>
+
+5. H1 tag on every post — only one H1, 
+   must contain primary keyword for that post
+
+6. H2 and H3 subheadings throughout 
+   every post body
+
+════════════════════════════════════════
+SITEMAP & ROBOTS
+════════════════════════════════════════
+Generate and deploy:
+
+1. /sitemap.xml — auto-generated, includes:
+   - All static pages
+   - All blog posts (dynamic, pulls from 
+     database on build)
+   - All navigator project type pages
+   - Update frequency: weekly
+   - Priority: homepage 1.0, blog 0.8, 
+     other pages 0.6
+
+2. /robots.txt:
+User-agent: *
+Allow: /
+Disallow: /navigator/project/
+Disallow: /api/
+Sitemap: https://uaiu.live/sitemap.xml
+
+════════════════════════════════════════
+ORGANIZATION SCHEMA — ADD TO HOMEPAGE
+════════════════════════════════════════
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "UAIU Holdings Corp",
+  "url": "https://uaiu.live",
+  "logo": "https://uaiu.live/logo.png",
+  "description": "Institutional carbon procurement 
+  and execution platform",
+  "address": {
+    "@type": "PostalAddress",
+    "addressRegion": "WY",
+    "addressCountry": "US"
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/uaiu"
+  ]
+}
+</script>
+
+════════════════════════════════════════
+PERFORMANCE SEO
+════════════════════════════════════════
+1. Add loading="lazy" to all images 
+   below the fold
+2. Add alt text to every image using 
+   descriptive carbon market keywords
+3. Ensure all pages return 200 status — 
+   fix any 404s on internal links
+4. Add <link rel="preconnect"> for 
+   Supabase and Anthropic API domains
+
+════════════════════════════════════════
+DO NOT TOUCH:
+════════════════════════════════════════
+- Any existing page layouts or components
+- Any existing functionality
+- Any existing database schema
+- Any existing API routes
+- Stripe or escrow logic
