@@ -163,6 +163,9 @@ interface Listing {
   sellerProfileId?: string | null;
   status: string;
   isAcceptingOrders: boolean;
+  pricePerTonne: number;
+  changePercent?: number;
+  changeDirection?: string;
   registrySerial?: string;
   registryName?: string;
   vintageYear?: number;
