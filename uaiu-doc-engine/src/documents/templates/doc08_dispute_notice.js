@@ -1,0 +1,19 @@
+module.exports = function template() {
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>{{document_ref_number}}</title></head>
+<body>
+<h1>{{is_draft_label}}</h1>
+<p>Trade ID: {{trade_id}}</p>
+<p>Document Ref: {{document_ref_number}}</p>
+<p>Generated: {{generation_timestamp}}</p>
+<p>Listing: {{listing_id}}</p>
+<p>Buyer: {{buyer_entity_name}} ({{buyer_email}})</p>
+<p>Seller: {{seller_entity_name}} ({{seller_email}})</p>
+<p>Quantity: {{quantity}} {{credit_type}}</p>
+<p>Total price: {{currency}} {{total_trade_price}}</p>
+<p>Settlement: {{settlement_date}}</p>
+<p>Special terms: {{special_terms}}</p>
+</body>
+</html>`;
+};
