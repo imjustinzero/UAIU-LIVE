@@ -92,15 +92,6 @@ const dealObjectSchema = z
         message: 'special_terms requires legal review before document generation',
       });
     }
-
-    if (deal.delivery_type === 'FORWARD' || deal.delivery_type === 'STRUCTURED') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['delivery_type'],
-        message: 'delivery_type FORWARD or STRUCTURED requires escalation',
-      });
-    }
-
     const serial = (deal.serial_numbers || '').trim().toUpperCase();
     if (!serial || serial === 'MISSING' || serial === 'UNVERIFIED' || serial === 'NULL') {
       ctx.addIssue({

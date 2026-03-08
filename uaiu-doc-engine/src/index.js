@@ -34,7 +34,7 @@ app.use(
         frameAncestors: ["'none'"],
         imgSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         connectSrc: ["'self'", ...allowedOrigins],
       },
@@ -83,6 +83,7 @@ const tradesRouter = require('./routes/trades');
 const documentsRouter = require('./routes/documents');
 const verificationRouter = require('./routes/verification');
 const signingRouter = require('./routes/signing');
+const webhooksRouter = require('./routes/webhooks');
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -92,6 +93,7 @@ app.use('/api/trigger', triggersRouter);
 app.use('/api/trades', tradesRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/verification', verificationRouter);
+app.use('/api/webhooks', webhooksRouter);
 app.use('/', signingRouter);
 app.get('/verify/:tradeId', (req, res) => res.redirect(302, `/api/verification/${req.params.tradeId}`));
 
