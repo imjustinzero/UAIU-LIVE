@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Trade {
+  id                   String               @id @default(cuid())
+  tradeId              String               @unique
+  status               TradeStatus          @default(LISTING_PENDING)
+  dealMode             DealMode             @default(STANDARD)
+
+  tradeDate            DateTime
+  listingId            String
+  listingDate          DateTime
+  buyerEntityName      String
+  sellerEntityName     String
+  buyerEmail           String
+  sellerEmail          String
+  buyerSignatoryName   String
+  sellerSignatoryName  String
+  buyerSignatoryTitle  String
+  sellerSignatoryTitle String
+  buyerKycRef          String
+  sellerKycRef         String
+  buyerJurisdiction    String
+  sellerJurisdiction   String
+  registry             String
+  registryStatus       String
+  registryAccountBuyer String
+  registryAccountSeller String
+  projectName          String
+  projectCountry       String
+  creditType           String
+  methodology          String
+  quantity             Float
+  vintage              String
+  serialNumbers        String               @db.Text
+  currency             String               @default("USD")
+  pricePerCredit       Decimal              @db.Decimal(18, 4)
+  totalTradePrice      Decimal              @db.Decimal(18, 2)
+  settlementDate       DateTime
+  deliveryDeadline     DateTime
+  deliveryType         String
+  intendedUse          String               @db.Text
+  paymentTerms         String
+  escrowRequired       Boolean              @default(false)
+  escrowPath           String?
+  escrowReleaseConditions String?
+  pendingDisputes      String?
+  specialTerms         String?
+  exceptionReason      String?
+  brokeredBy           String?
+  brokerFeePercent     Decimal?             @db.Decimal(8, 4)
+  buyerKycStatus       KycStatus            @default(PENDING)
+  sellerKycStatus      KycStatus            @default(PENDING)
+  sanctionsStatus      SanctionsStatus      @default(PENDING_REVIEW)
+  complianceNotes      String?
+  governingLaw         String
+
+  documents            Document[]
+  auditPack            AuditPack?
+  verificationRecord   VerificationRecord?
+
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([status])
+  @@index([dealMode])
+  @@index([tradeDate])
+}
+
+model Document {
+  id                    String     @id @default(cuid())
+  tradeId               String
+  trade                 Trade      @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  docType               DocType
+  triggerEvent          String
+  status                DocStatus  @default(PENDING)
+  isDraft               Boolean    @default(false)
+  generatedHtml         String?    @db.Text
+  pdfS3Key              String?
+  pdfPresignedUrl       String?
+  presignedUrlExpiresAt DateTime?
+  signatureRequestId    String?
+  signatureRequestUrl   String?
+  buyerSigned           Boolean    @default(false)
+  sellerSigned          Boolean    @default(false)
+  uaiuSigned            Boolean    @default(false)
+  signedAt              DateTime?
+  version               Int        @default(1)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  @@index([tradeId, docType])
+  @@index([status])
+}
+
+model AuditPack {
+  id                    String          @id @default(cuid())
+  tradeId               String          @unique
+  trade                 Trade           @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  s3Key                 String?
+  sha256Hash            String?
+  publicVerificationUrl String?
+  documentCount         Int             @default(0)
+  status                AuditPackStatus @default(PENDING)
+  assembledAt           DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model VerificationRecord {
+  id            String   @id @default(cuid())
+  tradeId       String   @unique
+  trade         Trade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  tradeDate     DateTime
+  registry      String
+  creditType    String
+  quantity      Float
+  vintage       String
+  projectName   String
+  closingStatus String
+  sha256Hash    String
+  timestamp     DateTime
+  createdAt     DateTime @default(now())
+}
+
+model ComplianceEvent {
+  id          String   @id @default(cuid())
+  tradeId     String
+  eventType   String
+  reason      String
+  triggeredBy String
+  resolvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([tradeId])
+  @@index([eventType])
+}
+
+enum TradeStatus {
+  LISTING_PENDING
+  LISTING_VALIDATED
+  MATCHED
+  CONFIRMATION_DRAFT_SENT
+  CONFIRMATION_SIGNED
+  CERTS_PENDING
+  CERTS_COMPLETE
+  ESCROW_FUNDED
+  AWAITING_DELIVERY
+  CLOSING
+  CLOSED
+  DISPUTED
+  FAILED
+  EXCEPTION_REVIEW
+  CANCELLED
+}
+
+enum DealMode {
+  STANDARD
+  EXCEPTION
+}
+
+enum DocType {
+  DOC_02
+  DOC_03
+  DOC_04
+  DOC_05
+  DOC_08
+  DOC_12
+  AUDIT_PACK_COVER
+  CLOSING_SUMMARY
+}
+
+enum DocStatus {
+  PENDING
+  GENERATING
+  GENERATED
+  SENT
+  PARTIALLY_SIGNED
+  SIGNED
+  FAILED
+  VOIDED
+}
+
+enum KycStatus {
+  CLEAR
+  PENDING
+  FAILED
+  ENHANCED_DUE_DILIGENCE
+}
+
+enum SanctionsStatus {
+  CLEAR
+  FLAGGED
+  PENDING_REVIEW
+}
+
+enum AuditPackStatus {
+  PENDING
+  ASSEMBLING
+  COMPLETE
+  FAILED
+}
