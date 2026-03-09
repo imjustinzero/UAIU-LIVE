@@ -792,13 +792,32 @@ export default function Exchange() {
   }
 
   async function handleStartKyc() {
-    if (!sessionAccount?.id || !sessionAccount?.email) return;
+    if (!sessionAccount?.id || !sessionAccount?.email) {
+      showToast('Please sign in again before starting verification.');
+      return;
+    }
     try {
-      const res = await fetch('/api/kyc/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` }) });
-      const data = await res.json();
-      if (data.url) { window.location.href = data.url; }
-      else { showToast('KYC session started — our team will contact you within 24 hours.'); }
-    } catch { showToast('Could not start verification. Please contact info@uaiu.live'); }
+      const res = await fetch('/api/kyc/start', {
+        method: 'POST',
+        headers: { ...exchangeHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data?.error || 'Could not start verification right now. Please try again.');
+        return;
+      }
+
+      const verificationUrl = data.url || data.verification_url || data.verificationUrl;
+      if (verificationUrl) {
+        window.location.href = verificationUrl;
+        return;
+      }
+
+      showToast('KYC session started — our team will contact you within 24 hours.');
+    } catch {
+      showToast('Could not start verification. Please contact info@uaiu.live');
+    }
   }
 
   async function handleListSubmit() {
