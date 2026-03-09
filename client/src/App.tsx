@@ -22,6 +22,11 @@ import RetireUpload from "@/pages/RetireUpload";
 import VerifyTrade from "@/pages/VerifyTrade";
 import DemoMode from "@/pages/DemoMode";
 import Blog from "@/pages/Blog";
+import Alerts from "@/pages/Alerts";
+import Ledger from "@/pages/Ledger";
+import IndexPage from "@/pages/IndexPage";
+import Corsia from "@/pages/Corsia";
+import ApiDocs from "@/pages/ApiDocs";
 import NotFound from "@/pages/not-found";
 import NavigatorLanding from "@/pages/navigator/Landing";
 import NavigatorIntake from "@/pages/navigator/Intake";
@@ -42,6 +47,11 @@ function Router() {
       <Route path="/x/verify/:hash" component={VerifyTrade} />
       <Route path="/verify/:hash" component={VerifyTrade} />
       <Route path="/blog" component={Blog} />
+      <Route path="/alerts" component={Alerts} />
+      <Route path="/ledger" component={Ledger} />
+      <Route path="/index" component={IndexPage} />
+      <Route path="/corsia" component={Corsia} />
+      <Route path="/api" component={ApiDocs} />
       <Route path="/x/demo" component={DemoMode} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />

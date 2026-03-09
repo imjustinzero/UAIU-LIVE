@@ -348,6 +348,11 @@ export const exchangeTrades = pgTable("exchange_trades", {
   sellerRegistryName: varchar("seller_registry_name"),
   sellerRegistrySerial: varchar("seller_registry_serial"),
   vintageYear: integer("vintage_year"),
+  retirementStatus: varchar("retirement_status"),
+  retirementCertificateId: varchar("retirement_certificate_id"),
+  retirementCertificateUrl: text("retirement_certificate_url"),
+  retirementCertificateGeneratedAt: timestamp("retirement_certificate_generated_at"),
+  retirementPurpose: varchar("retirement_purpose"),
   status: varchar("status").notNull().default('completed'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -404,6 +409,22 @@ export const retirementUploadTokens = pgTable("retirement_upload_tokens", {
   expiresAt: timestamp("expires_at").notNull(),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const alertSubscribers = pgTable("alert_subscribers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  organization: varchar("organization").notNull(),
+  sector: varchar("sector").notNull(),
+  frameworks: text("frameworks").array().notNull().default(sql`ARRAY[]::text[]`),
+  alertTiming: text("alert_timing").array().notNull().default(sql`ARRAY[]::text[]`),
+  source: varchar("source"),
+  confirmed: boolean("confirmed").notNull().default(false),
+  confirmToken: varchar("confirm_token").notNull().unique(),
+  unsubscribeToken: varchar("unsubscribe_token").notNull().unique(),
+  subscribedAt: timestamp("subscribed_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const webhookFailures = pgTable("webhook_failures", {
@@ -479,6 +500,12 @@ export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRe
   id: true,
   createdAt: true,
 });
+export const insertAlertSubscriberSchema = createInsertSchema(alertSubscribers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  subscribedAt: true,
+});
 
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
@@ -493,6 +520,7 @@ export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
 export type ExchangeTrade = typeof exchangeTrades.$inferSelect;
 export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
 export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inferSelect;
+export type AlertSubscriber = typeof alertSubscribers.$inferSelect;
 export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
 
 // ── Backup & Disaster Recovery ──────────────────────────────────────────────
