@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import SkipLink from "@/components/SkipLink";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { SettingsProvider } from "@/lib/settings";
+import { AuthProvider } from "@/lib/auth-context";
 import Play from "@/pages/Play";
 import Profile from "@/pages/Profile";
 import Feed from "@/pages/Feed";
@@ -67,15 +68,17 @@ function App() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <SettingsProvider>
-          <TooltipProvider>
-            <SkipLink />
-            <Toaster />
-            <main id="main" className="min-h-screen">
-              <Router />
-            </main>
-          </TooltipProvider>
-        </SettingsProvider>
+        <AuthProvider>
+          <SettingsProvider>
+            <TooltipProvider>
+              <SkipLink />
+              <Toaster />
+              <main id="main" className="min-h-screen">
+                <Router />
+              </main>
+            </TooltipProvider>
+          </SettingsProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
   );
