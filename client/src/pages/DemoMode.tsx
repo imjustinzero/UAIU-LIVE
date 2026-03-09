@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
+import { useSEO } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -624,6 +625,11 @@ function CalendarPanel() {
 }
 
 export default function DemoMode() {
+  useSEO({
+    title: 'UAIU.LIVE/X Demo — Carbon Procurement Platform',
+    description: 'Guided walkthrough of the UAIU institutional carbon procurement platform. See how to browse credits, run AI due diligence, submit RFQs, and settle via Stripe escrow.',
+    path: '/x/demo',
+  });
   const [persona, setPersona] = useState<"buyer" | "seller">("buyer");
 
   return (

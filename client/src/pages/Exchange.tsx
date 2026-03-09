@@ -383,8 +383,8 @@ export default function Exchange() {
   const [location] = useLocation();
   const { session, profile, sessionExpired, clearSessionExpired } = useAuth();
   useSEO({
-    title: 'Carbon Credit Exchange',
-    description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
+    title: 'UAIU.LIVE/X — Carbon Procurement Desk',
+    description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — institutional-grade audit artifacts, Stripe escrow settlement, and AI due diligence on every listing.',
     path: '/x',
   });
   const cursorRef = useRef<HTMLDivElement>(null);
