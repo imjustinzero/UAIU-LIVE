@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { dbInsert, getSupabaseClient } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import { Globe, Waves, Leaf, Trees, Droplets, Building2, Shield, Zap, Link2, Scale, Star, MapPin, CheckCircle, Lock, FileText, Clock, Users } from "lucide-react";
 import { CarbonClock } from "../components/exchange/CarbonClock";
 import { TerminalMode } from "../components/exchange/TerminalMode";
@@ -286,6 +287,7 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
 
 export default function Exchange() {
   const [location] = useLocation();
+  const { session, profile, sessionExpired, clearSessionExpired } = useAuth();
   useSEO({
     title: 'Carbon Credit Exchange',
     description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
@@ -359,6 +361,7 @@ export default function Exchange() {
   const [verifyResult, setVerifyResult] = useState<any>(null);
 
   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: '' });
+  const sessionExpiredNotifiedRef = useRef(false);
 
   // New feature state
   const { isDark, toggle: toggleDark } = useDarkMode();
@@ -420,6 +423,30 @@ export default function Exchange() {
     setToast({ show: true, msg });
     setTimeout(() => setToast({ show: false, msg: '' }), 4000);
   }
+
+  useEffect(() => {
+    if (sessionExpired && !sessionExpiredNotifiedRef.current) {
+      sessionExpiredNotifiedRef.current = true;
+      showToast('Session expired — please sign in again.');
+      setShowAccountModal(true);
+      clearSessionExpired();
+    }
+  }, [clearSessionExpired, sessionExpired]);
+
+  useEffect(() => {
+    if (!profile || !sessionAccount) return;
+    setSessionAccount((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        kycStatus: profile.kyc_status || prev.kycStatus || 'not_started',
+        kybStatus: profile.kyb_status || prev.kybStatus || 'not_started',
+        kycCompletedAt: profile.kyc_completed_at || prev.kycCompletedAt || null,
+        company: profile.company_name || prev.company,
+        accountType: profile.role || prev.accountType,
+      };
+    });
+  }, [profile, sessionAccount]);
 
   function rateOk(key: string, max = 4): boolean {
     const now = Date.now();
@@ -601,7 +628,8 @@ export default function Exchange() {
     const onLeave = () => { ring.style.width = '32px'; ring.style.height = '32px'; ring.style.borderColor = 'rgba(212,168,67,0.5)'; };
 
     document.addEventListener('mousemove', onMove);
-    document.querySelectorAll('button,a').forEach(el => {
+    const interactiveEls = Array.from(document.querySelectorAll('button,a'));
+    interactiveEls.forEach(el => {
       el.addEventListener('mouseenter', onEnter);
       el.addEventListener('mouseleave', onLeave);
     });
@@ -609,6 +637,10 @@ export default function Exchange() {
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener('mousemove', onMove);
+      interactiveEls.forEach(el => {
+        el.removeEventListener('mouseenter', onEnter);
+        el.removeEventListener('mouseleave', onLeave);
+      });
     };
   }, [listings]);
 
@@ -634,7 +666,7 @@ export default function Exchange() {
   const tradeFee = tradeSub * 0.0075;
   const tradeTotal = tradeSub;
   const isDemoRoute = location === '/x/demo';
-  const hasVerifiedKyc = isDemoRoute || sessionAccount?.kycStatus === 'verified';
+  const hasVerifiedKyc = isDemoRoute || sessionAccount?.kycStatus === 'verified' || profile?.kyc_status === 'verified';
 
 
   function openTrade(listing: Listing | null, mode: 'buy' | 'sell') {
@@ -670,7 +702,8 @@ export default function Exchange() {
     const gross = tradePrice * tradeQty;
     const fee = gross * 0.0075;
     const standard = currentListing?.name || TRADE_TYPES.find(t => t.value === tradeTypeValue)?.label || 'Carbon Credit';
-    const payload = JSON.stringify({ tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: lastReceiptHashRef.current, ts: Date.now() });
+    const previousHash = lastReceiptHashRef.current;
+    const payload = JSON.stringify({ tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, settlement: 'T+1', prev: previousHash, ts: Date.now() });
     const hash = await sha256(payload);
     lastReceiptHashRef.current = hash;
 
@@ -684,7 +717,7 @@ export default function Exchange() {
       }
     }
 
-    const prevHash = hash;
+    const prevHash = previousHash;
     const trade = { id: tradeId, mode, standard, priceEurPerTonne: tradePrice, volumeTonnes: tradeQty, grossEur: gross, feeEur: fee, receiptHash: hash, prevReceiptHash: prevHash, verifyUrl: `uaiu.live/verify/${tradeId}`, auditUrl: `uaiu.live/audit/${tradeId}.pdf`, ts: Date.now() };
     dbInsert('trades', { trade_id: tradeId, side: mode, standard, price_eur_per_tonne: tradePrice, volume_tonnes: tradeQty, gross_eur: gross, fee_eur: fee, net_eur: gross + fee, settlement: 'T+1', receipt_hash: hash, prev_receipt_hash: prevHash, verify_url: `uaiu.live/verify/${tradeId}`, status: 'filled' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     setTimeout(() => {
@@ -805,15 +838,20 @@ export default function Exchange() {
   async function handleStartKyc() {
     const supabase = getSupabaseClient();
     let freshExchangeToken = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    let activeSession = session;
 
     if (supabase) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      if (!activeSession) {
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        activeSession = freshSession;
+      }
+
+      if (!activeSession) {
         showToast('Please sign in again before starting verification.');
         return;
       }
 
-      const token = session.access_token;
+      const token = activeSession.access_token;
       if (token) {
         freshExchangeToken = token;
         sessionStorage.setItem('x-exchange-token', token);
@@ -961,7 +999,7 @@ export default function Exchange() {
         if (res.status === 401 && data.error?.includes('Password required')) {
           setSigninNeedsPassword(true);
         } else {
-          setSigninError(data.error || 'No account found for that email. Please open a new account.');
+          setSigninError('Sign in failed. Check your details and try again.');
         }
       }
     } catch {
