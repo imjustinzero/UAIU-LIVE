@@ -19,6 +19,10 @@ export function isDemoMode(): boolean {
   return _client === null;
 }
 
+export function getSupabaseClient(): SupabaseClient | null {
+  return _client;
+}
+
 export async function dbInsert(
   table: string,
   data: Record<string, unknown>

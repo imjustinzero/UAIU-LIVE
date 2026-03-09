@@ -63,9 +63,10 @@ You are NOT a lawyer. Remind users to verify with their compliance officer for f
 interface CoPilotProps {
   context?: CoPilotContext;
   isDark?: boolean;
+  kycStatus?: string;
 }
 
-export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProps) {
+export function AIComplianceCoPilot({ context = {}, isDark = true, kycStatus = 'not_started' }: CoPilotProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -75,6 +76,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
   const inputRef = useRef<HTMLInputElement>(null);
 
   const GOLD = '#D4A843';
+  const isVerified = kycStatus === 'verified';
 
   // Welcome message on first open
   useEffect(() => {
@@ -110,6 +112,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
   };
 
   const sendMessage = async (text?: string) => {
+    if (!isVerified) return;
     const messageText = text || input.trim();
     if (!messageText) return;
 
@@ -297,7 +300,20 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
             flex: 1, overflowY: 'auto', padding: '14px',
             display: 'flex', flexDirection: 'column', gap: '10px'
           }}>
-            {messages.map(msg => (
+            {!isVerified && (
+              <div style={{
+                border: '1px solid rgba(212,168,67,0.35)',
+                background: 'rgba(212,168,67,0.08)',
+                color: GOLD,
+                fontSize: '13px',
+                lineHeight: 1.6,
+                padding: '14px',
+                borderRadius: '10px'
+              }}>
+                Complete identity verification to unlock full compliance support.
+              </div>
+            )}
+            {isVerified && messages.map(msg => (
               <div key={msg.id} style={{
                 display: 'flex',
                 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
@@ -327,7 +343,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
                 </div>
               </div>
             ))}
-            {loading && (
+            {isVerified && loading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
                 <div style={{
                   width: '24px', height: '24px', borderRadius: '50%',
@@ -366,11 +382,11 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                 {QUICK_QUESTIONS.slice(0, 4).map((q, i) => (
-                  <button key={i} onClick={() => sendMessage(q)} style={{
+                  <button key={i} onClick={() => sendMessage(q)} disabled={!isVerified} style={{
                     padding: '4px 10px', borderRadius: '20px', fontSize: '10px',
                     border: '1px solid rgba(212,168,67,0.2)',
                     background: 'transparent', color: GOLD,
-                    cursor: 'pointer', fontWeight: 500
+                    cursor: isVerified ? 'pointer' : 'not-allowed', fontWeight: 500, opacity: isVerified ? 1 : 0.55
                   }}>{q}</button>
                 ))}
               </div>
@@ -395,6 +411,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              disabled={!isVerified}
               placeholder="Ask about compliance, credits, deadlines..."
               style={{
                 flex: 1, padding: '9px 12px', borderRadius: '8px',
@@ -406,7 +423,7 @@ export function AIComplianceCoPilot({ context = {}, isDark = true }: CoPilotProp
             />
             <button
               onClick={() => sendMessage()}
-              disabled={loading || !input.trim()}
+              disabled={!isVerified || loading || !input.trim()}
               style={{
                 width: '36px', height: '36px', borderRadius: '8px',
                 border: 'none', flexShrink: 0,
