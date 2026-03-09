@@ -2212,10 +2212,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // ── KYC — Stripe Identity ─────────────────────────────────────────────────
   // POST /api/kyc/start  — create a verification session, return URL for buyer
-  app.post('/api/kyc/start', requireAuth, async (req, res) => {
+  app.post('/api/kyc/start', requireExchangeAuth, async (req, res) => {
     try {
       const { account_id, email, return_url } = req.body;
       if (!account_id || !email) return res.status(400).json({ error: 'account_id and email required' });
+      const sessionEmail = String((req as any).exchangeEmail || '').trim().toLowerCase();
+      const normalizedEmail = String(email).trim().toLowerCase();
+      if (!sessionEmail || sessionEmail !== normalizedEmail) {
+        return res.status(403).json({ error: 'You can only start KYC for your signed-in account.' });
+      }
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
 
