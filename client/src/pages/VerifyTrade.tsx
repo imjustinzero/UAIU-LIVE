@@ -20,9 +20,21 @@ const C = {
   cream3: 'rgba(242,234,216,0.6)',
 };
 
+const DEMO_TRADE: VerifyResponse = {
+  verified: true,
+  tradeId: 'UAIU-2026-0041',
+  standard: 'Verra VCS — REDD+ Forest Conservation',
+  volumeTonnes: 10000,
+  grossEur: 132190,
+  settledAt: new Date().toISOString(),
+  receiptHash: '8b1f6d67f3ca8d6c3819e74274f5e93a63ea9e7f2d3db8f1fce5d705d6b8a14c',
+};
+
 export default function VerifyTrade() {
-  const [match, params] = useRoute<{ hash: string }>("/x/verify/:hash");
-  const hash = params?.hash || '';
+  const [matchX, paramsX] = useRoute<{ hash: string }>("/x/verify/:hash");
+  const [matchRoot, paramsRoot] = useRoute<{ hash: string }>("/verify/:hash");
+  const hash = paramsX?.hash || paramsRoot?.hash || '';
+  const match = matchX || matchRoot;
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<VerifyResponse | null>(null);
   const [error, setError] = useState('');
@@ -30,6 +42,13 @@ export default function VerifyTrade() {
   useEffect(() => {
     if (!match || !hash) return;
     let mounted = true;
+
+    if (hash === 'UAIU-2026-0041') {
+      setData(DEMO_TRADE);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
     fetch(`/api/exchange/verify/${encodeURIComponent(hash)}`)
@@ -59,7 +78,7 @@ export default function VerifyTrade() {
         <p style={{ margin: 0, color: C.cream3, fontSize: 13 }}>UAIU.LIVE/X receipt hash verification.</p>
 
         <div style={{ marginTop: 22, padding: '14px 16px', border: `1px solid ${C.goldborder}`, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, wordBreak: 'break-all', color: C.cream3 }}>
-          Hash: {hash || 'n/a'}
+          Lookup Key: {hash || 'n/a'}
         </div>
 
         {loading && <p style={{ marginTop: 20, color: C.cream3 }}>Verifying receipt…</p>}
