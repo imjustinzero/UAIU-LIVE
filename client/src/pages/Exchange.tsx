@@ -3,7 +3,7 @@ import { useSEO } from "@/lib/seo";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { dbInsert } from "@/lib/supabase";
+import { dbInsert, getSupabaseClient } from "@/lib/supabase";
 import { Globe, Waves, Leaf, Trees, Droplets, Building2, Shield, Zap, Link2, Scale, Star, MapPin, CheckCircle, Lock, FileText, Clock, Users } from "lucide-react";
 import { CarbonClock } from "../components/exchange/CarbonClock";
 import { TerminalMode } from "../components/exchange/TerminalMode";
@@ -285,6 +285,7 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
 }
 
 export default function Exchange() {
+  const [location] = useLocation();
   useSEO({
     title: 'Carbon Credit Exchange',
     description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
@@ -503,6 +504,7 @@ export default function Exchange() {
             annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
             acceptedTermsAt: account.acceptedTermsAt,
             kycStatus: account.kycStatus || 'not_started',
+            kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
           });
         } else {
           sessionStorage.removeItem('x-exchange-token');
@@ -631,6 +633,9 @@ export default function Exchange() {
   const tradeSub = tradePrice * tradeQty;
   const tradeFee = tradeSub * 0.0075;
   const tradeTotal = tradeSub;
+  const isDemoRoute = location === '/x/demo';
+  const hasVerifiedKyc = isDemoRoute || sessionAccount?.kycStatus === 'verified';
+
 
   function openTrade(listing: Listing | null, mode: 'buy' | 'sell') {
     setCurrentListing(listing);
@@ -648,6 +653,11 @@ export default function Exchange() {
     if (botDetected()) { showToast('Submission blocked.'); return; }
     if (!rateOk('trade', 5)) return;
     if (tradeQty < 1) { showToast('Please enter a valid quantity.'); return; }
+
+    if (!hasVerifiedKyc) {
+      showToast('Complete identity verification to unlock trading features.');
+      return;
+    }
 
     if (!sessionAccount?.acceptedTermsAt) {
       setPendingTradeAction(() => () => handleExecuteTrade(mode));
@@ -722,6 +732,7 @@ export default function Exchange() {
   }
 
   function exportCSV() {
+    if (!hasVerifiedKyc) { showToast('Complete identity verification to unlock trading features.'); return; }
     const allTrades = [...dbTrades, ...sessionTrades];
     if (!allTrades.length) { showToast('No trades to export.'); return; }
     const headers = ['Trade ID', 'Date', 'Side', 'Standard', 'Volume (tCO2)', 'Price (EUR/t)', 'Gross (EUR)', 'Fee (EUR)', 'Status', 'Receipt Hash'];
@@ -792,21 +803,42 @@ export default function Exchange() {
   }
 
   async function handleStartKyc() {
-    if (!sessionAccount?.id || !sessionAccount?.email) {
+    const supabase = getSupabaseClient();
+    let freshExchangeToken = exchangeToken || sessionStorage.getItem('x-exchange-token');
+
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showToast('Please sign in again before starting verification.');
+        return;
+      }
+
+      const token = session.access_token;
+      if (token) {
+        freshExchangeToken = token;
+        sessionStorage.setItem('x-exchange-token', token);
+        setExchangeToken(token);
+      }
+    }
+
+    if (!freshExchangeToken || !sessionAccount?.id || !sessionAccount?.email) {
       showToast('Please sign in again before starting verification.');
       return;
     }
+
     try {
       const res = await fetch('/api/kyc/start', {
         method: 'POST',
-        headers: { ...exchangeHeaders(), 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Exchange-Token': freshExchangeToken },
         body: JSON.stringify({ account_id: sessionAccount.id, email: sessionAccount.email, return_url: `${window.location.origin}/x?kyc=done` })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast(data?.error || 'Could not start verification right now. Please try again.');
+        showToast('Could not start verification right now. Please try again.');
         return;
       }
+
+      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
 
       const verificationUrl = data.url || data.verification_url || data.verificationUrl;
       if (verificationUrl) {
@@ -816,7 +848,7 @@ export default function Exchange() {
 
       showToast('KYC session started — our team will contact you within 24 hours.');
     } catch {
-      showToast('Could not start verification. Please contact info@uaiu.live');
+      showToast('Could not start verification right now. Please try again.');
     }
   }
 
@@ -851,6 +883,7 @@ export default function Exchange() {
   }
 
   async function handleRfqSubmit() {
+    if (!hasVerifiedKyc) { showToast('Complete identity verification to unlock trading features.'); return; }
     if (botDetected()) { showToast('Submission blocked.'); return; }
     if (!rateOk('rfq', 3)) return;
     if (!rfqCompany || !rfqContact || !rfqEmail || !rfqVolume) { showToast('Please fill in all required fields.'); return; }
@@ -912,6 +945,7 @@ export default function Exchange() {
           annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
           acceptedTermsAt: account.acceptedTermsAt,
           kycStatus: account.kycStatus || 'not_started',
+            kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
         };
         const token = account.token;
         if (token) {
@@ -1054,7 +1088,7 @@ export default function Exchange() {
 
       <TerminalMode listings={listings.map(l => ({ name: l.name, standard: l.standard, volume: 0, price: l.sellerProfileId ? l.pricePerTonne : 0, origin: l.origin, status: l.sellerProfileId ? 'LIVE' : 'RFQ' }))} trades={sessionTrades.map(t => ({ id: t.trade_id || t.id || '', side: t.side || 'BUY', standard: t.standard || 'VCS', volume: t.volume_tonnes || 0, price: t.price_eur_per_tonne || 0, time: new Date().toLocaleTimeString() }))} indexPrice={0} etsPrice={0} />
 
-      <AIComplianceCoPilot isDark={isDark} context={{ currentIndexPrice: 0, etsPrice: 0, portfolioTonnes: sessionTrades.reduce((s, t) => s + (t.volume_tonnes || 0), 0), portfolioSpend: sessionTrades.reduce((s, t) => s + (t.gross_eur || 0), 0), accountType: sessionAccount?.accountType, listings: listings.map(l => ({ name: l.name, standard: l.standard, price: l.sellerProfileId ? l.pricePerTonne : 0, tonnes: 0 })) }} />
+      <AIComplianceCoPilot isDark={isDark} kycStatus={sessionAccount?.kycStatus || 'not_started'} context={{ currentIndexPrice: 0, etsPrice: 0, portfolioTonnes: sessionTrades.reduce((s, t) => s + (t.volume_tonnes || 0), 0), portfolioSpend: sessionTrades.reduce((s, t) => s + (t.gross_eur || 0), 0), accountType: sessionAccount?.accountType, listings: listings.map(l => ({ name: l.name, standard: l.standard, price: l.sellerProfileId ? l.pricePerTonne : 0, tonnes: 0 })) }} />
 
       {escrowTrade && (
         <EscrowSettlement tradeId={escrowTrade.tradeId} amountEur={escrowTrade.amountEur} volumeTonnes={escrowTrade.volumeTonnes} standard={escrowTrade.standard} buyerEmail={sessionAccount?.email || ''} isDark={isDark} onSettled={() => setEscrowTrade(null)} onCancel={() => setEscrowTrade(null)} />
@@ -2022,14 +2056,17 @@ export default function Exchange() {
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3 }}>{sessionAccount.email}</div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                       <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 8px', border: `1px solid ${C.goldborder}`, color: C.gold }}>{sessionAccount.accountType || 'Exchange Member'}</span>
-                      <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 8px', border: `1px solid ${sessionAccount.kycStatus === 'verified' ? C.green : C.goldborder}`, color: sessionAccount.kycStatus === 'verified' ? C.green : C.cream3 }}>KYC: {sessionAccount.kycStatus === 'verified' ? 'VERIFIED' : sessionAccount.kycStatus === 'pending' ? 'PENDING' : 'NOT STARTED'}</span>
+                      <span style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 8px', border: `1px solid ${sessionAccount.kycStatus === 'verified' ? C.green : C.goldborder}`, color: sessionAccount.kycStatus === 'verified' ? C.green : C.cream3 }}>KYC: {sessionAccount.kycStatus === 'verified' ? 'VERIFIED ✓' : sessionAccount.kycStatus === 'pending' ? 'PENDING' : 'NOT STARTED'}</span>
                     </div>
+                    {sessionAccount.kycStatus === 'verified' && sessionAccount.kycCompletedAt && (
+                      <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginTop: 6 }}>Verified on {new Date(sessionAccount.kycCompletedAt).toLocaleDateString('en-GB')}</div>
+                    )}
                   </div>
                 </div>
 
                 {sessionAccount.kycStatus !== 'verified' && (
                   <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '14px 18px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'KYC under review — you will receive confirmation by email.' : 'Complete KYC to unlock trading on the platform.'}</div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'Verification in progress — we will notify you when complete' : 'Complete KYC to unlock trading on the platform.'}</div>
                     {sessionAccount.kycStatus !== 'pending' && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">Verify Identity →</button>}
                   </div>
                 )}

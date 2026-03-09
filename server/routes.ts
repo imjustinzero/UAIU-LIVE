@@ -314,7 +314,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 if (account_id) {
                   await db.execute(sql`
                     UPDATE exchange_accounts
-                    SET kyc_status = 'verified', kyc_verified_at = NOW()
+                    SET kyc_status = 'verified', kyc_completed_at = NOW(), kyc_provider_reference = ${session.id}
                     WHERE id = ${account_id}
                   `).catch((e: any) => console.error('[KYC webhook update]', e.message));
 
@@ -1607,7 +1607,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       await storage.resetExchangeFailedLogin(account.email);
       const token = await createExchangeSession(account.email);
       await logSecurityEvent({ email: account.email, eventType: 'signin_success', req, detail: { tokenIssued: true } });
-      res.json({ account, token });
+      res.json({ ...account, token });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }
@@ -1621,7 +1621,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!session) return res.status(401).json({ error: 'Invalid or expired exchange session.' });
       const account = await storage.getExchangeAccountByEmail(String(session.email));
       if (!account) return res.status(404).json({ error: 'Account not found.' });
-      return res.json({ account });
+      return res.json(account);
     } catch (e: any) {
       return res.status(500).json({ error: safeError(e) });
     }
@@ -2235,7 +2235,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       await db.execute(sql`
         UPDATE exchange_accounts
-        SET kyc_session_id = ${session.id}, kyc_status = 'pending'
+        SET kyc_session_id = ${session.id}, kyc_status = 'pending', kyc_provider_reference = ${session.id}
         WHERE id = ${account_id}
       `).catch((e: any) => console.error('[KYC update]', e.message));
 
@@ -2265,7 +2265,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (verified) {
         await db.execute(sql`
           UPDATE exchange_accounts
-          SET kyc_status = 'verified', kyc_verified_at = NOW()
+          SET kyc_status = 'verified', kyc_completed_at = NOW(), kyc_provider_reference = ${session.id}
           WHERE kyc_session_id = ${req.params.session_id}
         `).catch((e: any) => console.error('[KYC verified update]', e.message));
 
