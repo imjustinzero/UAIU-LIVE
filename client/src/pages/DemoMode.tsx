@@ -139,7 +139,7 @@ function BuyerFlow() {
           <SectionCard title="Browse Live Listings" icon={Leaf}>
             {demoListings.map((l) => (
               <div key={l.id} style={{ borderTop: `1px solid ${C.border}`, padding: "14px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
+                <div className="demo-listing-left">
                   <div style={{ fontWeight: 600, color: C.text, marginBottom: 3 }}>{l.project}</div>
                   <div style={{ color: C.muted, fontSize: 13 }}>{l.type}</div>
                   <div style={{ color: C.muted, fontSize: 12 }}>{l.location}</div>
@@ -150,7 +150,7 @@ function BuyerFlow() {
                   </div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{l.status}</div>
                 </div>
-                <div style={{ textAlign: "right", minWidth: 140 }}>
+                <div className="demo-listing-right">
                   <div style={{ fontSize: 22, fontWeight: 700, color: C.gold }}>${l.price.toFixed(2)}<span style={{ fontSize: 13, fontWeight: 400, color: C.muted }}>/tonne</span></div>
                   <div style={{ color: C.muted, fontSize: 12 }}>{l.volume.toLocaleString()} tonnes available</div>
                   <Button size="sm" onClick={() => { setSelected(l); setStep(1); setDdReady(false); }} style={{ marginTop: 8, background: C.gold, color: "#111827", fontWeight: 700 }}>
@@ -211,7 +211,7 @@ function BuyerFlow() {
       {step === 2 && (
         <div>
           <SectionCard title="Submit RFQ" icon={FileText}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="demo-half-grid">
               {[
                 ["Buyer", "Meridian Shipping Group"],
                 ["Contact", "Sarah Chen, Chief Compliance Officer"],
@@ -239,7 +239,7 @@ function BuyerFlow() {
       {step === 3 && (
         <div>
           <SectionCard title="AI Trade Negotiator" icon={TrendingUp}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div className="demo-half-grid" style={{ marginBottom: 16 }}>
               <div style={{ background: "#0a1628", border: `1px solid ${C.border}`, borderRadius: 6, padding: 16, textAlign: "center" }}>
                 <div style={{ color: C.muted, fontSize: 12 }}>Recommended Counter</div>
                 <div style={{ color: C.gold, fontSize: 30, fontWeight: 700 }}>$14.40</div>
@@ -271,7 +271,7 @@ function BuyerFlow() {
       {step === 4 && (
         <div>
           <SectionCard title="Escrow & Settlement" icon={Lock}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+            <div className="demo-half-grid" style={{ marginBottom: 14 }}>
               {[
                 ["Trade ID", "UAIU-2026-0041"],
                 ["Buyer", "Meridian Shipping Group"],
@@ -384,7 +384,7 @@ function SellerFlow() {
       {step === 0 && (
         <div>
           <SectionCard title="List Your Carbon Credits" icon={Leaf}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+            <div className="demo-half-grid" style={{ marginBottom: 16 }}>
               {[
                 ["Project Name", "Rimba Raya Biodiversity Reserve"],
                 ["Registry", "Verra VCS"],
@@ -450,7 +450,7 @@ function SellerFlow() {
                 <div style={{ color: C.muted, fontSize: 13 }}>Bid: ${incomingBids[selectedBid].bid.toFixed(2)} · Your ask: $14.50</div>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div className="demo-half-grid" style={{ marginBottom: 16 }}>
               <div style={{ background: "#0a1628", border: `1px solid ${C.border}`, borderRadius: 6, padding: 16, textAlign: "center" }}>
                 <div style={{ color: C.muted, fontSize: 12 }}>Accept Threshold</div>
                 <div style={{ color: C.gold, fontSize: 28, fontWeight: 700 }}>$14.40</div>
@@ -485,7 +485,7 @@ function SellerFlow() {
               <Lock size={16} color={C.green} />
               <span style={{ color: C.green, fontWeight: 600, fontSize: 13 }}>BUYER FUNDS HELD IN STRIPE ESCROW</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="demo-half-grid">
               {[
                 ["Trade ID", "UAIU-2026-0041"],
                 ["Buyer", "Meridian Shipping Group"],
@@ -634,10 +634,79 @@ export default function DemoMode() {
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Responsive outer grid: sidebar stacks below on mobile */
+        .demo-main-grid {
+          display: grid;
+          grid-template-columns: 1fr 280px;
+          gap: 20px;
+          align-items: start;
+        }
+        @media (max-width: 768px) {
+          .demo-main-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* Responsive half-grid: form field pairs stack on very small phones */
+        .demo-half-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        @media (max-width: 500px) {
+          .demo-half-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* Listing card left cell — no forced min-width */
+        .demo-listing-left {
+          flex: 1;
+          min-width: 0;
+        }
+
+        /* Listing card right cell — reduced min-width */
+        .demo-listing-right {
+          text-align: right;
+          min-width: 120px;
+        }
+        @media (max-width: 400px) {
+          .demo-listing-right {
+            min-width: 0;
+            width: 100%;
+            text-align: left;
+          }
+        }
+
+        /* Responsive header */
+        .demo-header {
+          background: #0a0e1a;
+          padding: 14px 24px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        @media (max-width: 480px) {
+          .demo-header {
+            padding: 12px 16px;
+          }
+        }
+
+        /* Persona toggle buttons */
+        .demo-persona-row {
+          display: flex;
+          justify-content: center;
+          gap: 12px;
+          margin-bottom: 28px;
+          flex-wrap: wrap;
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{ background: "#0a0e1a", borderBottom: `1px solid ${C.border}`, padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="demo-header" style={{ borderBottom: `1px solid ${C.border}` }}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: C.gold, fontWeight: 700, letterSpacing: "0.04em" }}>
           UAIU.LIVE/X
         </div>
@@ -647,11 +716,11 @@ export default function DemoMode() {
       </div>
 
       {/* Demo Banner */}
-      <div style={{ background: "#78350f", borderBottom: `1px solid #92400e`, padding: "8px 24px", textAlign: "center", fontSize: 12, fontWeight: 700, color: C.amber, letterSpacing: "0.06em" }}>
+      <div style={{ background: "#78350f", borderBottom: `1px solid #92400e`, padding: "8px 16px", textAlign: "center", fontSize: 12, fontWeight: 700, color: C.amber, letterSpacing: "0.06em", wordBreak: "break-word" }}>
         DEMO MODE — All data is simulated for demonstration purposes only
       </div>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 20px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
 
         {/* Title */}
         <div style={{ marginBottom: 28, textAlign: "center" }}>
@@ -664,7 +733,7 @@ export default function DemoMode() {
         </div>
 
         {/* Persona Toggle */}
-        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 28 }}>
+        <div className="demo-persona-row">
           {(["buyer", "seller"] as const).map((p) => (
             <button key={p} onClick={() => setPersona(p)} style={{ padding: "12px 32px", borderRadius: 6, border: `2px solid ${persona === p ? C.gold : C.border}`, background: persona === p ? C.gold : "transparent", color: persona === p ? "#111827" : C.muted, fontWeight: 700, fontSize: 15, cursor: "pointer", textTransform: "capitalize", transition: "all 0.15s" }}>
               {p === "buyer" ? <><Building2 size={15} style={{ display: "inline", marginRight: 7, verticalAlign: "middle" }} />I'm a Buyer</> : <><Leaf size={15} style={{ display: "inline", marginRight: 7, verticalAlign: "middle" }} />I'm a Seller</>}
@@ -673,7 +742,7 @@ export default function DemoMode() {
         </div>
 
         {/* Main layout */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20, alignItems: "start" }}>
+        <div className="demo-main-grid">
           <div>
             {persona === "buyer" ? <BuyerFlow /> : <SellerFlow />}
           </div>
