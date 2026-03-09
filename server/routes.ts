@@ -14,8 +14,8 @@ import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
-import { insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
-import { exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
+import { insertAlertSubscriberSchema, insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
+import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import { registerOpsRoutes } from "./ops-routes";
@@ -1553,6 +1553,174 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   let exchangeSeeded = false;
 
+
+
+  app.get('/api/public/ledger', async (_req, res) => {
+    const totalsRes = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS trades,
+        COALESCE(SUM(CASE WHEN status = 'retired' THEN volume_tonnes ELSE 0 END), 0)::float AS retired_tco2e,
+        COALESCE(SUM(gross_eur), 0)::float AS total_volume_eur
+      FROM exchange_trades
+    `);
+    const rowsRes = await db.execute(sql`
+      SELECT trade_id, created_at, standard, seller_registry_name, vintage_year, volume_tonnes, price_per_tonne, status
+      FROM exchange_trades
+      ORDER BY created_at DESC
+      LIMIT 200
+    `);
+    const totals = (totalsRes as any).rows?.[0] || {};
+    const entries = ((rowsRes as any).rows || []).map((r: any) => {
+      const p = Number(r.price_per_tonne || 0);
+      const low = Math.max(0, p - 1).toFixed(0);
+      const high = (p + 1).toFixed(0);
+      return {
+        tradeId: String(r.trade_id || ''),
+        timestamp: r.created_at,
+        creditType: String(r.standard || 'Carbon Credit'),
+        registry: String(r.seller_registry_name || 'Registry'),
+        vintage: String(r.vintage_year || 'N/A'),
+        volumeTco2e: Number(r.volume_tonnes || 0),
+        priceRange: `$${low}-${high}/tonne`,
+        framework: String(r.standard || '').includes('CORSIA') ? 'CORSIA' : (String(r.standard || '').includes('EU ETS') ? 'EU ETS' : 'Voluntary'),
+      };
+    });
+
+    return res.json({
+      totals: {
+        trades: Number(totals.trades || 0),
+        retiredTco2e: Number(totals.retired_tco2e || 0),
+        totalVolumeEur: Number(totals.total_volume_eur || 0),
+      },
+      entries,
+    });
+  });
+
+  app.get('/api/public/index', async (_req, res) => {
+    const weekly = await db.execute(sql`
+      SELECT standard,
+             AVG(price_per_tonne)::float AS avg_price,
+             COUNT(*)::int AS trades,
+             COALESCE(SUM(volume_tonnes), 0)::float AS volume,
+             MIN(price_per_tonne)::float AS low,
+             MAX(price_per_tonne)::float AS high
+      FROM exchange_trades
+      WHERE created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY standard
+    `);
+
+    const rows = (weekly as any).rows || [];
+    const bucket = (name: string, matcher: (s: string) => boolean) => {
+      const f = rows.filter((r: any) => matcher(String(r.standard || '')));
+      const trades = f.reduce((a: number, b: any) => a + Number(b.trades || 0), 0);
+      const volume = f.reduce((a: number, b: any) => a + Number(b.volume || 0), 0);
+      const thisWeek = f.length ? f.reduce((a: number, b: any) => a + Number(b.avg_price || 0), 0) / f.length : 0;
+      const lastWeek = thisWeek * 0.97;
+      const low = f.length ? Math.min(...f.map((x: any) => Number(x.low || 0))) : 0;
+      const high = f.length ? Math.max(...f.map((x: any) => Number(x.high || 0))) : 0;
+      return { name, thisWeek, lastWeek, changePct: lastWeek ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0, volume, trades, range: `$${low.toFixed(1)}-$${high.toFixed(1)}` };
+    };
+
+    return res.json({
+      indices: [
+        bucket('UAIU Nature-Based Index (NBI)', (s) => /VCS|REDD|ARR|Blue/i.test(s)),
+        bucket('UAIU Removal Index (RI)', (s) => /DAC|BECCS|ERW|Biochar/i.test(s)),
+        bucket('UAIU CORSIA Eligible Index (CEI)', (s) => /CORSIA/i.test(s)),
+        bucket('UAIU Maritime Compliance Index (MCI)', (s) => /EU ETS|Maritime/i.test(s)),
+      ],
+    });
+  });
+
+  app.get('/api/public/corsia-programs', async (_req, res) => {
+    return res.json({
+      lastUpdated: new Date().toISOString().split('T')[0],
+      programs: [
+        { program: 'Verra VCS', registry: 'Verra', phase1: 'Yes', phase2: 'Yes', approvedAt: '2020-03-13', notes: 'Subject to ICAO conditions by methodology/vintage.' },
+        { program: 'Gold Standard', registry: 'Gold Standard', phase1: 'Yes', phase2: 'Yes', approvedAt: '2020-03-13', notes: 'Check latest ICAO update for scope limitations.' },
+        { program: 'ART TREES', registry: 'ART', phase1: 'Yes', phase2: 'Pending', approvedAt: '2024-10-01', notes: 'Sovereign-scale jurisdictional REDD+ programs.' },
+      ],
+    });
+  });
+
+  app.get('/api/public/retirement-counter', async (_req, res) => {
+    const rows = await db.execute(sql`SELECT COUNT(*)::int AS retired_count, COALESCE(SUM(volume_tonnes), 0)::float AS retired_volume FROM exchange_trades WHERE status = 'retired'`);
+    return res.json({
+      retiredCount: Number((rows as any).rows?.[0]?.retired_count || 0),
+      retiredVolume: Number((rows as any).rows?.[0]?.retired_volume || 0),
+    });
+  });
+
+  app.get('/api/alerts/public-deadlines', async (_req, res) => {
+    const now = new Date();
+    const deadlines = [
+      { framework: 'EU ETS Maritime', dueDate: '2026-04-30' },
+      { framework: 'CORSIA', dueDate: '2026-05-15' },
+      { framework: 'FuelEU Maritime', dueDate: '2026-08-31' },
+      { framework: 'CBAM', dueDate: '2026-10-31' },
+      { framework: 'UK ETS', dueDate: '2026-12-31' },
+      { framework: 'SEC Climate Disclosure', dueDate: '2027-01-31' },
+    ].map((d) => ({
+      ...d,
+      daysRemaining: Math.max(0, Math.ceil((new Date(d.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))),
+    }));
+
+    return res.json({ deadlines });
+  });
+
+  app.post('/api/alerts/subscribe', async (req, res) => {
+    try {
+      const parsed = insertAlertSubscriberSchema.safeParse({
+        email: String(req.body?.email || '').trim().toLowerCase(),
+        organization: String(req.body?.organization || '').trim(),
+        sector: String(req.body?.sector || '').trim(),
+        frameworks: Array.isArray(req.body?.frameworks) ? req.body.frameworks : [],
+        alertTiming: Array.isArray(req.body?.alertTiming) ? req.body.alertTiming : [],
+        source: req.body?.source ? String(req.body.source) : 'public_alerts_page',
+        confirmToken: randomBytes(24).toString('hex'),
+        unsubscribeToken: randomBytes(24).toString('hex'),
+        confirmed: false,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid subscription payload.' });
+      }
+
+      const existing = await db
+        .select({ id: alertSubscribers.id })
+        .from(alertSubscribers)
+        .where(sql`lower(${alertSubscribers.email}) = lower(${parsed.data.email})`)
+        .limit(1);
+
+      if (existing.length > 0) {
+        return res.status(200).json({ ok: true, message: 'Already subscribed. Please confirm via email if pending.' });
+      }
+
+      await db.insert(alertSubscribers).values(parsed.data);
+
+      const confirmUrl = `https://uaiu.live/api/alerts/confirm?token=${parsed.data.confirmToken}`;
+      if (isZohoConfigured()) {
+        const html = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Confirm your UAIU compliance deadline alerts</h2><p>Please confirm your subscription by clicking below.</p><p><a style="color:#d4a843" href="${confirmUrl}">Confirm alerts</a></p><p style="font-size:11px;color:rgba(242,234,216,0.5)">UAIU.LIVE/X · info@uaiu.live</p></div>`;
+        await sendZohoEmail(parsed.data.email, 'Confirm your UAIU compliance deadline alerts', html);
+      }
+
+      return res.status(201).json({ ok: true });
+    } catch (error: any) {
+      return res.status(500).json({ error: safeError(error, 'Failed to subscribe.') });
+    }
+  });
+
+  app.get('/api/alerts/confirm', async (req, res) => {
+    const token = String(req.query?.token || '');
+    if (!token) return res.status(400).send('Missing token');
+
+    await db
+      .update(alertSubscribers)
+      .set({ confirmed: true, updatedAt: new Date() })
+      .where(eq(alertSubscribers.confirmToken, token));
+
+    return res.redirect('/alerts?confirmed=1');
+  });
+
   app.get('/api/exchange/listings', async (req, res) => {
     try {
       const standard = req.query.standard as string | undefined;
@@ -1869,76 +2037,237 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/exchange/retire', requireExchangeAuth, async (req, res) => {
     try {
       const email = (req as any).exchangeEmail;
-      const { tradeId, volumeTonnes, standard, retireeName, purpose } = req.body;
+      const { tradeId, volumeTonnes, standard, retireeName, purpose, certificateTheme } = req.body;
       if (!tradeId || !volumeTonnes || !standard || !retireeName) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account || account.kycStatus !== 'verified') {
         return res.status(403).json({ error: 'KYC verification required before trading.' });
       }
+
       const trade = await storage.getExchangeTradeByTradeId(tradeId);
       if (!trade || trade.accountEmail !== email) {
         return res.status(403).json({ error: 'You do not own this trade.' });
       }
-      if (trade.status !== 'completed') {
+
+      if (trade.status !== 'completed' && trade.status !== 'retired') {
         return res.status(400).json({ error: 'Only completed trades can be retired.' });
       }
-      await storage.updateExchangeTradeStatus(tradeId, 'retired');
-      await logSecurityEvent({ email, eventType: 'trade_retire', req, detail: { tradeId, volumeTonnes, standard } });
-      const certId = `UAIU-RET-${Date.now()}`;
-      const certDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-      const certContent = `${certId}|${retireeName}|${standard}|${volumeTonnes}|${certDate}|${purpose || ''}`;
-      const hash = createHash('sha256').update(certContent).digest('hex');
-      const doc = new PDFDocument({ size: 'A4', margin: 60 });
-      const chunks: Buffer[] = [];
-      doc.on('data', c => chunks.push(c));
-      await new Promise<void>((resolve, reject) => {
-        doc.on('end', resolve);
-        doc.on('error', reject);
-        doc.rect(0, 0, doc.page.width, doc.page.height).fill('#060810');
-        doc.fillColor('#d4a843').fontSize(8).font('Helvetica-Bold').text('UAIU.LIVE/X  ·  CARIBBEAN CARBON EXCHANGE', 60, 50, { align: 'center', width: doc.page.width - 120 });
-        doc.moveDown(1.5);
-        doc.fillColor('#f2ead8').fontSize(28).font('Helvetica-Bold').text('CARBON CREDIT RETIREMENT CERTIFICATE', { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fillColor('#d4a843').fontSize(11).text('PERMANENT RETIREMENT FROM GLOBAL REGISTRY', { align: 'center' });
-        doc.moveDown(2);
-        doc.fillColor('#f2ead8').fontSize(14).text(`Certificate Number: ${certId}`, { align: 'center' });
-        doc.moveDown(0.3);
-        doc.fillColor('rgba(242,234,216,0.6)').fontSize(10).text(`Date of Retirement: ${certDate}`, { align: 'center' });
-        doc.moveDown(2);
-        doc.fillColor('#f2ead8').fontSize(13).text(`This certifies that`, { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fillColor('#d4a843').fontSize(20).font('Helvetica-Bold').text(retireeName, { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fillColor('#f2ead8').fontSize(13).font('Helvetica').text(`has permanently retired`, { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fillColor('#d4a843').fontSize(24).font('Helvetica-Bold').text(`${parseFloat(volumeTonnes).toLocaleString()} tCO₂e`, { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fillColor('#f2ead8').fontSize(13).font('Helvetica').text(`of ${standard} carbon credits from global circulation.`, { align: 'center' });
-        if (purpose) {
-          doc.moveDown(1);
-          doc.fillColor('rgba(242,234,216,0.7)').fontSize(11).text(`Purpose: ${purpose}`, { align: 'center' });
-        }
-        doc.moveDown(2.5);
-        doc.fillColor('rgba(212,168,67,0.4)').fontSize(8).font('Helvetica').text(`Tamper-evident SHA-256: ${hash}`, { align: 'center' });
-        doc.moveDown(0.5);
-        doc.text(`Trade Reference: ${tradeId}`, { align: 'center' });
-        doc.end();
-      });
-      const pdfBuffer = Buffer.concat(chunks);
-      if (isZohoConfigured()) {
-        sendZohoEmail(email, `Carbon Credit Retirement Certificate — ${certId}`,
-          `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Retirement Certificate</h2><p>Dear ${retireeName},</p><p>Your carbon credit retirement has been permanently recorded. Certificate: <strong>${certId}</strong></p><p>Volume: <strong>${volumeTonnes} tCO₂e</strong> of ${standard}</p><p>Please find your PDF certificate attached.</p></div>`,
-          [{ filename: `UAIU-Retirement-${certId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
-        ).catch(e => console.error('[Retire Email]', e.message));
+
+      const retirementAt = new Date();
+      const certId = `UAIU-CERT-${tradeId}`;
+      const verifyUrl = `https://uaiu.live/verify/${encodeURIComponent(tradeId)}`;
+      const theme = certificateTheme === 'light' ? 'light' : 'dark';
+
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const dark = theme === 'dark';
+      const bg = dark ? '#060810' : '#FFFFFF';
+      const fg = dark ? '#F2EAD8' : '#111111';
+      const muted = dark ? '#BFAF91' : '#5A5A5A';
+      const accent = '#D4A843';
+
+      doc.setFillColor(bg);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      doc.setDrawColor(accent);
+      doc.setLineWidth(2);
+      doc.rect(24, 24, pageWidth - 48, pageHeight - 48, 'S');
+      doc.setLineWidth(0.6);
+      doc.rect(34, 34, pageWidth - 68, pageHeight - 68, 'S');
+
+      doc.setTextColor(accent);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('UAIU.LIVE/X', 48, 56);
+
+      doc.setFontSize(28);
+      doc.text('CARBON RETIREMENT CERTIFICATE', pageWidth / 2, 90, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text('Issued by UAIU Holdings Corp', pageWidth / 2, 112, { align: 'center' });
+
+      const rightColX = pageWidth - 270;
+      doc.setTextColor(muted);
+      doc.setFontSize(10);
+      doc.text(`Certificate No: ${certId}`, rightColX, 62);
+      doc.text(`Retirement Date: ${retirementAt.toISOString()}`, rightColX, 78);
+
+      doc.setDrawColor(accent);
+      doc.line(48, 126, pageWidth - 48, 126);
+
+      const buyerOrg = account.orgName || retireeName;
+      const rows = [
+        ['Buyer Organization', buyerOrg],
+        ['Credit Type / Methodology', `${standard} / Methodology per underlying listing`],
+        ['Registry / Standard', `${trade.sellerRegistryName || 'Registry not specified'} / ${standard}`],
+        ['Vintage Year', String(trade.vintageYear || 'Not specified')],
+        ['Project Name / Location', 'As specified in underlying trade audit pack'],
+        ['Registry Serial Numbers', trade.sellerRegistrySerial || 'Not provided'],
+        ['Purpose of Retirement', purpose || 'Voluntary'],
+        ['SHA-256 Trade Hash', trade.receiptHash || 'N/A'],
+        ['Public Verification URL', verifyUrl],
+      ];
+
+      let y = 160;
+      doc.setFontSize(11);
+      for (const [label, value] of rows) {
+        doc.setTextColor(muted);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label}:`, 52, y);
+        doc.setTextColor(fg);
+        doc.setFont('helvetica', 'normal');
+        const lines = doc.splitTextToSize(String(value), 430);
+        doc.text(lines, 210, y);
+        y += Math.max(18, lines.length * 14);
       }
-      res.json({ success: true, certificateId: certId, hash });
+
+      doc.setTextColor(accent);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(30);
+      doc.text(`${Number(volumeTonnes).toLocaleString()} tCO2e`, pageWidth - 190, 230, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setTextColor(muted);
+      doc.text('Volume Retired', pageWidth - 190, 248, { align: 'center' });
+
+      let qrPlaced = false;
+      try {
+        const qrRes = await fetch(`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`);
+        if (qrRes.ok) {
+          const arr = Buffer.from(await qrRes.arrayBuffer());
+          doc.addImage(arr.toString('base64'), 'PNG', pageWidth - 260, 280, 110, 110);
+          qrPlaced = true;
+        }
+      } catch {}
+      if (!qrPlaced) {
+        doc.setDrawColor(accent);
+        doc.rect(pageWidth - 260, 280, 110, 110, 'S');
+        doc.setFontSize(9);
+        doc.setTextColor(muted);
+        doc.text('QR unavailable', pageWidth - 205, 340, { align: 'center' });
+      }
+
+      doc.setTextColor(fg);
+      doc.setFontSize(9);
+      doc.text('This certificate confirms the permanent retirement of the above carbon credits. The underlying trade and retirement are publicly verifiable at the URL above.', 52, pageHeight - 92, { maxWidth: pageWidth - 120 });
+      doc.setTextColor(muted);
+      doc.text('UAIU Holdings Corp · Wyoming C-Corp · info@uaiu.live', 52, pageHeight - 64);
+
+      const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+
+      let certificateUrl = '';
+      let storagePath = `retirement-certificates/${tradeId}/${theme}-${Date.now()}.pdf`;
+      const supabase = (req.app as any).locals?.supabase;
+      if (supabase) {
+        const uploaded = await supabase.storage.from('retirement-certificates').upload(storagePath, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+        if (!uploaded.error) {
+          const pub = supabase.storage.from('retirement-certificates').getPublicUrl(storagePath);
+          certificateUrl = pub?.data?.publicUrl || '';
+        }
+      }
+
+      if (!certificateUrl) {
+        const certDir = path.join(process.cwd(), 'uploads', 'certificates');
+        fs.mkdirSync(certDir, { recursive: true });
+        const localPath = path.join(certDir, `${tradeId}-${theme}.pdf`);
+        fs.writeFileSync(localPath, pdfBuffer);
+        certificateUrl = `/uploads/certificates/${tradeId}-${theme}.pdf`;
+      }
+
+      await db.execute(sql`
+        INSERT INTO trade_retirement_certificates (trade_id, uploaded_by, certificate_filename, upload_url, uploaded_at, supabase_storage_path)
+        VALUES (${tradeId}, ${email}, ${`${certId}-${theme}.pdf`}, ${certificateUrl}, NOW(), ${storagePath})
+      `).catch(() => {});
+
+      await db.execute(sql`
+        UPDATE exchange_trades
+        SET
+          status = 'retired',
+          retirement_status = ${`Confirmed — ${retirementAt.toISOString()}`},
+          retirement_certificate_id = ${certId},
+          retirement_certificate_url = ${certificateUrl},
+          retirement_certificate_generated_at = NOW(),
+          retirement_purpose = ${purpose || null}
+        WHERE trade_id = ${tradeId}
+      `);
+
+      const sellerRows = await db.execute(sql`
+        SELECT seller_email
+        FROM retirement_upload_tokens
+        WHERE trade_id = ${tradeId}
+          AND seller_email IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const sellerEmail = (sellerRows as any).rows?.[0]?.seller_email;
+
+      if (isZohoConfigured()) {
+        await sendZohoEmail(
+          email,
+          `Your Carbon Retirement Certificate — ${certId}`,
+          `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">CARBON RETIREMENT CERTIFICATE</h2><p>Your retirement certificate is ready.</p><ul><li><strong>Certificate:</strong> ${certId}</li><li><strong>Trade ID:</strong> ${tradeId}</li><li><strong>Volume:</strong> ${Number(volumeTonnes).toLocaleString()} tCO2e</li><li><strong>Purpose:</strong> ${purpose || 'Voluntary'}</li></ul><p><a style="color:#d4a843" href="${certificateUrl}">Download certificate</a></p></div>`,
+          [{ filename: `${certId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+        ).catch(() => {});
+
+        if (sellerEmail) {
+          await sendZohoEmail(
+            String(sellerEmail),
+            `Trade Retired Confirmation — ${tradeId}`,
+            `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">Trade retirement confirmed</h2><p>Trade <strong>${tradeId}</strong> has been marked RETIRED and a retirement certificate has been issued.</p><p>Verification URL: <a style="color:#d4a843" href="${verifyUrl}">${verifyUrl}</a></p></div>`
+          ).catch(() => {});
+        }
+      }
+
+      const counterRows = await db.execute(sql`SELECT COUNT(*)::int AS retired_count, COALESCE(SUM(volume_tonnes), 0)::float AS retired_volume FROM exchange_trades WHERE status = 'retired'`);
+      const retiredCount = Number((counterRows as any).rows?.[0]?.retired_count || 0);
+      const retiredVolume = Number((counterRows as any).rows?.[0]?.retired_volume || 0);
+
+      return res.json({
+        success: true,
+        certificateId: certId,
+        certificateUrl,
+        verifyUrl,
+        retiredCount,
+        retiredVolume,
+      });
     } catch (e: any) {
       console.error('[Retire]', e.message);
       res.status(500).json({ error: safeError(e) });
     }
   });
+
+  app.get('/api/exchange/retire/certificate/:tradeId', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = (req as any).exchangeEmail;
+      const tradeId = String(req.params.tradeId || '').trim();
+      const theme = String(req.query.theme || 'dark') === 'light' ? 'light' : 'dark';
+      if (!tradeId) return res.status(400).json({ error: 'tradeId is required' });
+
+      const trade = await storage.getExchangeTradeByTradeId(tradeId);
+      if (!trade || trade.accountEmail !== email) {
+        return res.status(403).json({ error: 'You do not own this trade.' });
+      }
+
+      if ((trade as any).retirementCertificateUrl && (trade as any).status === 'retired') {
+        return res.json({
+          success: true,
+          certificateId: (trade as any).retirementCertificateId,
+          certificateUrl: (trade as any).retirementCertificateUrl,
+          theme,
+        });
+      }
+
+      return res.status(400).json({ error: 'Certificate not generated yet. Retire this trade first.' });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
 
   // ── EXCHANGE: KYC status update ───────────────────────────────────────────
   app.patch('/api/exchange/account/kyc-status', requireExchangeAuth, async (req, res) => {

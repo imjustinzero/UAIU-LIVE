@@ -763,6 +763,24 @@ export default function Exchange() {
     } catch { showToast('Failed to retire credits. Please try again.'); }
     finally { setRetireSubmitting(false); }
   }
+  async function downloadRetirementCertificate(tradeId: string, theme: 'dark' | 'light' = 'dark') {
+    try {
+      const res = await fetch(`/api/exchange/retire/certificate/${encodeURIComponent(tradeId)}?theme=${theme}`, {
+        method: 'GET',
+        headers: exchangeHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.certificateUrl) {
+        showToast(data?.error || 'Certificate is not available yet.');
+        return;
+      }
+      window.open(data.certificateUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      showToast('Unable to download certificate right now.');
+    }
+  }
+
+
 
   function exportCSV() {
     if (!hasVerifiedKyc) { showToast('Complete identity verification to unlock trading features.'); return; }
@@ -2142,6 +2160,12 @@ export default function Exchange() {
                           </div>
                           {t.status === 'completed' && t.side === 'BUY' && (
                             <button onClick={() => { setRetireTrade(t); setShowRetireModal(true); }} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-retire-${t.tradeId || i}`}>Retire →</button>
+                          )}
+                          {t.status === 'retired' && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              <button onClick={() => downloadRetirementCertificate(t.tradeId, 'dark')} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-cert-dark-${t.tradeId || i}`}>Certificate (Dark)</button>
+                              <button onClick={() => downloadRetirementCertificate(t.tradeId, 'light')} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.cream3, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-cert-light-${t.tradeId || i}`}>Certificate (Light)</button>
+                            </div>
                           )}
                         </div>
                       ))}
