@@ -1,9 +1,9 @@
 module.exports = function template() {
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><title>{{document_ref_number}}</title></head>
+<head><meta charset="utf-8"><title>Buyer Certificate - {{document_ref_number}}</title></head>
 <body>
-<h1>{{is_draft_label}}</h1>
+<h1>Buyer Certificate — {{is_draft_label}}</h1>
 <p>Trade ID: {{trade_id}}</p>
 <p>Document Ref: {{document_ref_number}}</p>
 <p>Generated: {{generation_timestamp}}</p>

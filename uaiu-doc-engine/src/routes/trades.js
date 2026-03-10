@@ -2,8 +2,15 @@ const express = require('express');
 
 const router = express.Router();
 
-router.get('/', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
+router.all('*', (_req, res) => {
+  res.status(501).json({
+    error: {
+      name: 'NotImplemented',
+      message: 'Trade endpoints will be added in a follow-up phase.',
+      statusCode: 501,
+      isOperational: true,
+    },
+  });
 });
 
 module.exports = router;

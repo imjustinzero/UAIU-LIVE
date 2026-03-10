@@ -1,5 +1,16 @@
-module.exports = function errorHandler(err, _req, res, _next) {
+const logger = require('../utils/logger');
+
+module.exports = function errorHandler(err, req, res, _next) {
   const statusCode = Number(err?.statusCode) || 500;
+
+  logger.error({
+    event: 'request_failed',
+    method: req.method,
+    path: req.originalUrl,
+    statusCode,
+    name: err?.name,
+    message: err?.message,
+  });
 
   if (typeof err?.toJSON === 'function') {
     return res.status(statusCode).json(err.toJSON());

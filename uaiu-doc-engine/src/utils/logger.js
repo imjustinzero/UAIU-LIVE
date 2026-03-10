@@ -1,16 +1,17 @@
-function format(level, payload) {
-  const event = typeof payload === 'string' ? { message: payload } : payload || {};
-  return JSON.stringify({ level, timestamp: new Date().toISOString(), ...event });
-}
+const { createLogger, format, transports } = require('winston');
 
-module.exports = {
-  info(payload) {
-    process.stdout.write(`${format('info', payload)}\n`);
+const logger = createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: format.combine(
+    format.timestamp(),
+    format.errors({ stack: true }),
+    format.json()
+  ),
+  defaultMeta: {
+    service: 'uaiu-doc-engine',
+    env: process.env.NODE_ENV || 'development',
   },
-  warn(payload) {
-    process.stdout.write(`${format('warn', payload)}\n`);
-  },
-  error(payload) {
-    process.stderr.write(`${format('error', payload)}\n`);
-  },
-};
+  transports: [new transports.Console()],
+});
+
+module.exports = logger;
