@@ -3913,6 +3913,9 @@ Respond with a JSON object (no markdown) with these exact fields:
           return res.status(403).json({ error: 'KYC verification required.' });
         }
       }
+      if (!listing_id && !seller_connect_account_id) {
+        return res.status(400).json({ error: 'listing_id or seller_connect_account_id is required — cannot determine payment model without seller context.' });
+      }
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
       const { default: Stripe } = await import('stripe');
