@@ -223,7 +223,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
               const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
               const event = verifiedEvent;
 
-              // ── payment_intent.amount_capturable_updated / requires_capture ──
+              // ── Explicit if/else if chain for required event types ──
               if (
                 event.type === 'payment_intent.amount_capturable_updated' ||
                 (event.type as string) === 'payment_intent.requires_capture'
@@ -259,16 +259,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                     'Authorized': new Date().toISOString(),
                   }).catch((e: any) => console.error('[Escrow Email]', e.message));
                 }
-              }
-
-              // ── payment_intent.succeeded ──
-              if (event.type === 'payment_intent.succeeded') {
+              } else if (event.type === 'payment_intent.succeeded') {
                 const pi = event.data.object as any;
                 console.log(`[Webhook] payment_intent.succeeded — PI: ${pi.id}`);
-              }
-
-              // ── payment_intent.payment_failed ──
-              if (event.type === 'payment_intent.payment_failed') {
+              } else if (event.type === 'payment_intent.payment_failed') {
                 const pi = event.data.object as any;
                 const trade_id = pi.metadata?.trade_id || 'unknown';
                 console.log(`[Webhook] payment_intent.payment_failed — PI: ${pi.id}, trade: ${trade_id}`);
@@ -292,10 +286,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   'Reason':     pi.last_payment_error?.message || 'Unknown',
                   'Timestamp':  new Date().toISOString(),
                 }).catch(() => {});
-              }
-
-              // ── charge.dispute.created ──
-              if (event.type === 'charge.dispute.created') {
+              } else if (event.type === 'charge.dispute.created') {
                 const dispute = event.data.object as any;
                 const disputedPI = dispute.payment_intent;
                 const chargeId = dispute.charge;
@@ -334,16 +325,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   'Status':     'Escrow release blocked — dispute_hold',
                   'Timestamp':  new Date().toISOString(),
                 }).catch(() => {});
-              }
-
-              // ── transfer.created ──
-              if ((event.type as string) === 'transfer.created') {
+              } else if ((event.type as string) === 'transfer.created') {
                 const transfer = event.data.object as any;
                 console.log(`[Webhook] transfer.created — ${transfer.id}, amount: €${(transfer.amount / 100).toLocaleString()}`);
-              }
-
-              // KYC auto-confirm on Stripe Identity verified
-              if (event.type === 'identity.verification_session.verified') {
+              } else if (event.type === 'identity.verification_session.verified') {
                 const session = event.data.object as any;
                 const account_id = session.metadata?.account_id;
                 const email      = session.metadata?.email;
@@ -364,10 +349,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   }
                   console.log(`[KYC] Account ${account_id} verified via webhook`);
                 }
-              }
-
-              // Exchange spot trade — checkout.session.completed
-              if (event.type === 'checkout.session.completed') {
+              } else if (event.type === 'checkout.session.completed') {
                 const cs = event.data.object as any;
                 const meta = cs.metadata || {};
                 const tradeId     = meta.trade_id || cs.id;
@@ -518,10 +500,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
 
                 console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: €${grossEur}`);
-              }
-
-              // Stripe Connect - account.updated (onboarding complete / requirements changed)
-              if (event.type === 'account.updated') {
+              } else if (event.type === 'account.updated') {
                 const acct = event.data.object as any;
                 const accountId = acct.id;
                 const detailsSubmitted = !!acct.details_submitted;
@@ -536,10 +515,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   `).catch((e: any) => console.error('[Connect account.updated]', e.message));
                   console.log('[Connect] account.updated - ' + accountId + ' ready=' + (detailsSubmitted && payoutsEnabled));
                 }
-              }
-
-              // Stripe Connect - transfer.paid
-              if ((event.type as string) === 'transfer.paid') {
+              } else if ((event.type as string) === 'transfer.paid') {
                 const transfer = event.data.object as any;
                 await db.execute(sql`
                   UPDATE seller_payouts
@@ -547,10 +523,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   WHERE payout_reference = ${transfer.id} OR stripe_transfer_id = ${transfer.id}
                 `).catch((e: any) => console.error('[Connect transfer.paid]', e.message));
                 console.log('[Connect] transfer.paid - ' + transfer.id);
-              }
-
-              // Stripe Connect - transfer.failed
-              if ((event.type as string) === 'transfer.failed') {
+              } else if ((event.type as string) === 'transfer.failed') {
                 const transfer = event.data.object as any;
                 const reason = transfer.failure_message || 'Transfer failed';
                 await db.execute(sql`
