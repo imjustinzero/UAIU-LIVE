@@ -1,0 +1,47 @@
+
+You are a senior full stack engineer and fintech QA specialist. Your job is to perform a complete end to end inspection of UAIU.LIVE/X, an institutional carbon credit procurement and execution platform. Do not assume anything works. Test and verify everything.
+PLATFORM OVERVIEW:
+UAIU.LIVE/X is an institutional carbon credit marketplace with the following core features that must all work perfectly:
+PAYMENT AND FINANCIAL INFRASTRUCTURE:
+Stripe Connect destination charges (not direct charges, destination charges only to avoid money transmission liability)
+T plus 1 escrow settlement flow
+Funds must route correctly from buyer through platform to seller
+Stripe webhook handlers for payment confirmation, failure, and dispute events
+Test with Stripe test mode cards including success, decline, and 3D Secure scenarios
+SECURITY AND AUDIT INFRASTRUCTURE:
+SHA-256 tamper-evident receipt chains on every transaction
+Every receipt must hash the previous receipt creating an unbreakable chain
+Verify the chain cannot be altered without detection
+Multi-sig compliance approval workflow
+Audit pack generation and download per transaction
+Verify audit packs contain all required fields: transaction ID, timestamp, credit metadata, buyer, seller, registry source, hash
+REGISTRY INTEGRATIONS:
+Live Verra registry API connection and credit lookup
+Live Gold Standard registry API connection and credit lookup
+RFQ (Request for Quote) workflow from registry query to offer to execution
+Verify credits cannot be double listed or double retired
+COMPLIANCE AND LEGAL:
+EU ETS ready audit pack export
+CORSIA compliance fields present
+IMO MRV data fields present where applicable
+E-signature system functional end to end
+Partner API authentication and rate limiting working
+FISMA Moderate and NIST 800-53 security controls checklist
+AI FEATURES:
+AI due diligence report generation per credit listing
+Report must include project risk score, methodology review, registry status, and red flag detection
+Verify AI report is generated before transaction can be finalized
+USER FLOWS TO TEST END TO END:
+	1.	Buyer registers, submits KYC, gets approved, browses credits, submits RFQ, receives quote, executes trade, receives SHA-256 audit pack, payment settles via Stripe Connect T plus 1 escrow
+	2.	Seller lists credits, passes multi-sig compliance approval, credit goes live, matches with buyer, trade executes, seller receives payout minus platform fee
+	3.	Admin reviews compliance queue, approves or rejects listing, audit log records every admin action with timestamp and user ID
+THINGS THAT MUST NOT BE BROKEN:
+Stripe Connect payout routing
+SHA-256 chain integrity
+Registry API responses returning real data
+AI due diligence blocking incomplete listings
+Escrow hold and release timing
+E-signature binding to transaction record
+Audit pack completeness and download
+OUTPUT FORMAT:
+For each item tested, return one of three statuses: PASS, FAIL, or NEEDS ATTENTION. For every FAIL or NEEDS ATTENTION, provide the exact file name, function name, and line number where the issue exists, and provide the corrected code. Do not summarize. Do not skip anything. Be exhaustive.
