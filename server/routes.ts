@@ -35,13 +35,21 @@ import { registerNavigatorRoutes } from "./navigator-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
-async function logAdminAction(req: any, type: string, message: string): Promise<void> {
+async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any> }): Promise<void> {
   try {
     const adminKey = String(req.headers['x-admin-key'] || '');
     const userId = adminKey
       ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
       : 'unknown';
-    await storage.addActionLog({ userId, userName: 'admin', type, message });
+    const structuredMessage = JSON.stringify({
+      action: type,
+      affected_record_id: details?.affectedRecordId || null,
+      notes: message,
+      ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
+      timestamp: new Date().toISOString(),
+      ...(details?.metadata || {}),
+    });
+    await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
   } catch (_) {}
 }
 
@@ -2591,7 +2599,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (isNaN(volume) || volume < 1000) {
         return res.status(400).json({ message: 'Minimum RFQ volume is 1,000 tonnes' });
       }
-      const kycEmail = String(body.email || '').toLowerCase();
+      const authenticatedEmail = String((req as any).userEmail || '').toLowerCase();
+      const submittedEmail = String(body.email || '').toLowerCase();
+      if (authenticatedEmail && submittedEmail && authenticatedEmail !== submittedEmail) {
+        return res.status(403).json({ error: 'RFQ email must match your authenticated account.' });
+      }
+      const kycEmail = authenticatedEmail || submittedEmail;
+      if (!kycEmail) {
+        return res.status(400).json({ error: 'Email is required.' });
+      }
       const kycAccount = await storage.getExchangeAccountByEmail(kycEmail);
       if (!kycAccount || kycAccount.kycStatus !== 'verified') {
         return res.status(403).json({ error: 'KYC verification required.' });
@@ -2599,7 +2615,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const rfqData: any = {
         company: String(body.company),
         contact: String(body.contact),
-        email: String(body.email),
+        email: kycEmail,
         side: String(body.side),
         standard: String(body.standard),
         volumeTonnes: volume,
@@ -3086,7 +3102,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const newListing = await storage.approveCreditListing(req.params.id);
-      logAdminAction(req, 'approve_listing', `Listing ${req.params.id} approved — ${newListing.name}`).catch(() => {});
+      logAdminAction(req, 'approve_listing', `Listing ${req.params.id} approved — ${newListing.name}`, { affectedRecordId: req.params.id, metadata: { listing_name: newListing.name, standard: newListing.standard } }).catch(() => {});
       sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
         'Listing ID':   req.params.id,
         'Name':         newListing.name,
@@ -3107,7 +3123,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/admin/listings/:id/reject', requireAdminHeader, async (req, res) => {
     try {
       const rejected = await storage.rejectCreditListing(req.params.id);
-      logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.orgName || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`).catch(() => {});
+      logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.orgName || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`, { affectedRecordId: req.params.id, metadata: { org: rejected.orgName, reason: req.body.reason || null } }).catch(() => {});
       const reason = req.body.reason || 'Your listing did not meet our current marketplace requirements.';
       const html = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Listing Review</h2><p>Thank you for submitting your carbon credits to UAIU.LIVE/X.</p><p>After review, we are unable to approve your listing at this time.</p><p><strong>Reason:</strong> ${reason}</p><p>Please contact info@uaiu.live if you have questions.</p></div>`;
       if (rejected.email && isZohoConfigured()) {
@@ -3136,7 +3152,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!failure) return res.status(404).json({ error: 'Failure record not found' });
 
       await storage.incrementWebhookRetry(req.params.id);
-      logAdminAction(req, 'webhook_retry', `Webhook failure ${req.params.id} retried — event: ${failure.eventType || 'unknown'}, trade: ${failure.tradeId || 'n/a'}`).catch(() => {});
+      logAdminAction(req, 'webhook_retry', `Webhook failure ${req.params.id} retried — event: ${failure.eventType || 'unknown'}, trade: ${failure.tradeId || 'n/a'}`, { affectedRecordId: req.params.id, metadata: { event_type: failure.eventType, trade_id: failure.tradeId } }).catch(() => {});
 
       // If we have a PI ID, attempt to re-capture
       if (failure.paymentIntentId && stripeReady) {
@@ -4123,19 +4139,21 @@ Respond with a JSON object (no markdown) with these exact fields:
 
   // ─── Wave 3: Stripe Escrow Routes ────────────────────────────────
 
-  app.post('/api/escrow/create', async (req, res) => {
+  app.post('/api/escrow/create', requireExchangeAuth, async (req, res) => {
     if (!stripeReady) return res.status(503).json({ error: 'Escrow unavailable — Stripe key validation failed at startup' });
     try {
+      const authenticatedEmail = String((req as any).exchangeEmail || '').toLowerCase();
       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
       if (!trade_id || !amount_eur || amount_eur < 100) {
         return res.status(400).json({ error: 'Invalid escrow parameters' });
       }
-      const escrowKycEmail = String(buyer_email || '').toLowerCase();
-      if (escrowKycEmail) {
-        const escrowKycAccount = await storage.getExchangeAccountByEmail(escrowKycEmail);
-        if (!escrowKycAccount || escrowKycAccount.kycStatus !== 'verified') {
-          return res.status(403).json({ error: 'KYC verification required.' });
-        }
+      const escrowKycEmail = authenticatedEmail || String(buyer_email || '').toLowerCase();
+      if (!escrowKycEmail) {
+        return res.status(400).json({ error: 'Buyer email is required for escrow creation.' });
+      }
+      const escrowKycAccount = await storage.getExchangeAccountByEmail(escrowKycEmail);
+      if (!escrowKycAccount || escrowKycAccount.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
       }
       if (!listing_id && !seller_connect_account_id) {
         return res.status(400).json({ error: 'listing_id or seller_connect_account_id is required — cannot determine payment model without seller context.' });
@@ -4247,7 +4265,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       const uaiu_fee = gross * 0.0075;
       const seller_net = gross - uaiu_fee;
       const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
-      logAdminAction(req, 'escrow_release', `Escrow released — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, gross: €${gross.toFixed(2)}, model: ${escrowPaymentModel}`).catch(() => {});
+      logAdminAction(req, 'escrow_release', `Escrow released — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, gross: €${gross.toFixed(2)}, model: ${escrowPaymentModel}`, { affectedRecordId: trade_id || payment_intent_id, metadata: { payment_intent_id, trade_id, gross_eur: gross, payment_model: escrowPaymentModel } }).catch(() => {});
       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
       if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
         const escrowSellerLookup = await db.execute(sql`

@@ -13,13 +13,21 @@ import {
   getBaseUrl,
 } from "./stripe-connect";
 
-async function logAdminAction(req: any, type: string, message: string): Promise<void> {
+async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any> }): Promise<void> {
   try {
     const adminKey = String(req.headers['x-admin-key'] || '');
     const userId = adminKey
       ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
       : 'unknown';
-    await storage.addActionLog({ userId, userName: 'admin', type, message });
+    const structuredMessage = JSON.stringify({
+      action: type,
+      affected_record_id: details?.affectedRecordId || null,
+      notes: message,
+      ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
+      timestamp: new Date().toISOString(),
+      ...(details?.metadata || {}),
+    });
+    await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
   } catch (_) {}
 }
 
