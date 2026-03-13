@@ -35,9 +35,13 @@ export function AIRFQAssistant({ onParsed }: AIRFQProps) {
     setResponse('');
     setParsed(null);
     try {
+      const token = localStorage.getItem('x-exchange-token') || sessionStorage.getItem('x-exchange-token');
       const res = await fetch('/api/exchange/ai-rfq', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-Exchange-Token': token } : {}),
+        },
         body: JSON.stringify({ message: input }),
       });
       const data = await res.json();

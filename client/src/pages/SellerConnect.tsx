@@ -15,7 +15,7 @@ const C = {
 };
 
 function getToken(): string | null {
-  return sessionStorage.getItem('x-exchange-token');
+  return localStorage.getItem('x-exchange-token') || sessionStorage.getItem('x-exchange-token');
 }
 
 function authHeaders(): Record<string, string> {

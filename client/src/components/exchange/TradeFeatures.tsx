@@ -22,7 +22,7 @@ export function VideoTradeRoom({
   const createRoom = async () => {
     setState('creating');
     try {
-      const token = sessionStorage.getItem('x-exchange-token');
+      const token = localStorage.getItem('x-exchange-token') || sessionStorage.getItem('x-exchange-token');
       // Use existing Daily.co room creation endpoint
       const res = await fetch('/api/daily/create-room', {
         method: 'POST',

@@ -193,6 +193,22 @@ function genTradeId(mode: string): string {
   return `UAIU-${mode.toUpperCase()}-${Date.now().toString().slice(-6)}`;
 }
 
+
+function getExchangeTokenStorage(): string | null {
+  return localStorage.getItem('x-exchange-token') || sessionStorage.getItem('x-exchange-token');
+}
+
+function setExchangeTokenStorage(token: string): void {
+  localStorage.setItem('x-exchange-token', token);
+  sessionStorage.setItem('x-exchange-token', token);
+}
+
+function clearExchangeTokenStorage(): void {
+  localStorage.removeItem('x-exchange-token');
+  sessionStorage.removeItem('x-exchange-token');
+}
+
+
 function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
   exchangeHeaders: () => Record<string, string>;
   sessionAccount: any;
@@ -206,7 +222,7 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
 
   useEffect(() => {
     if (!sessionAccount) return;
-    const token = sessionStorage.getItem('x-exchange-token');
+    const token = getExchangeTokenStorage();
     if (!token) return;
     fetch('/api/seller/registry-proof', { headers: { 'X-Exchange-Token': token } })
       .then(r => r.ok ? r.json() : null)
@@ -236,7 +252,7 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
     if (!file) return;
     setStatus('uploading');
     try {
-      const token = sessionStorage.getItem('x-exchange-token');
+      const token = getExchangeTokenStorage();
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/seller/registry-proof', {
@@ -468,7 +484,7 @@ export default function Exchange() {
   useEffect(() => {
     if (!sessionAccount?.email) { setDbTrades([]); return; }
     setDbTradesLoading(true);
-    const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    const token = exchangeToken || getExchangeTokenStorage();
     fetch(`/api/exchange/trades`, { headers: token ? { 'X-Exchange-Token': token } : {} })
       .then(r => r.ok ? r.json() : [])
       .then((data: any[]) => { setDbTrades(Array.isArray(data) ? data : []); })
@@ -485,7 +501,7 @@ export default function Exchange() {
       window.history.replaceState({}, '', '/x');
       if (sessionAccount?.email) {
         setTimeout(() => {
-          const tok2 = exchangeToken || sessionStorage.getItem('x-exchange-token');
+          const tok2 = exchangeToken || getExchangeTokenStorage();
           fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} }).then(r => r.ok ? r.json() : []).then((data: any[]) => {
             setDbTrades(Array.isArray(data) ? data : []);
           }).catch(() => {});
@@ -503,7 +519,7 @@ export default function Exchange() {
   }, []);
 
   function exchangeHeaders(extra: Record<string, string> = {}): Record<string, string> {
-    const token = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    const token = exchangeToken || getExchangeTokenStorage();
     const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
     if (token) headers['X-Exchange-Token'] = token;
     return headers;
@@ -511,7 +527,7 @@ export default function Exchange() {
 
   // Restore exchange account session from sessionStorage token on mount
   useEffect(() => {
-    const token = sessionStorage.getItem('x-exchange-token');
+    const token = getExchangeTokenStorage();
     if (!token) return;
     setExchangeToken(token);
     fetch('/api/exchange/account/verify-token', {
@@ -534,12 +550,12 @@ export default function Exchange() {
             kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
           });
         } else {
-          sessionStorage.removeItem('x-exchange-token');
+          clearExchangeTokenStorage();
           setExchangeToken(null);
         }
       })
       .catch(() => {
-        sessionStorage.removeItem('x-exchange-token');
+        clearExchangeTokenStorage();
         setExchangeToken(null);
       });
   }, []);
@@ -811,7 +827,12 @@ export default function Exchange() {
     if (!instName || !instContact || !instEmail || !instVolume) { showToast('Please fill in all required fields.'); return; }
     setInstSubmitting(true);
     try {
-      await apiRequest('POST', '/api/exchange/rfq', { company: instName, contact: instContact, email: instEmail, side: 'INSTITUTIONAL', standard: instStandard, volumeTonnes: parseInt(instVolume) || 50000, notes: instMessage });
+      const res = await fetch('/api/exchange/rfq', {
+        method: 'POST',
+        headers: exchangeHeaders(),
+        body: JSON.stringify({ company: instName, contact: instContact, email: instEmail, side: 'INSTITUTIONAL', standard: instStandard, volumeTonnes: parseInt(instVolume) || 50000, notes: instMessage }),
+      });
+      if (!res.ok) throw new Error('RFQ submission failed');
       setInstSuccess(true);
       showToast('Institutional inquiry received — desk will contact you within 2 hours.');
     } catch { showToast('Failed to submit. Please try again.'); }
@@ -855,7 +876,7 @@ export default function Exchange() {
 
   async function handleStartKyc() {
     const supabase = getSupabaseClient();
-    let freshExchangeToken = exchangeToken || sessionStorage.getItem('x-exchange-token');
+    let freshExchangeToken = exchangeToken || getExchangeTokenStorage();
     let activeSession = session;
 
     if (supabase) {
@@ -872,7 +893,7 @@ export default function Exchange() {
       const token = activeSession.access_token;
       if (token) {
         freshExchangeToken = token;
-        sessionStorage.setItem('x-exchange-token', token);
+        setExchangeTokenStorage(token);
         setExchangeToken(token);
       }
     }
@@ -948,7 +969,12 @@ export default function Exchange() {
     if (!rfqEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
     setRfqSubmitting(true);
     try {
-      const res = await apiRequest('POST', '/api/exchange/rfq', { company: rfqCompany, contact: rfqContact, email: rfqEmail, side: rfqSide, standard: rfqStandard, volumeTonnes: vol, targetPrice: rfqPrice ? parseFloat(rfqPrice) : undefined, preferredOrigin: rfqOrigin, vintageYear: rfqVintage ? parseInt(rfqVintage) : undefined, deadline: rfqDeadline, notes: rfqNotes });
+      const res = await fetch('/api/exchange/rfq', {
+        method: 'POST',
+        headers: exchangeHeaders(),
+        body: JSON.stringify({ company: rfqCompany, contact: rfqContact, email: rfqEmail, side: rfqSide, standard: rfqStandard, volumeTonnes: vol, targetPrice: rfqPrice ? parseFloat(rfqPrice) : undefined, preferredOrigin: rfqOrigin, vintageYear: rfqVintage ? parseInt(rfqVintage) : undefined, deadline: rfqDeadline, notes: rfqNotes }),
+      });
+      if (!res.ok) throw new Error('RFQ submission failed');
       const data = await res.json();
       const rfqIdGenerated = data.id || genTradeId('RFQ');
       setRfqId(rfqIdGenerated);
@@ -1005,7 +1031,7 @@ export default function Exchange() {
         };
         const token = account.token;
         if (token) {
-          sessionStorage.setItem('x-exchange-token', token);
+          setExchangeTokenStorage(token);
           setExchangeToken(token);
         }
         setSessionAccount(sessionData);
@@ -1042,7 +1068,7 @@ export default function Exchange() {
   function handleSignOut() {
     setSessionAccount(null);
     setExchangeToken(null);
-    sessionStorage.removeItem('x-exchange-token');
+    clearExchangeTokenStorage();
     setShowAccountModal(false);
     setAcctModalTab('open');
     showToast('Signed out.');
