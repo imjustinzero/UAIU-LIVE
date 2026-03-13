@@ -39,6 +39,7 @@ export function registerOpsRoutes(app: Express) {
     const enabled = !!req.body?.enabled;
     process.env.TRADING_DISABLED = enabled ? '1' : '0';
     recordOpsEvent('maintenance_mode_changed', { enabled });
+    logAdminAction(req, 'maintenance_mode', `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`).catch(() => {});
     res.json({ success: true, enabled });
   });
 
@@ -191,6 +192,7 @@ export function registerOpsRoutes(app: Express) {
       `).catch((e: any) => console.warn('[Backup verify] Could not update backup_logs:', e.message));
 
       recordOpsEvent('backup_verified', { id, verifyStatus });
+      logAdminAction(req, 'backup_verify', `Backup ${id} verified — status: ${verifyStatus}`).catch(() => {});
 
       return res.json({ id, verifyStatus, details });
     } catch (e: any) {

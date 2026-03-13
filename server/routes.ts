@@ -2987,6 +2987,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!email) return res.status(401).json({ error: 'Unauthorized' });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(email);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
+
       // Find seller profile by exchange account email
       const profileRows = await db.execute(sql`
         SELECT id FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
@@ -3131,6 +3136,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!failure) return res.status(404).json({ error: 'Failure record not found' });
 
       await storage.incrementWebhookRetry(req.params.id);
+      logAdminAction(req, 'webhook_retry', `Webhook failure ${req.params.id} retried — event: ${failure.eventType || 'unknown'}, trade: ${failure.tradeId || 'n/a'}`).catch(() => {});
 
       // If we have a PI ID, attempt to re-capture
       if (failure.paymentIntentId && stripeReady) {
@@ -4241,6 +4247,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       const uaiu_fee = gross * 0.0075;
       const seller_net = gross - uaiu_fee;
       const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
+      logAdminAction(req, 'escrow_release', `Escrow released — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, gross: €${gross.toFixed(2)}, model: ${escrowPaymentModel}`).catch(() => {});
       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
       if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
         const escrowSellerLookup = await db.execute(sql`

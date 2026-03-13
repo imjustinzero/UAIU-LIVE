@@ -167,6 +167,9 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
 
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account) return res.status(404).json({ error: "Exchange account not found." });
+      if (account.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
 
       const result = await db.execute(sql`
         INSERT INTO seller_profiles (
@@ -254,6 +257,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           updated_at = NOW()
         WHERE id = ${sellerProfileId}
       `);
+      logAdminAction(req, 'kyb_update', `Seller ${sellerProfileId} KYB set to ${kybStatus}${note ? ` — ${note}` : ''}`).catch(() => {});
 
       if (String(kybStatus) === "rejected") {
         await raiseException("seller_profile", sellerProfileId, "kyb_rejected", note || "Seller KYB rejected.", { sellerProfileId }, "high");
@@ -487,6 +491,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const { rfqId, maxPriceSlippagePct = 8 } = req.body || {};
       if (!rfqId) return res.status(400).json({ error: "rfqId required." });
 
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(buyerEmail);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
+
       const rfqResult = await db.execute(sql`
         SELECT * FROM exchange_rfqs WHERE id = ${rfqId} LIMIT 1
       `);
@@ -690,6 +699,8 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         )
       `);
 
+      logAdminAction(req, 'settlement_run', `Settlement run for trade ${tradeId} — seller: ${seller.seller_email}, net: €${sellerNet.toFixed(2)}`).catch(() => {});
+
       return res.json({
         success: true,
         tradeId,
@@ -707,6 +718,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
     try {
       const email = String((req as any).exchangeEmail || "").toLowerCase();
       const baseUrl = getBaseUrl(req);
+
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(email);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
 
       const profileResult = await db.execute(sql`
         SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
@@ -794,6 +810,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const email = String((req as any).exchangeEmail || "").toLowerCase();
       const baseUrl = getBaseUrl(req);
 
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(email);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
+
       const profileResult = await db.execute(sql`
         SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1
       `);
@@ -824,6 +845,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       if (payout.payout_status === "paid" || payout.payout_status === "released") {
         return res.json({ success: true, alreadyReleased: true, payout });
       }
+      logAdminAction(req, 'payout_release', `Payout release initiated — trade: ${tradeId}, seller: ${payout.seller_email || 'n/a'}, net: €${payout.seller_net_eur || '?'}`).catch(() => {});
 
       // ── Destination charge: funds already with seller — no transfer needed
       if (payout.settlement_method === 'destination_charge') {
