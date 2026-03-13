@@ -1,0 +1,84 @@
+Groups A through C (T001 through T018) are fully deployed and verified. Now perform Group F, a deep four-track hardening pass on UAIU.LIVE/X.
+GROUP F: END TO END BUYER AND SELLER FLOW STRESS TEST
+T019 Full Buyer Journey:
+Simulate a buyer registering from scratch with valid KYC documents
+Verify KYC approval unlocks the trading interface server side
+Verify the buyer can browse live credit listings pulled from Verra and Gold Standard registries
+Verify the buyer can submit an RFQ and receive a valid quote
+Verify the buyer must acknowledge AI due diligence (ddAcknowledged: true) before checkout
+Verify Stripe destination charge fires correctly with platform fee deducted
+Verify T plus 1 escrow hold is placed immediately after payment
+Verify a SHA-256 audit pack is generated and linked to the trade record
+Verify the buyer can download their audit pack and it contains all required fields
+Verify the buyer cannot re-purchase a retired credit
+T020 Full Seller Journey:
+Simulate a seller registering and submitting a credit listing
+Verify the listing enters a multi-sig compliance approval queue and is not immediately live
+Verify an admin can approve or reject the listing with a reason
+Verify approval makes the listing visible to buyers on the exchange
+Verify rejection sends the seller a clear status message
+Verify after a trade executes the seller payout is held in escrow until T plus 1
+Verify payout releases correctly to the seller Stripe Connect account after settlement
+Verify the credit is marked retired in the registry after settlement
+Verify the seller cannot relist a retired credit
+T021 Edge Cases and Failure Modes:
+Verify a declined Stripe payment cancels the trade and releases the credit back to available
+Verify a disputed charge triggers escrow freeze and notifies both parties
+Verify a buyer attempting to purchase the same credit twice gets blocked on the second attempt
+Verify an expired RFQ cannot be accepted by either party
+Verify a network timeout during registry sync does not corrupt the trade record
+Verify a partially completed trade (payment success but registry call failed) is flagged for manual review and does not silently fail
+GROUP F: EU ETS AND CORSIA EXPORT COMPLIANCE PACK
+T022 EU ETS Audit Pack Export:
+Verify audit pack export includes all EU ETS required fields: operator ID, installation ID, activity type, verified emissions quantity, credit type, credit vintage, and registry serial number
+Verify export format is machine readable (JSON or XML)
+Verify the export is signed with a platform timestamp and SHA-256 hash
+Verify the export cannot be altered after generation without hash mismatch detection
+T023 CORSIA Compliance Fields:
+Verify every carbon credit record stores CORSIA eligibility status (Phase 1 and Phase 2 badges)
+Verify CORSIA export includes ICAO operator code, flight route data fields, emissions unit type, and eligible program name
+Verify credits not eligible for CORSIA are clearly flagged and blocked from CORSIA export
+Verify the CORSIA export endpoint requires authentication
+T024 IMO MRV Fields:
+Verify maritime-applicable trades store IMO MRV data fields: vessel IMO number, voyage data reference, fuel consumption offset, and CO2 equivalent quantity
+Verify IMO MRV export is available as a separate download on applicable trades
+Verify non-maritime trades do not have IMO fields populated or exposed
+GROUP F: PERFORMANCE AND LOAD TESTING
+T025 Concurrent Trade Handling:
+Simulate 50 concurrent buyers attempting to purchase credits simultaneously
+Verify no two buyers can purchase the same credit unit (atomic lock on credit inventory)
+Verify the database does not deadlock under concurrent write pressure
+Verify all 50 requests resolve with either a successful purchase or a clear out of stock response and no silent failures or hung requests
+T026 API Response Times:
+Verify all public API endpoints respond in under 500ms under normal load
+Verify the ledger endpoint handles pagination correctly and does not time out on large datasets
+Verify registry API calls are cached appropriately and do not block the critical purchase path
+Verify Stripe webhook handlers respond within Stripe’s 30 second timeout window under load
+T027 Database Query Performance:
+Identify any unindexed columns used in WHERE clauses on exchange_trades, credit_listings, and receipt_hashes tables
+Add missing indexes and verify query plans improve
+Verify the SHA-256 chain lookup (getMostRecentReceiptHash) uses an indexed query and does not do a full table scan
+GROUP F: E-SIGNATURE BINDING AND LEGAL ENFORCEABILITY
+T028 E-Signature Creation and Binding:
+Verify the e-signature system captures the signer’s full name, email address, IP address, timestamp, and user agent at signing
+Verify the signature record is cryptographically bound to the specific trade document hash
+Verify a signature cannot be reused across different documents
+Verify the signature record is immutable after creation
+T029 Document Integrity:
+Verify the trade document presented to the signer is hashed before signing
+Verify the hash is stored alongside the signature record
+Verify any alteration to the document after signing produces a hash mismatch detectable by the platform
+Verify the platform can generate a signed document certificate showing signer identity, timestamp, document hash, and platform attestation
+T030 Legal Enforceability Checklist:
+Verify the signing flow presents the full contract text before the signer can complete
+Verify there is an explicit affirmative action required (checkbox or typed confirmation) before the signature is accepted
+Verify the platform retains the complete signing audit trail for a minimum of 7 years or flags if retention policy is not configured
+Verify the e-signature flow complies with ESIGN Act requirements: intent to sign, consent to do business electronically, and association of signature with the record
+Verify a signer can download a copy of their signed document immediately after signing
+FINAL OUTPUT REQUIREMENTS:
+Return a numbered result for every single item above
+Status must be PASS, FAIL, or NEEDS ATTENTION
+Every FAIL or NEEDS ATTENTION must include exact file name, function name, line number, and corrected code
+Do not skip any item
+Do not summarize groups
+Be exhaustive
