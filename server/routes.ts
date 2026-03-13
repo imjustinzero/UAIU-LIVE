@@ -198,22 +198,30 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             return res.status(500).json({ error: 'Webhook processing error' });
           }
 
+          // ── Verify signature + enforce 300s tolerance BEFORE any processing ──
+          const stripeKey = process.env.STRIPE_SECRET_KEY;
+          const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+          let verifiedEvent: any = null;
+          if (stripeKey && webhookSecret) {
+            const { default: Stripe } = await import('stripe');
+            const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+            verifiedEvent = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret, 300);
+
+            const eventAgeSec = Math.floor(Date.now() / 1000) - verifiedEvent.created;
+            if (eventAgeSec > 300) {
+              console.warn(`[Webhook] Rejecting stale event ${verifiedEvent.id} — age: ${eventAgeSec}s (>300s)`);
+              return res.status(400).json({ error: 'Event timestamp too old — rejected' });
+            }
+          }
+
           await WebhookHandlers.processWebhook(req.body as Buffer, sig, uuid);
 
-          // ── AUTO ESCROW RELEASE + COMPENSATION + PDF (Fix 4, 5, 8) ─────────
+          // ── Escrow + financial event handlers ─────────
           try {
-            const stripeKey = process.env.STRIPE_SECRET_KEY;
-            const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-            if (stripeKey && webhookSecret) {
+            if (stripeKey && webhookSecret && verifiedEvent) {
               const { default: Stripe } = await import('stripe');
               const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
-              const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-
-              const eventAgeSec = Math.floor(Date.now() / 1000) - event.created;
-              if (eventAgeSec > 300) {
-                console.warn(`[Webhook] Rejecting stale event ${event.id} — age: ${eventAgeSec}s (>300s)`);
-                return res.status(400).json({ error: 'Event timestamp too old — rejected' });
-              }
+              const event = verifiedEvent;
 
               // ── payment_intent.amount_capturable_updated / requires_capture ──
               if (
@@ -1918,7 +1926,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const applicationFeeAmount = Math.round(fee * 100);
       const connectAccountId: string | null = (activeListing as any).stripe_connect_account_id || null;
       const connectReady: boolean = (activeListing as any).connect_onboarding_complete === true;
-      const paymentModel = connectAccountId && connectReady ? 'destination_charge' : 'platform_collect';
+      if (connectAccountId && !connectReady) {
+        return res.status(400).json({ error: 'Seller Connect account exists but onboarding is not complete. Cannot process payment.' });
+      }
+      const paymentModel = connectAccountId ? 'destination_charge' : 'platform_collect';
       const origin = req.headers.origin || `https://${req.headers.host}` || 'https://uaiu.live';
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -3911,7 +3922,10 @@ Respond with a JSON object (no markdown) with these exact fields:
         const listingRow = (listingLookup as any).rows?.[0];
         escrowSellerProfileId = listingRow?.seller_profile_id || '';
         if (!escrowConnectAccountId) escrowConnectAccountId = listingRow?.stripe_connect_account_id || '';
-        if (escrowConnectAccountId && listingRow?.connect_onboarding_complete === true) {
+        if (escrowConnectAccountId) {
+          if (listingRow?.connect_onboarding_complete !== true) {
+            return res.status(400).json({ error: 'Seller Connect account exists but onboarding is not complete. Cannot create escrow.' });
+          }
           escrowPaymentModel = 'destination_charge';
         }
       }
