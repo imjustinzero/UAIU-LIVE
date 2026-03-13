@@ -35,6 +35,16 @@ import { registerNavigatorRoutes } from "./navigator-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
+async function logAdminAction(req: any, type: string, message: string): Promise<void> {
+  try {
+    const adminKey = String(req.headers['x-admin-key'] || '');
+    const userId = adminKey
+      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+      : 'unknown';
+    await storage.addActionLog({ userId, userName: 'admin', type, message });
+  } catch (_) {}
+}
+
 function createRetirementUploadToken(): { token: string; tokenHash: string } {
   const token = randomBytes(24).toString('hex');
   const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -144,6 +154,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many checkout attempts. Please try again later." },
+  });
+
+  const partnerApiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many partner API requests. Please try again later." },
   });
   // ── FIX 7: Stripe startup health check ──────────────────────────────────────
   // Validates key on startup. Escrow endpoints are blocked if this fails.
@@ -2355,6 +2373,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (isNaN(volume) || volume < 1000) {
         return res.status(400).json({ message: 'Minimum RFQ volume is 1,000 tonnes' });
       }
+      const kycEmail = String(body.email || '').toLowerCase();
+      const kycAccount = await storage.getExchangeAccountByEmail(kycEmail);
+      if (!kycAccount || kycAccount.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
       const rfqData: any = {
         company: String(body.company),
         contact: String(body.contact),
@@ -2431,12 +2454,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   // POST /api/partner/listings
   // Authenticated by PARTNER_API_KEY secret. Alki's team calls this to push
   // live credit inventory directly into the marketplace in real time.
-  app.post('/api/partner/listings', async (req, res) => {
+  app.post('/api/partner/listings', partnerApiLimiter, async (req, res) => {
     try {
-      const { api_key, listings } = req.body;
+      const { listings } = req.body;
+      const providedKey = String(req.headers['x-api-key'] || '');
       const validKey = process.env.PARTNER_API_KEY;
       if (!validKey) return res.status(500).json({ error: 'PARTNER_API_KEY not configured in Replit Secrets' });
-      if (!api_key || api_key !== validKey) return res.status(401).json({ error: 'Invalid API key' });
+      if (!providedKey) return res.status(401).json({ error: 'x-api-key header required' });
+      const providedHash = createHash('sha256').update(providedKey).digest();
+      const validHash   = createHash('sha256').update(validKey).digest();
+      if (providedHash.length !== validHash.length || !timingSafeEqual(providedHash, validHash)) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
       if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
       if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
 
@@ -2834,6 +2863,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const newListing = await storage.approveCreditListing(req.params.id);
+      logAdminAction(req, 'approve_listing', `Listing ${req.params.id} approved — ${newListing.name}`).catch(() => {});
       sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
         'Listing ID':   req.params.id,
         'Name':         newListing.name,
@@ -2854,7 +2884,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/admin/listings/:id/reject', requireAdminHeader, async (req, res) => {
     try {
       const rejected = await storage.rejectCreditListing(req.params.id);
-      // Email the seller
+      logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.name || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`).catch(() => {});
       const reason = req.body.reason || 'Your listing did not meet our current marketplace requirements.';
       const html = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Listing Review</h2><p>Thank you for submitting your carbon credits to UAIU.LIVE/X.</p><p>After review, we are unable to approve your listing at this time.</p><p><strong>Reason:</strong> ${reason}</p><p>Please contact info@uaiu.live if you have questions.</p></div>`;
       if (rejected.email && isZohoConfigured()) {
@@ -3875,6 +3905,13 @@ Respond with a JSON object (no markdown) with these exact fields:
       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
       if (!trade_id || !amount_eur || amount_eur < 100) {
         return res.status(400).json({ error: 'Invalid escrow parameters' });
+      }
+      const escrowKycEmail = String(buyer_email || '').toLowerCase();
+      if (escrowKycEmail) {
+        const escrowKycAccount = await storage.getExchangeAccountByEmail(escrowKycEmail);
+        if (!escrowKycAccount || escrowKycAccount.kycStatus !== 'verified') {
+          return res.status(403).json({ error: 'KYC verification required.' });
+        }
       }
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });

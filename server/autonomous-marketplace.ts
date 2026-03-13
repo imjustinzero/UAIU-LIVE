@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
 import { requireAdminHeader, requireExchangeAuth, safeError } from "./exchange-auth";
+import { createHash } from "crypto";
 import {
   createConnectAccount,
   createOnboardingLink,
@@ -11,6 +12,16 @@ import {
   createTransfer,
   getBaseUrl,
 } from "./stripe-connect";
+
+async function logAdminAction(req: any, type: string, message: string): Promise<void> {
+  try {
+    const adminKey = String(req.headers['x-admin-key'] || '');
+    const userId = adminKey
+      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+      : 'unknown';
+    await storage.addActionLog({ userId, userName: 'admin', type, message });
+  } catch (_) {}
+}
 
 type RuleEval = {
   decision: "approved" | "manual_review" | "rejected";
@@ -278,6 +289,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const seller = (sellerProfile as any).rows?.[0];
       if (!seller) return res.status(404).json({ error: "Seller profile not found." });
 
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(email);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
+
       const verificationStatus =
         String(verifiedVolumeTonnes || requestedVolumeTonnes) > "0" && String(registrySerial).trim().length >= 6
           ? "verified"
@@ -341,6 +357,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       `);
       const seller = (sellerProfileResult as any).rows?.[0];
       if (!seller) return res.status(404).json({ error: "Seller profile not found." });
+
+      const kycCheckAcct = await storage.getExchangeAccountByEmail(email);
+      if (!kycCheckAcct || kycCheckAcct.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
 
       const listing = await storage.createExchangeCreditListing({
         orgName,
@@ -912,6 +933,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         SET status = 'resolved', resolved_at = NOW(), resolved_by = ${who}
         WHERE id = ${id}
       `);
+      logAdminAction(req, 'resolve_exception', `Exception ${id} resolved`).catch(() => {});
       return res.json({ success: true });
     } catch (e: any) {
       return res.status(500).json({ error: safeError(e) });

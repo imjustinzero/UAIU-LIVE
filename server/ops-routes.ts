@@ -7,6 +7,17 @@ import { db } from './db';
 import { sql } from 'drizzle-orm';
 import { existsSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
+import { storage } from './storage';
+
+async function logAdminAction(req: any, type: string, message: string): Promise<void> {
+  try {
+    const adminKey = String(req.headers['x-admin-key'] || '');
+    const userId = adminKey
+      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+      : 'unknown';
+    await storage.addActionLog({ userId, userName: 'admin', type, message });
+  } catch (_) {}
+}
 
 export function registerOpsRoutes(app: Express) {
   app.get('/api/admin/ops/overview', requireAdminHeader, (_req, res) => {
@@ -77,8 +88,9 @@ export function registerOpsRoutes(app: Express) {
   });
 
   // ── Backup: Trigger a manual backup ─────────────────────────────────────────
-  app.post('/api/admin/backup/trigger', requireAdminHeader, async (_req, res) => {
+  app.post('/api/admin/backup/trigger', requireAdminHeader, async (req, res) => {
     const result = await triggerDatabaseBackup('admin', 'manual');
+    logAdminAction(req, 'backup_trigger', `Manual backup triggered — success: ${result.success}, file: ${result.filename || 'n/a'}`).catch(() => {});
     recordOpsEvent('manual_backup_triggered', {
       success: result.success,
       filename: result.filename,
