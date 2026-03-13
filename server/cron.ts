@@ -7,6 +7,7 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { sendExchangeEmail } from "./email-service";
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
+import { generateTradePDF } from "./pdf-generator";
 import {
   isS3Configured,
   uploadToS3,
@@ -246,7 +247,7 @@ export async function triggerDatabaseBackup(
 }
 
 export function startCronJobs(_app: Express): void {
-  console.log("[Cron] Escrow watchdog started — 30-min interval");
+  console.log("[Cron] Escrow watchdog started — 30-min interval (T+1 / 24h capture threshold)");
 
   // Daily database backup — 5 min after startup, then every 24h
   setTimeout(() => {
@@ -322,34 +323,43 @@ export function startCronJobs(_app: Express): void {
         apiVersion: "2024-12-18.acacia" as any,
       });
 
-      const thirtyMinutesAgo = Math.floor(
-        (Date.now() - 30 * 60 * 1000) / 1000
+      const twentyFourHoursAgo = Math.floor(
+        (Date.now() - 24 * 60 * 60 * 1000) / 1000
       );
       const piList = await stripe.paymentIntents.list({ limit: 100 });
       const stuckPIs = piList.data.filter(
         (pi) =>
           pi.status === "requires_capture" &&
           pi.metadata?.escrow_type === "carbon_credit_t1" &&
-          pi.created < thirtyMinutesAgo
+          pi.created < twentyFourHoursAgo
       );
 
       if (stuckPIs.length === 0) {
-        console.log("[Cron] No stuck escrow trades found");
+        console.log("[Cron] No escrow trades past T+1 window");
         return;
       }
 
-      console.log(`[Cron] Found ${stuckPIs.length} stuck escrow PI(s)`);
+      console.log(`[Cron] Found ${stuckPIs.length} escrow PI(s) past T+1 window`);
 
       for (const pi of stuckPIs) {
         const trade_id = pi.metadata?.trade_id || "unknown";
 
         const existing = await db
           .execute(
-            sql`SELECT id FROM escrow_settlements_log WHERE payment_intent_id = ${pi.id} LIMIT 1`
+            sql`SELECT id, status FROM escrow_settlements_log WHERE payment_intent_id = ${pi.id} LIMIT 1`
           )
           .catch(() => ({ rows: [] as any[] }));
 
-        if ((existing as any).rows?.length > 0) {
+        const existingRow = (existing as any).rows?.[0];
+        if (existingRow?.status === 'dispute_hold') {
+          console.log(`[Cron] PI ${pi.id} under dispute_hold — skipping capture`);
+          continue;
+        }
+        if (existingRow?.status === 'payment_failed') {
+          console.log(`[Cron] PI ${pi.id} payment failed — skipping capture`);
+          continue;
+        }
+        if (existingRow?.status === 'auto_settled' || existingRow?.status === 'cron_settled') {
           console.log(`[Cron] PI ${pi.id} already settled — skipping`);
           continue;
         }
@@ -375,21 +385,59 @@ export function startCronJobs(_app: Express): void {
             )
             .catch((e: any) => console.error("[Cron PG log]", e.message));
 
+          const settled_at = new Date().toISOString();
+          const buyer_email = pi.metadata?.buyer_email || pi.receipt_email || '';
+          const charge_id = captured.latest_charge as string;
+
           await sendExchangeEmail(
-            `[CRON] Trade ${trade_id} — Auto-Settled`,
+            `[CRON T+1] Trade ${trade_id} — Settlement Complete`,
             {
               "Trade ID": trade_id,
               "PI ID": pi.id,
               Gross: `€${gross.toLocaleString()}`,
               "UAIU Fee (0.75%)": `€${uaiu_fee.toFixed(2)}`,
               "Net to Seller": `€${seller_net.toFixed(2)}`,
-              "Settled By": "Cron watchdog",
-              "Settled At": new Date().toISOString(),
+              "Settled By": "T+1 cron watchdog",
+              "Settled At": settled_at,
             }
           ).catch(() => {});
 
+          const receiptData = `${trade_id}:${pi.id}:${charge_id}:${gross}:${settled_at}`;
+          const receiptHash = createHash('sha256').update(receiptData).digest('hex');
+          let prevReceiptHash = 'GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE';
+          try {
+            const prevRow = await db.execute(
+              sql`SELECT receipt_hash FROM exchange_trades WHERE receipt_hash IS NOT NULL AND receipt_hash != '' ORDER BY created_at DESC LIMIT 1`
+            );
+            prevReceiptHash = (prevRow as any).rows?.[0]?.receipt_hash || prevReceiptHash;
+          } catch {}
+
+          generateTradePDF({
+            trade_id,
+            side: 'BUY',
+            standard: pi.metadata?.standard || 'Carbon Credit',
+            volume_tonnes: parseFloat(pi.metadata?.volume_tonnes || '0'),
+            price_eur_per_tonne: gross / (parseFloat(pi.metadata?.volume_tonnes || '1') || 1),
+            gross_eur: gross,
+            fee_eur: uaiu_fee,
+            receipt_hash: receiptHash,
+            prev_receipt_hash: prevReceiptHash,
+            payment_intent_id: pi.id,
+            stripe_charge_id: charge_id,
+            settled_at,
+            buyer_email,
+          }).then(pdfBuffer => {
+            const recipients = ['info@uaiu.live'];
+            if (buyer_email && buyer_email !== 'info@uaiu.live') recipients.push(buyer_email);
+            const attachment = [{ filename: `UAIU-Trade-${trade_id}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
+            const emailHtml = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — T+1 Settlement Complete</h2><p>Trade <strong>${trade_id}</strong> has settled after the 24-hour escrow hold. Your audit pack PDF is attached.</p><p style="color:#6ee7b7;font-size:12px">UAIU Exchange — info@uaiu.live</p></div>`;
+            if (isZohoConfigured()) {
+              return sendZohoEmail(recipients.join(','), `UAIU Trade Settlement — ${trade_id}`, emailHtml, attachment);
+            }
+          }).catch((e: any) => console.error('[Cron PDF email]', e.message));
+
           console.log(
-            `[Cron] Captured stuck PI ${pi.id} — Trade ${trade_id}`
+            `[Cron T+1] Captured PI ${pi.id} — Trade ${trade_id} — €${gross}`
           );
         } catch (captureErr: any) {
           console.error(
