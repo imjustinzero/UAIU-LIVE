@@ -217,28 +217,36 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           }
 
           // ── Verify signature + enforce 300s tolerance BEFORE any processing ──
+          // Fail closed: reject immediately if Stripe credentials are not configured.
           const stripeKey = process.env.STRIPE_SECRET_KEY;
           const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-          let verifiedEvent: any = null;
-          if (stripeKey && webhookSecret) {
-            const { default: Stripe } = await import('stripe');
-            const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
-            verifiedEvent = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret, 300);
+          if (!stripeKey || !webhookSecret) {
+            console.error('[Webhook] Stripe key or webhook secret not configured — rejecting');
+            return res.status(503).json({ error: 'Webhook endpoint not configured' });
+          }
 
-            const eventAgeSec = Math.floor(Date.now() / 1000) - verifiedEvent.created;
-            if (eventAgeSec > 300) {
-              console.warn(`[Webhook] Rejecting stale event ${verifiedEvent.id} — age: ${eventAgeSec}s (>300s)`);
-              return res.status(400).json({ error: 'Event timestamp too old — rejected' });
-            }
+          const { default: Stripe } = await import('stripe');
+          const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+
+          let verifiedEvent: any;
+          try {
+            verifiedEvent = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret, 300);
+          } catch (verifyErr: any) {
+            console.error('[Webhook] Signature verification failed:', verifyErr.message);
+            return res.status(400).json({ error: 'Webhook signature verification failed' });
+          }
+
+          const eventAgeSec = Math.floor(Date.now() / 1000) - verifiedEvent.created;
+          if (eventAgeSec > 300) {
+            console.warn(`[Webhook] Rejecting stale event ${verifiedEvent.id} — age: ${eventAgeSec}s (>300s)`);
+            return res.status(400).json({ error: 'Event timestamp too old — rejected' });
           }
 
           await WebhookHandlers.processWebhook(req.body as Buffer, sig, uuid);
 
           // ── Escrow + financial event handlers ─────────
           try {
-            if (stripeKey && webhookSecret && verifiedEvent) {
-              const { default: Stripe } = await import('stripe');
-              const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+            {
               const event = verifiedEvent;
 
               // ── Explicit if/else if chain for required event types ──
