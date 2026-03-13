@@ -803,7 +803,7 @@ export default function Exchange() {
 
     if (sessionAccount?.email && mode === 'buy') {
       try {
-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: (sessionAccount as any)?.registryAccountId || '', registryName: (sessionAccount as any)?.registryName || '' }) });
+        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: (sessionAccount as any)?.registryAccountId || '', registryName: (sessionAccount as any)?.registryName || '', ddAcknowledged: true }) });
         const data = await res.json();
         if (data.url) { window.location.href = data.url; return; }
       } catch (e) {

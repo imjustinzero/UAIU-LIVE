@@ -29,7 +29,7 @@ import { gameManager, type GameType } from "./game-manager";
 import { nanoid } from "nanoid";
 import { startCronJobs } from "./cron";
 import { generateTradePDF } from "./pdf-generator";
-import { sendZohoEmail, isZohoConfigured, verifyZohoConnection } from "./zoho-mailer";
+import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
 import { registerNavigatorRoutes } from "./navigator-routes";
 
@@ -75,37 +75,6 @@ async function sendRetirementUploadRequest(params: {
   }
 }
 
-async function getPreviousReceiptHash(): Promise<string> {
-  try {
-    const prev = await db.execute(sql`
-      SELECT receipt_hash
-      FROM exchange_trades
-      WHERE receipt_hash IS NOT NULL AND receipt_hash <> ''
-      ORDER BY created_at DESC
-      LIMIT 1
-    `);
-    return String((prev as any).rows?.[0]?.receipt_hash || '');
-  } catch {
-    return '';
-  }
-}
-
-async function resolveAuthenticatedEmail(req: express.Request): Promise<string | null> {
-  const exchangeToken = String(req.headers['x-exchange-token'] || '').trim();
-  if (exchangeToken) {
-    const exchangeSession = await verifyExchangeToken(exchangeToken);
-    if (exchangeSession?.email) return String(exchangeSession.email).toLowerCase().trim();
-  }
-
-  const bearerToken = req.headers.authorization?.replace('Bearer ', '').trim();
-  if (bearerToken) {
-    const session = await getSession(bearerToken);
-    if (session?.email) return String(session.email).toLowerCase().trim();
-  }
-
-  return null;
-}
-
 function estimateNextStripePayoutDate(from = new Date()): string {
   const next = new Date(from);
   next.setDate(next.getDate() + 2);
@@ -130,6 +99,18 @@ async function sendSellerDestinationPayoutEmail(params: {
 
 let stripeReady = false;
 let stripeReadyAt: string | null = null;
+
+async function getMostRecentReceiptHash(): Promise<string> {
+  try {
+    const rows = await db.execute(
+      sql`SELECT receipt_hash FROM exchange_trades WHERE receipt_hash IS NOT NULL AND receipt_hash != '' ORDER BY created_at DESC LIMIT 1`
+    );
+    const hash = (rows as any).rows?.[0]?.receipt_hash;
+    return hash || 'GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE';
+  } catch {
+    return 'GENESIS_BLOCK_UAIU_CARIBBEAN_CARBON_EXCHANGE';
+  }
+}
 
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
   const authLoginLimiter = rateLimit({
@@ -276,7 +257,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                     // ── FIX 4: Auto-generate and email PDF audit pack ────────
                     const receiptData = `${trade_id}:${pi.id}:${charge_id}:${gross}:${settled_at}`;
                     const receiptHash = createHash('sha256').update(receiptData).digest('hex');
-                    const prevReceiptHash = await getPreviousReceiptHash();
+                    const prevReceiptHash = await getMostRecentReceiptHash();
                     generateTradePDF({
                       trade_id,
                       side:                'BUY',
@@ -484,7 +465,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 }
 
                 // Generate and email PDF receipt
-                const prevReceiptHash = await getPreviousReceiptHash();
+                const prevReceiptHashCheckout = await getMostRecentReceiptHash();
                 generateTradePDF({
                   trade_id:            tradeId,
                   side,
@@ -494,7 +475,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   gross_eur:           grossEur,
                   fee_eur:             feeEur,
                   receipt_hash:        receiptHash,
-                  prev_receipt_hash:   prevReceiptHash,
+                  prev_receipt_hash:   prevReceiptHashCheckout,
                   payment_intent_id:   cs.payment_intent || '',
                   stripe_charge_id:    '',
                   settled_at,
@@ -1878,9 +1859,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
     try {
       const email = (req as any).exchangeEmail;
-      const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName } = req.body;
+      const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName, ddAcknowledged } = req.body;
       if (!standard || !volumeTonnes || !tradeId) {
         return res.status(400).json({ error: 'Missing required fields' });
+      }
+      if (!ddAcknowledged) {
+        return res.status(400).json({ error: 'AI due diligence report must be reviewed before executing a trade. Acknowledge by setting ddAcknowledged: true after reviewing.' });
       }
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account || account.kycStatus !== 'verified') {
@@ -1998,7 +1982,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const result = await db.execute(sql`
         SELECT trade_id, standard, volume_tonnes, gross_eur, created_at, receipt_hash
         FROM exchange_trades
-        WHERE receipt_hash = ${hash} OR trade_id = ${hash}
+        WHERE receipt_hash = ${hash}
         LIMIT 1
       `);
 
@@ -2085,7 +2069,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(403).json({ error: 'You do not own this trade.' });
       }
 
-      if (trade.status !== 'completed' && trade.status !== 'retired') {
+      if (trade.status === 'retired') {
+        return res.status(400).json({ error: 'This trade has already been retired.' });
+      }
+      if (trade.status !== 'completed') {
         return res.status(400).json({ error: 'Only completed trades can be retired.' });
       }
 
@@ -2316,7 +2303,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/account', exchangeAccountCreateLimiter, async (req, res) => {
+  app.post('/api/exchange/account', requireAuth, exchangeAccountCreateLimiter, async (req, res) => {
     try {
       const body = req.body;
       if (!body.email) {
@@ -2358,16 +2345,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/rfq', async (req, res) => {
+  app.post('/api/exchange/rfq', requireAuth, async (req, res) => {
     try {
-      const authenticatedEmail = await resolveAuthenticatedEmail(req);
-      if (!authenticatedEmail) {
-        return res.status(401).json({ message: 'Exchange authentication required' });
-      }
       const body = req.body;
-      if (body.email && String(body.email).trim().toLowerCase() !== authenticatedEmail) {
-        return res.status(403).json({ message: 'RFQ email must match authenticated account.' });
-      }
       if (!body.company || !body.contact || !body.email || !body.side || !body.standard || !body.volumeTonnes) {
         return res.status(400).json({ message: 'Missing required fields: company, contact, email, side, standard, volumeTonnes' });
       }
@@ -2378,7 +2358,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const rfqData: any = {
         company: String(body.company),
         contact: String(body.contact),
-        email: String(body.email || authenticatedEmail),
+        email: String(body.email),
         side: String(body.side),
         standard: String(body.standard),
         volumeTonnes: volume,
@@ -2689,9 +2669,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     };
 
     // Email
-    const zohoLive = await verifyZohoConnection();
     results.email = {
-      status: zohoLive ? 'OK' : (process.env.ZOHO_SMTP_USER ? 'WARN — SMTP configured but handshake failed' : 'WARN'),
+      status: process.env.ZOHO_SMTP_USER ? 'OK' : 'WARN',
     };
 
     // Partner API
@@ -3702,12 +3681,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  app.post('/api/exchange/ai-rfq', async (req, res) => {
+  app.post('/api/exchange/ai-rfq', requireAuth, async (req, res) => {
     try {
-      const authenticatedEmail = await resolveAuthenticatedEmail(req);
-      if (!authenticatedEmail) {
-        return res.status(401).json({ error: 'Exchange authentication required' });
-      }
       const { message } = req.body;
       if (!message) return res.status(400).json({ error: 'message required' });
       const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -3829,25 +3804,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        const counterPrice = Number(market?.indexPrice ? (market.indexPrice * 0.97) : 62.50);
         return res.json({
           recommendation: {
             action: 'ACCEPT',
-            counter_price: counterPrice,
+            counter_price: market?.indexPrice ? (market.indexPrice * 0.97).toFixed(2) : '62.50',
             counter_volume: rfq.volume_tonnes || 5000,
             rationale: '[Demo Mode] Based on current Caribbean carbon credit market conditions and your RFQ parameters, we recommend accepting near the index price with a slight discount for bulk volume. Standard settlement terms apply.',
             risk_assessment: 'LOW',
             settlement_days: 5,
             confidence: 87,
-            recommended_price: counterPrice,
-            acceptance_probability: 87,
-            market_context: `UAIU Caribbean Premium Index: €${Number(market?.indexPrice || 67.43).toFixed(2)}.`,
-            counter_range: {
-              low: Number((counterPrice * 0.98).toFixed(2)),
-              high: Number((counterPrice * 1.02).toFixed(2)),
-            },
-            urgency: (rfq.volume_tonnes || 0) > 100000 ? 'high' : (rfq.volume_tonnes || 0) > 20000 ? 'medium' : 'low',
-            signal: 'buy',
           }
         });
       }
@@ -3895,19 +3860,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       } catch {
         recommendation = { action: 'ACCEPT', counter_price: (market?.indexPrice || 67.43) * 0.97, counter_volume: rfq.volume_tonnes, rationale: text, risk_assessment: 'LOW', settlement_days: 5, confidence: 75 };
       }
-      const normalized = {
-        ...recommendation,
-        recommended_price: Number(recommendation.recommended_price ?? recommendation.counter_price ?? market?.indexPrice ?? 67.43),
-        acceptance_probability: Number(recommendation.acceptance_probability ?? recommendation.confidence ?? 75),
-        market_context: String(recommendation.market_context || `UAIU Caribbean Premium Index: €${Number(market?.indexPrice || 67.43).toFixed(2)}.`),
-        counter_range: recommendation.counter_range || {
-          low: Number((Number(recommendation.counter_price ?? market?.indexPrice ?? 67.43) * 0.98).toFixed(2)),
-          high: Number((Number(recommendation.counter_price ?? market?.indexPrice ?? 67.43) * 1.02).toFixed(2)),
-        },
-        urgency: recommendation.urgency || ((rfq.volume_tonnes || 0) > 100000 ? 'high' : (rfq.volume_tonnes || 0) > 20000 ? 'medium' : 'low'),
-        signal: recommendation.signal || 'buy',
-      };
-      res.json({ recommendation: normalized });
+      res.json({ recommendation });
     } catch (err: any) {
       console.error('Negotiate error:', err?.message);
       res.status(500).json({ error: 'Negotiation engine error' });
@@ -3922,9 +3875,6 @@ Respond with a JSON object (no markdown) with these exact fields:
       const { trade_id, amount_eur, buyer_email, listing_id, volume_tonnes, standard, seller_connect_account_id } = req.body;
       if (!trade_id || !amount_eur || amount_eur < 100) {
         return res.status(400).json({ error: 'Invalid escrow parameters' });
-      }
-      if (Number(amount_eur) < 10000) {
-        return res.status(400).json({ error: 'Escrow is only required for trades above €10,000.' });
       }
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
