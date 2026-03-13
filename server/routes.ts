@@ -610,6 +610,145 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     );
     console.log(`✅ Stripe webhook registered at /api/stripe/webhook/${webhookUuid}`);
     console.log(`   → Set this URL in Stripe Dashboard → Developers → Webhooks`);
+
+    // ── Secondary Stripe webhook endpoint (no UUID — signature is the sole gate) ─
+    // Mirrors the same raw-body verification + 300s tolerance + explicit handlers.
+    // Register this path in Stripe Dashboard as a fallback endpoint.
+    app.post(
+      '/api/stripe/webhook',
+      express.raw({ type: 'application/json' }),
+      async (req, res) => {
+        const signature = req.headers['stripe-signature'];
+        if (!signature) return res.status(400).json({ error: 'Missing stripe-signature' });
+
+        try {
+          const sig = Array.isArray(signature) ? signature[0] : signature;
+          if (!Buffer.isBuffer(req.body)) {
+            return res.status(500).json({ error: 'Webhook processing error — body not buffered' });
+          }
+
+          const stripeKey2    = process.env.STRIPE_SECRET_KEY;
+          const webhookSecret2 = process.env.STRIPE_WEBHOOK_SECRET;
+          if (!stripeKey2 || !webhookSecret2) {
+            return res.status(503).json({ error: 'Stripe not configured' });
+          }
+
+          const { default: Stripe2 } = await import('stripe');
+          const stripe2 = new Stripe2(stripeKey2, { apiVersion: '2024-12-18.acacia' as any });
+
+          // Verify signature + enforce 300s tolerance BEFORE any processing
+          let event2: any;
+          try {
+            event2 = stripe2.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret2, 300);
+          } catch (verifyErr: any) {
+            console.error('[Webhook-Secondary] Signature verification failed:', verifyErr.message);
+            return res.status(400).json({ error: 'Webhook signature verification failed' });
+          }
+
+          const eventAgeSec2 = Math.floor(Date.now() / 1000) - event2.created;
+          if (eventAgeSec2 > 300) {
+            console.warn(`[Webhook-Secondary] Rejecting stale event ${event2.id} — age: ${eventAgeSec2}s`);
+            return res.status(400).json({ error: 'Event timestamp too old — rejected' });
+          }
+
+          // Delegate generic processing (product/price/subscription sync etc.)
+          await WebhookHandlers.processWebhook(req.body as Buffer, sig, '').catch(() => {});
+
+          // ── Explicit financial event handlers (mirror of primary endpoint) ──
+          if (
+            event2.type === 'payment_intent.amount_capturable_updated' ||
+            (event2.type as string) === 'payment_intent.requires_capture'
+          ) {
+            const pi2 = event2.data.object as any;
+            if (pi2.metadata?.escrow_type === 'carbon_credit_t1' && pi2.status === 'requires_capture') {
+              const trade_id2   = pi2.metadata?.trade_id || 'unknown';
+              const gross2      = pi2.amount / 100;
+              console.log(`[Webhook-Secondary] T+1 escrow authorized — trade ${trade_id2} PI ${pi2.id}`);
+              await db.execute(sql`
+                INSERT INTO escrow_settlements_log (trade_id, payment_intent_id, amount_eur, status)
+                VALUES (${trade_id2}, ${pi2.id}, ${gross2}, 'pending_t1')
+                ON CONFLICT (payment_intent_id) DO UPDATE SET status = 'pending_t1'
+              `).catch((e: any) => console.error('[Webhook-Secondary escrow log]', e.message));
+            }
+          } else if (event2.type === 'payment_intent.succeeded') {
+            const pi2 = event2.data.object as any;
+            console.log(`[Webhook-Secondary] payment_intent.succeeded — PI: ${pi2.id}`);
+          } else if (event2.type === 'payment_intent.payment_failed') {
+            const pi2 = event2.data.object as any;
+            const trade_id2 = pi2.metadata?.trade_id || 'unknown';
+            console.log(`[Webhook-Secondary] payment_intent.payment_failed — PI: ${pi2.id} trade: ${trade_id2}`);
+            await db.execute(sql`
+              UPDATE escrow_settlements_log
+              SET status = 'payment_failed', settled_at = NOW()
+              WHERE payment_intent_id = ${pi2.id}
+            `).catch(() => {});
+            sendExchangeEmail(`Trade ${trade_id2} — Payment Failed (secondary)`, {
+              'Trade ID':  trade_id2,
+              'PI ID':     pi2.id,
+              'Status':    'Payment failed — escrow release cancelled',
+              'Reason':    pi2.last_payment_error?.message || 'Unknown',
+              'Timestamp': new Date().toISOString(),
+            }).catch(() => {});
+          } else if (event2.type === 'charge.dispute.created') {
+            const dispute2   = event2.data.object as any;
+            const disputedPI2 = dispute2.payment_intent;
+            console.log(`[Webhook-Secondary] charge.dispute.created — PI: ${disputedPI2}`);
+            if (disputedPI2) {
+              await db.execute(sql`
+                UPDATE escrow_settlements_log
+                SET status = 'dispute_hold', settled_at = NOW()
+                WHERE payment_intent_id = ${disputedPI2}
+                  AND status IN ('held', 'pending_t1')
+              `).catch(() => {});
+              try {
+                const dpi = await stripe2.paymentIntents.retrieve(String(disputedPI2));
+                if (dpi.status === 'requires_capture') {
+                  await stripe2.paymentIntents.cancel(String(disputedPI2));
+                  console.log(`[Webhook-Secondary] Cancelled uncaptured PI ${disputedPI2} due to dispute`);
+                }
+              } catch (cancelErr2: any) {
+                console.error(`[Webhook-Secondary] Failed to cancel disputed PI:`, cancelErr2.message);
+              }
+              sendExchangeEmail('Dispute Filed — Escrow Hold (secondary)', {
+                'PI ID':    disputedPI2 || 'unknown',
+                'Amount':   `€${((dispute2.amount || 0) / 100).toLocaleString()}`,
+                'Reason':   dispute2.reason || 'unknown',
+                'Status':   'dispute_hold',
+                'Timestamp': new Date().toISOString(),
+              }).catch(() => {});
+            }
+          } else if ((event2.type as string) === 'transfer.created') {
+            const transfer2 = event2.data.object as any;
+            console.log(`[Webhook-Secondary] transfer.created — ${transfer2.id} €${(transfer2.amount / 100).toLocaleString()}`);
+          } else if (event2.type === 'identity.verification_session.verified') {
+            const session2      = event2.data.object as any;
+            const account_id2   = session2.metadata?.account_id;
+            const kycEmail2     = session2.metadata?.email;
+            if (account_id2) {
+              await db.execute(sql`
+                UPDATE exchange_accounts
+                SET kyc_status = 'verified', kyc_completed_at = NOW(), kyc_provider_reference = ${session2.id}
+                WHERE id = ${account_id2}
+              `).catch((e: any) => console.error('[Webhook-Secondary KYC]', e.message));
+              if (kycEmail2) {
+                sendExchangeEmail('KYC Verified — Account Active (secondary)', {
+                  'Account ID': account_id2,
+                  'Email':      kycEmail2,
+                  'Status':     'VERIFIED — Trading enabled',
+                  'Verified At': new Date().toISOString(),
+                }).catch(() => {});
+              }
+            }
+          }
+
+          res.status(200).json({ received: true });
+        } catch (err: any) {
+          console.error('[Webhook-Secondary] Error:', err.message);
+          res.status(400).json({ error: 'Webhook processing error' });
+        }
+      }
+    );
+    console.log(`✅ Secondary Stripe webhook registered at /api/stripe/webhook`);
   }
 
   // NOW apply JSON middleware for all other routes
@@ -2955,7 +3094,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/admin/listings/:id/reject', requireAdminHeader, async (req, res) => {
     try {
       const rejected = await storage.rejectCreditListing(req.params.id);
-      logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.name || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`).catch(() => {});
+      logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.orgName || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`).catch(() => {});
       const reason = req.body.reason || 'Your listing did not meet our current marketplace requirements.';
       const html = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Listing Review</h2><p>Thank you for submitting your carbon credits to UAIU.LIVE/X.</p><p>After review, we are unable to approve your listing at this time.</p><p><strong>Reason:</strong> ${reason}</p><p>Please contact info@uaiu.live if you have questions.</p></div>`;
       if (rejected.email && isZohoConfigured()) {
@@ -4006,12 +4145,15 @@ Respond with a JSON object (no markdown) with these exact fields:
         const listingRow = (listingLookup as any).rows?.[0];
         escrowSellerProfileId = listingRow?.seller_profile_id || '';
         if (!escrowConnectAccountId) escrowConnectAccountId = listingRow?.stripe_connect_account_id || '';
-        if (escrowConnectAccountId) {
-          if (listingRow?.connect_onboarding_complete !== true) {
-            return res.status(400).json({ error: 'Seller Connect account exists but onboarding is not complete. Cannot create escrow.' });
-          }
-          escrowPaymentModel = 'destination_charge';
+        if (escrowConnectAccountId && listingRow?.connect_onboarding_complete !== true) {
+          return res.status(400).json({ error: 'Seller Connect account exists but onboarding is not complete. Cannot create escrow.' });
         }
+      }
+      // Enforce destination_charge whenever a Connect account is present — regardless of
+      // whether it was supplied directly or resolved via listing_id lookup.
+      // platform_collect is only valid when no Connect account exists.
+      if (escrowConnectAccountId) {
+        escrowPaymentModel = 'destination_charge';
       }
 
       const paymentIntent = await stripe.paymentIntents.create({
