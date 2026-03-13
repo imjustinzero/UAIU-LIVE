@@ -210,9 +210,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
               const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
 
               const eventAgeSec = Math.floor(Date.now() / 1000) - event.created;
-              if (eventAgeSec > 600) {
-                console.warn(`[Webhook] Ignoring stale event ${event.id} — age: ${eventAgeSec}s (>600s)`);
-                return res.status(200).json({ received: true, skipped: 'stale_event' });
+              if (eventAgeSec > 300) {
+                console.warn(`[Webhook] Rejecting stale event ${event.id} — age: ${eventAgeSec}s (>300s)`);
+                return res.status(400).json({ error: 'Event timestamp too old — rejected' });
               }
 
               // ── payment_intent.amount_capturable_updated / requires_capture ──
@@ -392,6 +392,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   sellerRegistryName: meta.seller_registry_name || null,
                   sellerRegistrySerial: meta.seller_registry_serial || null,
                   vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
+                  paymentModel:    paymentModel,
                   status:          'completed',
                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
 
@@ -3964,6 +3965,29 @@ Respond with a JSON object (no markdown) with these exact fields:
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
       const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
+
+      const escrowRow = await db.execute(
+        sql`SELECT status FROM escrow_settlements_log WHERE payment_intent_id = ${payment_intent_id} LIMIT 1`
+      ).catch(() => ({ rows: [] as any[] }));
+      const escrowStatus = (escrowRow as any).rows?.[0]?.status;
+      if (escrowStatus === 'dispute_hold') {
+        return res.status(403).json({ error: 'Cannot release — escrow is under dispute hold' });
+      }
+      if (escrowStatus === 'payment_failed') {
+        return res.status(403).json({ error: 'Cannot release — payment failed' });
+      }
+
+      const piCheck = await stripe.paymentIntents.retrieve(payment_intent_id);
+      if (piCheck.status !== 'requires_capture') {
+        return res.status(400).json({ error: `PI status is '${piCheck.status}' — cannot capture` });
+      }
+      const piAgeSec = Math.floor(Date.now() / 1000) - piCheck.created;
+      const twentyFourHours = 24 * 60 * 60;
+      if (piAgeSec < twentyFourHours) {
+        const remainingHrs = ((twentyFourHours - piAgeSec) / 3600).toFixed(1);
+        return res.status(403).json({ error: `T+1 hold not yet elapsed — ${remainingHrs}h remaining` });
+      }
+
       const captured = await stripe.paymentIntents.capture(payment_intent_id);
       const gross = captured.amount / 100;
       const uaiu_fee = gross * 0.0075;
