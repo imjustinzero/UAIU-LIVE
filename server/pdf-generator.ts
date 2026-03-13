@@ -1,5 +1,7 @@
 import PDFDocument from "pdfkit";
 
+const PLATFORM_VERSION = "UAIU.LIVE/X v1.0";
+
 export interface TradeForPDF {
   trade_id: string;
   side: string;
@@ -14,6 +16,7 @@ export interface TradeForPDF {
   stripe_charge_id: string;
   settled_at: string;
   buyer_email: string;
+  seller_email?: string;
   buyer_registry_account_id?: string;
   buyer_registry_name?: string;
   seller_registry_name?: string;
@@ -60,6 +63,7 @@ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
     const rows = [
       ["Side",             trade.side.toUpperCase()],
       ["Standard",         trade.standard],
+      ["Vintage Year",     trade.vintage_year ? String(trade.vintage_year) : "N/A"],
       ["Volume",           `${trade.volume_tonnes.toLocaleString()} tonnes CO₂`],
       ["Price per Tonne",  `€${trade.price_eur_per_tonne.toFixed(2)}`],
       ["Gross Amount",     `€${trade.gross_eur.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
@@ -67,6 +71,7 @@ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
       ["Net Amount",       `€${(trade.gross_eur - trade.fee_eur).toFixed(2)}`],
       ["Settled At",       trade.settled_at || new Date().toISOString()],
       ["Buyer",            trade.buyer_email],
+      ["Seller",           trade.seller_email || "N/A"],
       ["Retirement Status", trade.retirement_status || 'Retirement Pending — Due within 48 hours of settlement.'],
     ];
 
@@ -128,7 +133,10 @@ export function generateTradePDF(trade: TradeForPDF): Promise<Buffer> {
       .text("Verify this receipt independently at uaiu.live/verify/" + trade.trade_id, 50, y);
     y += 12;
     doc.font("Helvetica").fontSize(8).fillColor(cream3)
-      .text("UAIU.LIVE/X — Caribbean Carbon Credit Exchange — info@uaiu.live", 50, y);
+      .text(`UAIU.LIVE/X — Caribbean Carbon Credit Exchange — info@uaiu.live`, 50, y);
+    y += 12;
+    doc.font("Helvetica").fontSize(7).fillColor(cream3)
+      .text(`Platform: ${PLATFORM_VERSION}`, 50, y);
 
     doc.rect(0, 837, 595, 5).fill(gold);
 

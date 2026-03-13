@@ -346,10 +346,31 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         askingPricePerTonne,
         projectOrigin,
         registrySerial,
+        registryName,
+        vintageYear,
       } = req.body || {};
 
       if (!orgName || !contactName || !standard || !creditType || !volumeTonnes || !askingPricePerTonne || !projectOrigin) {
         return res.status(400).json({ error: "Missing required listing fields." });
+      }
+
+      const LISTING_ALLOWED_REGISTRIES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'];
+      const parsedVolume = parseFloat(String(volumeTonnes));
+      if (isNaN(parsedVolume) || parsedVolume <= 0) {
+        return res.status(400).json({ error: "volume_tonnes must be a positive number." });
+      }
+      if (String(standard).trim().length === 0) {
+        return res.status(400).json({ error: "standard must be a non-empty string." });
+      }
+      if (registryName !== undefined && !LISTING_ALLOWED_REGISTRIES.includes(String(registryName))) {
+        return res.status(400).json({ error: `registry_name must be one of: ${LISTING_ALLOWED_REGISTRIES.join(', ')}.` });
+      }
+      if (vintageYear !== undefined) {
+        const currentYear = new Date().getFullYear();
+        const vy = parseInt(String(vintageYear));
+        if (isNaN(vy) || vy < 2010 || vy > currentYear) {
+          return res.status(400).json({ error: `vintage_year must be an integer between 2010 and ${currentYear}.` });
+        }
       }
 
       const sellerProfileResult = await db.execute(sql`
@@ -475,6 +496,13 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         return res.status(403).json({ error: "You can only auto-match your own RFQ." });
       }
 
+      if (rfq.expires_at && new Date(rfq.expires_at) < new Date()) {
+        return res.status(409).json({ error: "RFQ has expired." });
+      }
+      if (rfq.status && rfq.status !== 'active') {
+        return res.status(409).json({ error: `RFQ is not available for matching (status: ${rfq.status}).` });
+      }
+
       const targetPrice = Number(rfq.target_price || 0);
       const maxPrice = targetPrice > 0 ? targetPrice * (1 + Number(maxPriceSlippagePct) / 100) : null;
 
@@ -514,6 +542,16 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           - Math.min(25, viable.risk_score || 0)
           - (targetPrice > 0 ? Math.min(15, Math.round(((Number(viable.price_per_tonne) - targetPrice) / targetPrice) * 100)) : 0)
       );
+
+      const claimResult = await db.execute(sql`
+        UPDATE exchange_rfqs
+        SET status = 'accepted'
+        WHERE id = ${rfqId} AND status = 'active'
+        RETURNING id
+      `);
+      if (!((claimResult as any).rows?.length)) {
+        return res.status(409).json({ error: "RFQ has already been accepted or is no longer available." });
+      }
 
       const matchResult = await db.execute(sql`
         INSERT INTO exchange_rfq_matches (

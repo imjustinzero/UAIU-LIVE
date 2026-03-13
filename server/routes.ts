@@ -504,6 +504,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   stripe_charge_id:    '',
                   settled_at,
                   buyer_email:         email,
+                  seller_email:        sellerEmail || undefined,
                   buyer_registry_account_id: meta.buyer_registry_account_id || '',
                   buyer_registry_name: meta.buyer_registry_name || '',
                   seller_registry_name: meta.seller_registry_name || '',
@@ -1987,6 +1988,76 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const email = (req as any).exchangeEmail;
       const trades = await storage.getExchangeTradesByEmail(email);
       res.json(trades);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── EXCHANGE: Download trade PDF ─────────────────────────────────────────
+  app.get('/api/exchange/trades/:tradeId/pdf', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').toLowerCase();
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
+
+      const tradeResult = await db.execute(sql`
+        SELECT
+          t.*,
+          sp.exchange_account_email AS seller_email_from_profile
+        FROM exchange_trades t
+        LEFT JOIN seller_profiles sp ON sp.id::text = t.seller_profile_id::text
+        WHERE t.trade_id = ${tradeId}
+        LIMIT 1
+      `);
+      const trade = (tradeResult as any).rows?.[0];
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const buyerEmail = String(trade.account_email || '').toLowerCase();
+
+      const sellerEmailRes = await db.execute(sql`
+        SELECT seller_email FROM exchange_rfq_matches
+        WHERE rfq_id::text = ${tradeId}
+           OR listing_id::text = ${tradeId}
+        LIMIT 1
+      `);
+      const sellerEmailFromMatch = (sellerEmailRes as any).rows?.[0]?.seller_email || '';
+      const resolvedSellerEmail = String(
+        trade.seller_email_from_profile || sellerEmailFromMatch || ''
+      ).toLowerCase();
+
+      const isBuyer = email === buyerEmail;
+      const isSeller = resolvedSellerEmail && email === resolvedSellerEmail;
+      if (!isBuyer && !isSeller) {
+        return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
+      }
+
+      const pdfBuffer = await generateTradePDF({
+        trade_id:            tradeId,
+        side:                trade.side || 'buy',
+        standard:            trade.standard || '',
+        volume_tonnes:       Number(trade.volume_tonnes || 0),
+        price_eur_per_tonne: Number(trade.price_eur_per_tonne || 0),
+        gross_eur:           Number(trade.gross_eur || 0),
+        fee_eur:             Number(trade.fee_eur || 0),
+        receipt_hash:        trade.receipt_hash || '',
+        prev_receipt_hash:   trade.prev_receipt_hash || '',
+        payment_intent_id:   trade.payment_intent_id || '',
+        stripe_charge_id:    trade.stripe_charge_id || '',
+        settled_at:          trade.settled_at || trade.created_at || new Date().toISOString(),
+        buyer_email:         buyerEmail,
+        seller_email:        resolvedSellerEmail || undefined,
+        buyer_registry_account_id: trade.buyer_registry_account_id || '',
+        buyer_registry_name:       trade.buyer_registry_name || '',
+        seller_registry_name:      trade.seller_registry_name || '',
+        seller_registry_serial:    trade.seller_registry_serial || '',
+        vintage_year:              trade.vintage_year ? Number(trade.vintage_year) : undefined,
+        retirement_status:         trade.retirement_status || undefined,
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="UAIU-Trade-${tradeId}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      return res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }

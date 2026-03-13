@@ -371,6 +371,8 @@ export const exchangeRfqs = pgTable("exchange_rfqs", {
   vintageYear: integer("vintage_year"),
   deadline: varchar("deadline"),
   notes: varchar("notes"),
+  status: varchar("status").notNull().default('active'),
+  expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -554,10 +554,11 @@ export class DbStorage implements IStorage {
   async getExchangeListings(standard?: string): Promise<ExchangeListing[]> {
     if (standard && standard !== 'ALL') {
       return db.select().from(exchangeListings)
-        .where(eq(exchangeListings.standard, standard))
+        .where(and(eq(exchangeListings.status, 'active'), eq(exchangeListings.standard, standard)))
         .orderBy(desc(exchangeListings.pricePerTonne));
     }
     return db.select().from(exchangeListings)
+      .where(eq(exchangeListings.status, 'active'))
       .orderBy(desc(exchangeListings.pricePerTonne));
   }
 
@@ -571,7 +572,8 @@ export class DbStorage implements IStorage {
   }
 
   async createExchangeRfq(rfq: InsertExchangeRfq): Promise<ExchangeRfq> {
-    const [result] = await db.insert(exchangeRfqs).values(rfq).returning();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const [result] = await db.insert(exchangeRfqs).values({ ...rfq, expiresAt }).returning();
     return result;
   }
 
