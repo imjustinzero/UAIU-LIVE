@@ -1,0 +1,55 @@
+That’s a clean sprint completion. Here’s your next prompt to paste into Replit to move forward:
+
+Group A and Group B (T001 through T009) are fully deployed and verified. Now perform the following next-layer hardening pass on UAIU.LIVE/X.
+GROUP C: STRIPE AND FINANCIAL HARDENING
+T010 Stripe Connect Destination Charges:
+Verify every payment uses destination charges and not direct charges
+Confirm the connected account ID is passed as the transfer_destination on every charge
+Verify the platform fee is taken at charge creation and not as a separate transfer
+Confirm no direct charges exist anywhere in the codebase that would create money transmission liability
+T011 Escrow and Settlement Timing:
+Verify T plus 1 settlement logic exists and is enforced
+Confirm funds are held and not released to seller until the settlement window passes
+Verify the release trigger is automated and not manual
+Confirm a failed or disputed payment correctly cancels the escrow release
+T012 Stripe Webhook Security:
+Verify every webhook endpoint validates the Stripe-Signature header using the webhook secret
+Confirm raw body is used for signature verification and not parsed JSON
+Verify replay attack protection is in place via timestamp tolerance check
+Confirm all relevant webhook events are handled: payment_intent.succeeded, payment_intent.payment_failed, charge.dispute.created, transfer.created
+GROUP D: AUTH AND ACCESS CONTROL
+T013 KYC Gate:
+Verify unapproved users cannot reach the trading interface
+Confirm KYC status is checked server side on every protected route and not just client side
+Verify a pending or rejected KYC user receives a clear status message and cannot bypass the gate
+T014 Partner API Auth:
+Verify all Partner API routes require a valid API key
+Confirm API keys are hashed in the database and not stored in plaintext
+Verify rate limiting is enforced per API key
+Confirm expired or revoked keys return 401 immediately
+T015 Admin Route Protection:
+Verify all admin routes require an authenticated admin session
+Confirm role check is server side
+Verify every admin action writes to an audit log with timestamp, admin user ID, action type, and affected record ID
+GROUP E: DATA INTEGRITY
+T016 Registry Sync Integrity:
+Verify Verra and Gold Standard API responses are validated before being written to the database
+Confirm a failed or malformed registry response does not corrupt existing credit records
+Verify credits cannot be listed if registry status is not active and verified
+T017 RFQ Workflow Integrity:
+Verify an RFQ cannot be accepted after it has expired
+Confirm a buyer cannot submit two accepted RFQs for the same credit simultaneously
+Verify the RFQ to trade conversion is atomic and cannot leave an orphaned RFQ or trade record
+T018 Audit Pack Completeness:
+Verify every generated audit pack contains all required fields: transaction ID, timestamp, credit metadata, buyer ID, seller ID, registry source, SHA-256 hash, previous hash, and platform version
+Confirm audit packs are immutable after generation
+Verify audit pack download is gated to the buyer and seller of that specific trade only
+FINAL OUTPUT REQUIREMENTS:
+Return a numbered result for every item above
+Status must be PASS, FAIL, or NEEDS ATTENTION
+Every FAIL or NEEDS ATTENTION must include exact file name, function name, line number, and corrected code
+Do not skip any item
+Do not summarize
+Be exhaustive
+
+This takes you from page polish and core security into financial hardening, access control, and data integrity — the three layers that matter most before any institutional buyer does their own technical due diligence on the platform.​​​​​​​​​​​​​​​​
