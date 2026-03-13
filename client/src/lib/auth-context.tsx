@@ -36,13 +36,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("exchange_accounts")
-      .select("kyc_status, kyb_status, kyc_completed_at, org_name, account_type")
-      .eq("email", email)
-      .maybeSingle();
+    let data: any = null;
+    try {
+      const profileLookup = await supabase
+        .from("profiles")
+        .select("kyc_status, kyb_status, kyc_completed_at, org_name, account_type")
+        .eq("email", email)
+        .maybeSingle();
+      data = profileLookup.data;
+    } catch {
+      data = null;
+    }
 
-    if (error || !data) {
+    if (!data) {
+      const fallbackLookup = await supabase
+        .from("exchange_accounts")
+        .select("kyc_status, kyb_status, kyc_completed_at, org_name, account_type")
+        .eq("email", email)
+        .maybeSingle();
+      data = fallbackLookup.data;
+    }
+
+    if (!data) {
       setProfile(null);
       return;
     }

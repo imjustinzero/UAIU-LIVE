@@ -22,6 +22,18 @@ function createTransporter() {
   });
 }
 
+export async function verifyZohoConnection(): Promise<boolean> {
+  if (!isZohoConfigured()) return false;
+  try {
+    const transporter = createTransporter();
+    await transporter.verify();
+    return true;
+  } catch (error) {
+    console.error('❌ Zoho SMTP verify error:', error);
+    return false;
+  }
+}
+
 export async function sendZohoEmail(
   to: string,
   subject: string,
