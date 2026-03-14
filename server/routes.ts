@@ -459,31 +459,31 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   `).catch((e: any) => console.error('[Webhook] Failed to mark listing as sold', e.message));
                 }
 
-                await storage.createExchangeTrade({
-                  accountEmail:    email,
-                  tradeId,
-                  side,
-                  standard,
-                  volumeTonnes:    volumeT,
-                  pricePerTonne:   pricePerT,
-                  grossEur,
-                  feeEur,
-                  receiptHash,
-                  prevReceiptHash: prevReceiptHashVal,
-                  sellerProfileId: meta.seller_profile_id || null,
-                  listingId:       webhookListingId,
-                  stripeSessionId: cs.id,
-                  buyerRegistryAccountId: meta.buyer_registry_account_id || null,
-                  buyerRegistryName: meta.buyer_registry_name || null,
-                  sellerEmail:     sellerEmail || null,
-                  sellerRegistryName: meta.seller_registry_name || null,
-                  sellerRegistrySerial: meta.seller_registry_serial || null,
-                  vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
-                  paymentModel:    paymentModel,
-                  status:          'completed',
-                });
-
                 try {
+                  await storage.createExchangeTrade({
+                    accountEmail:    email,
+                    tradeId,
+                    side,
+                    standard,
+                    volumeTonnes:    volumeT,
+                    pricePerTonne:   pricePerT,
+                    grossEur,
+                    feeEur,
+                    receiptHash,
+                    prevReceiptHash: prevReceiptHashVal,
+                    sellerProfileId: meta.seller_profile_id || null,
+                    listingId:       webhookListingId,
+                    stripeSessionId: cs.id,
+                    buyerRegistryAccountId: meta.buyer_registry_account_id || null,
+                    buyerRegistryName: meta.buyer_registry_name || null,
+                    sellerEmail:     sellerEmail || null,
+                    sellerRegistryName: meta.seller_registry_name || null,
+                    sellerRegistrySerial: meta.seller_registry_serial || null,
+                    vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
+                    paymentModel:    paymentModel,
+                    status:          'completed',
+                  });
+
                   if (paymentModel === 'destination_charge' && cs.payment_intent) {
                     try {
                       const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
@@ -578,9 +578,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 } catch (postPaymentErr: any) {
                   console.error(`[Webhook] Post-payment failure for trade ${tradeId}:`, postPaymentErr.message);
                   await db.execute(sql`
-                    UPDATE exchange_trades
+                    INSERT INTO exchange_trades (
+                      account_email, trade_id, side, standard, volume_tonnes,
+                      price_per_tonne, gross_eur, fee_eur, receipt_hash,
+                      prev_receipt_hash, seller_profile_id, listing_id,
+                      stripe_session_id, seller_email, payment_model, status
+                    ) VALUES (
+                      ${email}, ${tradeId}, ${side}, ${standard}, ${volumeT},
+                      ${pricePerT}, ${grossEur}, ${feeEur}, ${receiptHash},
+                      ${prevReceiptHashVal}, ${meta.seller_profile_id || null}, ${webhookListingId},
+                      ${cs.id}, ${sellerEmail || null}, ${paymentModel}, 'registry_pending_review'
+                    )
+                    ON CONFLICT (trade_id) DO UPDATE
                     SET status = 'registry_pending_review'
-                    WHERE trade_id = ${tradeId}
                   `).catch(() => {});
                   sendExchangeEmail('Post-Payment Failure — Trade Needs Review', {
                     'Trade ID':  tradeId,
@@ -808,6 +818,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 'Status':   'dispute_hold',
                 'Timestamp': new Date().toISOString(),
               }).catch(() => {});
+            }
+          } else if (event2.type === 'checkout.session.completed') {
+            const cs2 = event2.data.object as any;
+            const meta2 = cs2.metadata || {};
+            const completedListingId2 = meta2.listing_id;
+            if (completedListingId2) {
+              await db.execute(sql`
+                UPDATE exchange_listings SET status = 'sold'
+                WHERE id = ${completedListingId2} AND status IN ('reserved', 'active')
+              `).catch((e: any) => console.error('[Webhook-Secondary] Failed to mark listing as sold', e.message));
+              console.log(`[Webhook-Secondary] checkout.session.completed — marked listing ${completedListingId2} as sold`);
             }
           } else if ((event2.type as string) === 'transfer.created') {
             const transfer2 = event2.data.object as any;
@@ -2165,7 +2186,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         }
       }
       const stripeInit = await initStripe();
-      if (!stripeInit?.stripeSync) return res.status(503).json({ error: 'Payment processor unavailable.' });
+      if (!stripeInit?.stripeSync) {
+        await db.execute(sql`UPDATE exchange_listings SET status = 'active' WHERE id = ${reservedListingId} AND status = 'reserved'`).catch(() => {});
+        reservedListingId = null;
+        return res.status(503).json({ error: 'Payment processor unavailable.' });
+      }
       const stripe = stripeInit.stripeSync;
       const gross = serverPrice * parseFloat(volumeTonnes);
       const fee = gross * 0.0075;
@@ -2174,6 +2199,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const connectAccountId: string | null = (activeListing as any).stripe_connect_account_id || null;
       const connectReady: boolean = (activeListing as any).connect_onboarding_complete === true;
       if (connectAccountId && !connectReady) {
+        await db.execute(sql`UPDATE exchange_listings SET status = 'active' WHERE id = ${reservedListingId} AND status = 'reserved'`).catch(() => {});
+        reservedListingId = null;
         return res.status(400).json({ error: 'Seller Connect account exists but onboarding is not complete. Cannot process payment.' });
       }
       const paymentModel = connectAccountId ? 'destination_charge' : 'platform_collect';
