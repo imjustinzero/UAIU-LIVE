@@ -2622,9 +2622,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const tradeId = String(req.params.tradeId || '').trim();
       if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
 
-      const { signerFullName, consent, contractAcknowledged } = req.body;
-      if (!signerFullName || typeof signerFullName !== 'string' || signerFullName.trim().length < 2) {
-        return res.status(400).json({ error: 'signerFullName is required (min 2 characters).' });
+      const { fullName, signerFullName, consent, contractAcknowledged } = req.body;
+      const resolvedFullName = fullName || signerFullName;
+      if (!resolvedFullName || typeof resolvedFullName !== 'string' || resolvedFullName.trim().length < 2) {
+        return res.status(400).json({ error: 'fullName is required (min 2 characters).' });
       }
       if (consent !== true) {
         return res.status(400).json({ error: 'consent must be true — explicit consent is required.' });
@@ -2651,34 +2652,31 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(409).json({ error: 'You have already signed this trade.' });
       }
 
-      const documentHash = createHash('sha256').update(JSON.stringify({
-        trade_id: trade.tradeId,
-        standard: trade.standard,
-        volume_tonnes: trade.volumeTonnes,
-        price_per_tonne: trade.pricePerTonne,
-        gross_eur: trade.grossEur,
-        fee_eur: trade.feeEur,
-        buyer_email: buyerEmail,
-        seller_email: sellerEmail || null,
-      })).digest('hex');
+      const tradeSnapshot: Record<string, any> = {};
+      const tradeKeys = Object.keys(trade).sort();
+      for (const k of tradeKeys) {
+        tradeSnapshot[k] = trade[k] ?? null;
+      }
+      const documentHash = createHash('sha256').update(JSON.stringify(tradeSnapshot)).digest('hex');
 
-      const contractText = `I, ${signerFullName.trim()}, hereby confirm and acknowledge this carbon credit trade (ID: ${tradeId}) on the UAIU.LIVE/X platform. I agree to the terms of trade including the specified volume, pricing, and settlement conditions.`;
+      const contractText = `I, ${resolvedFullName.trim()}, hereby confirm and acknowledge this carbon credit trade (ID: ${tradeId}) on the UAIU.LIVE/X platform. I agree to the terms of trade including the specified volume, pricing, and settlement conditions.`;
       const contractTextHash = createHash('sha256').update(contractText).digest('hex');
 
       const signerIp = getClientIp(req);
       const signerUserAgent = String(req.headers['user-agent'] || 'unknown').slice(0, 512);
       const signedAt = new Date();
 
-      const retentionUntil = new Date(signedAt);
-      retentionUntil.setFullYear(retentionUntil.getFullYear() + 7);
+      const retentionDate = new Date(signedAt);
+      retentionDate.setFullYear(retentionDate.getFullYear() + 7);
+      const retentionUntil = retentionDate.toISOString().split('T')[0];
 
       const platformAttestation = createHash('sha256').update(
-        `${tradeId}|${email}|${signerFullName.trim()}|${documentHash}|${contractTextHash}|${signedAt.toISOString()}|${signerIp}`
+        `${tradeId}|${email}|${resolvedFullName.trim()}|${documentHash}|${contractTextHash}|${signedAt.toISOString()}|${signerIp}`
       ).digest('hex');
 
       await db.execute(sql`
         INSERT INTO trade_signatures (trade_id, document_hash, contract_text_hash, signer_full_name, signer_email, signer_ip, signer_user_agent, signed_at, explicit_consent, retention_until, platform_attestation)
-        VALUES (${tradeId}, ${documentHash}, ${contractTextHash}, ${signerFullName.trim()}, ${email}, ${signerIp}, ${signerUserAgent}, ${signedAt.toISOString()}, ${true}, ${retentionUntil.toISOString()}, ${platformAttestation})
+        VALUES (${tradeId}, ${documentHash}, ${contractTextHash}, ${resolvedFullName.trim()}, ${email}, ${signerIp}, ${signerUserAgent}, ${signedAt.toISOString()}, ${true}, ${retentionUntil}::date, ${platformAttestation})
       `);
 
       await logSecurityEvent({ email, eventType: 'trade_signed', req, detail: JSON.stringify({ trade_id: tradeId, document_hash: documentHash }) });
@@ -2686,12 +2684,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.status(201).json({
         success: true,
         trade_id: tradeId,
+        signer_full_name: resolvedFullName.trim(),
         signer_email: email,
         document_hash: documentHash,
         contract_text_hash: contractTextHash,
         platform_attestation: platformAttestation,
         signed_at: signedAt.toISOString(),
-        retention_until: retentionUntil.toISOString(),
+        retention_until: retentionUntil,
       });
     } catch (e: any) {
       if (e?.message?.includes('idx_trade_signatures_trade_email') || e?.code === '23505') {
@@ -2733,13 +2732,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         fully_signed: buyerSigned && (sellerSigned === true || sellerSigned === null),
         buyer_signed: buyerSigned,
         seller_signed: sellerSigned,
-        signatures: signatures.map((s: any) => ({
-          signer_email: s.signer_email,
-          signer_full_name: s.signer_full_name,
-          signed_at: s.signed_at,
-          document_hash: s.document_hash,
-          platform_attestation: s.platform_attestation,
-        })),
+        your_signature: signatures.find((s: any) => String(s.signer_email).toLowerCase() === email) ? (() => {
+          const own = signatures.find((s: any) => String(s.signer_email).toLowerCase() === email);
+          return {
+            signer_email: own.signer_email,
+            signer_full_name: own.signer_full_name,
+            signed_at: own.signed_at,
+            document_hash: own.document_hash,
+            platform_attestation: own.platform_attestation,
+          };
+        })() : null,
+        counterparty_signed: signatures.some((s: any) => String(s.signer_email).toLowerCase() !== email),
+        total_signatures: signatures.length,
       });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
@@ -2794,24 +2798,26 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     try {
       const result = await db.execute(sql`
         SELECT
-          COUNT(*)::int AS total_signatures,
-          COUNT(*) FILTER (WHERE retention_until > NOW())::int AS active_retention,
-          COUNT(*) FILTER (WHERE retention_until <= NOW())::int AS expired_retention,
+          COUNT(*)::int AS total_records,
+          COUNT(*) FILTER (WHERE retention_until > CURRENT_DATE)::int AS active_retention,
+          COUNT(*) FILTER (WHERE retention_until <= CURRENT_DATE)::int AS expired_retention,
+          COUNT(*) FILTER (WHERE retention_until > CURRENT_DATE AND retention_until <= CURRENT_DATE + INTERVAL '30 days')::int AS expiring_within_30_days,
           MIN(signed_at) AS earliest_signature,
           MAX(signed_at) AS latest_signature,
-          MIN(retention_until) AS earliest_expiry,
-          MAX(retention_until) AS latest_expiry
+          MIN(retention_until) AS earliest_retention_until,
+          MAX(retention_until) AS latest_retention_until
         FROM trade_signatures
       `);
       const stats = (result as any).rows?.[0] || {};
       res.json({
-        total_signatures: stats.total_signatures || 0,
+        total_records: stats.total_records || 0,
         active_retention: stats.active_retention || 0,
         expired_retention: stats.expired_retention || 0,
+        expiring_within_30_days: stats.expiring_within_30_days || 0,
         earliest_signature: stats.earliest_signature || null,
         latest_signature: stats.latest_signature || null,
-        earliest_expiry: stats.earliest_expiry || null,
-        latest_expiry: stats.latest_expiry || null,
+        earliest_retention_until: stats.earliest_retention_until || null,
+        latest_retention_until: stats.latest_retention_until || null,
       });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });

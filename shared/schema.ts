@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -530,10 +530,11 @@ export const tradeSignatures = pgTable("trade_signatures", {
   signerUserAgent: varchar("signer_user_agent").notNull(),
   signedAt: timestamp("signed_at").notNull().defaultNow(),
   explicitConsent: boolean("explicit_consent").notNull(),
-  retentionUntil: timestamp("retention_until").notNull(),
+  retentionUntil: date("retention_until").notNull(),
   platformAttestation: varchar("platform_attestation").notNull(),
 }, (table) => ({
   uniqueTradeSignerPair: unique('idx_trade_signatures_trade_email').on(table.tradeId, table.signerEmail),
+  consentMustBeTrue: check('chk_explicit_consent_true', sql`${table.explicitConsent} = true`),
 }));
 
 export const insertTradeSignatureSchema = createInsertSchema(tradeSignatures).omit({
