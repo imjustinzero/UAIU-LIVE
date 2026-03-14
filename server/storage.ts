@@ -31,10 +31,12 @@ import {
   type InsertExchangeTrade,
   type WebhookFailure,
   type InsertWebhookFailure,
+  type InsertAdminActionLog,
   users,
   matches,
   payoutRequests,
   actionLog,
+  actionLogs,
   posts,
   likes,
   comments,
@@ -71,6 +73,7 @@ export interface IStorage {
   
   getActionLog(limit: number): Promise<ActionLogEntry[]>;
   addActionLog(entry: InsertActionLog): Promise<void>;
+  addAdminActionLog(entry: InsertAdminActionLog): Promise<void>;
   
   // Social features
   createPost(post: InsertPost): Promise<Post>;
@@ -225,6 +228,10 @@ export class DbStorage implements IStorage {
 
   async addActionLog(entry: InsertActionLog): Promise<void> {
     await db.insert(actionLog).values(entry);
+  }
+
+  async addAdminActionLog(entry: InsertAdminActionLog): Promise<void> {
+    await db.insert(actionLogs).values(entry);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {

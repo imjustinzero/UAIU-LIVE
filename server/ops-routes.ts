@@ -11,22 +11,23 @@ import { storage } from './storage';
 
 async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any>; critical?: boolean }): Promise<void> {
   const adminKey = String(req.headers['x-admin-key'] || '');
-  const userId = adminKey
+  const adminId = adminKey
     ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
     : 'unknown';
-  const structuredMessage = JSON.stringify({
-    action: type,
-    affected_record_id: details?.affectedRecordId || null,
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  const entry = {
+    adminId,
+    actionType: type,
+    affectedRecordId: details?.affectedRecordId || null,
     notes: message,
-    ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
-    timestamp: new Date().toISOString(),
-    ...(details?.metadata || {}),
-  });
+    details: details?.metadata ? JSON.stringify(details.metadata) : null,
+    ip,
+  };
   if (details?.critical) {
-    await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
+    await storage.addAdminActionLog(entry);
   } else {
-    storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage })
-      .catch(err => console.error(`[AUDIT] Failed to write log for action ${type}:`, err));
+    storage.addAdminActionLog(entry)
+      .catch(err => console.error(`[AUDIT] Failed to write admin log for action ${type}:`, err));
   }
 }
 

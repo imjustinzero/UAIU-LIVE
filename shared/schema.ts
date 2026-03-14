@@ -526,6 +526,22 @@ export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inf
 export type AlertSubscriber = typeof alertSubscribers.$inferSelect;
 export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
 
+// ── Admin Action Audit Log ───────────────────────────────────────────────────
+export const actionLogs = pgTable("action_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminId: varchar("admin_id").notNull(),
+  actionType: varchar("action_type").notNull(),
+  affectedRecordId: varchar("affected_record_id"),
+  notes: text("notes"),
+  details: text("details"),
+  ip: varchar("ip"),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export const insertAdminActionLogSchema = createInsertSchema(actionLogs).omit({ id: true, timestamp: true });
+export type AdminActionLog = typeof actionLogs.$inferSelect;
+export type InsertAdminActionLog = z.infer<typeof insertAdminActionLogSchema>;
+
 // ── Backup & Disaster Recovery ──────────────────────────────────────────────
 export const backupLogs = pgTable("backup_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
