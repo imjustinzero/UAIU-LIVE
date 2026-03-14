@@ -345,6 +345,7 @@ export const exchangeTrades = pgTable("exchange_trades", {
   stripeSessionId: varchar("stripe_session_id"),
   buyerRegistryAccountId: varchar("buyer_registry_account_id"),
   buyerRegistryName: varchar("buyer_registry_name"),
+  sellerEmail: varchar("seller_email"),
   sellerRegistryName: varchar("seller_registry_name"),
   sellerRegistrySerial: varchar("seller_registry_serial"),
   vintageYear: integer("vintage_year"),

@@ -404,6 +404,18 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 const receiptHash = createHash('sha256').update(receiptData).digest('hex');
 
                 // Store trade record in DB
+                let sellerEmail = '';
+                let destinationTransferId = '';
+                if (meta.seller_profile_id) {
+                  const sellerProfileLookup = await db.execute(sql`
+                    SELECT exchange_account_email
+                    FROM seller_profiles
+                    WHERE id = ${meta.seller_profile_id}
+                    LIMIT 1
+                  `).catch(() => ({ rows: [] } as any));
+                  sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
+                }
+
                 storage.createExchangeTrade({
                   accountEmail:    email,
                   tradeId,
@@ -417,25 +429,13 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   stripeSessionId: cs.id,
                   buyerRegistryAccountId: meta.buyer_registry_account_id || null,
                   buyerRegistryName: meta.buyer_registry_name || null,
+                  sellerEmail:     sellerEmail || null,
                   sellerRegistryName: meta.seller_registry_name || null,
                   sellerRegistrySerial: meta.seller_registry_serial || null,
                   vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
                   paymentModel:    paymentModel,
                   status:          'completed',
                 }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
-
-                // Look up seller email and destination transfer if this was a destination charge
-                let sellerEmail = '';
-                let destinationTransferId = '';
-                if (meta.seller_profile_id) {
-                  const sellerProfileLookup = await db.execute(sql`
-                    SELECT exchange_account_email
-                    FROM seller_profiles
-                    WHERE id = ${meta.seller_profile_id}
-                    LIMIT 1
-                  `).catch(() => ({ rows: [] } as any));
-                  sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
-                }
                 if (paymentModel === 'destination_charge' && cs.payment_intent) {
                   try {
                     const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
@@ -2159,58 +2159,41 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const tradeId = String(req.params.tradeId || '').trim();
       if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
 
-      const tradeResult = await db.execute(sql`
-        SELECT
-          t.*,
-          sp.exchange_account_email AS seller_email_from_profile
-        FROM exchange_trades t
-        LEFT JOIN seller_profiles sp ON sp.id::text = t.seller_profile_id::text
-        WHERE t.trade_id = ${tradeId}
-        LIMIT 1
-      `);
-      const trade = (tradeResult as any).rows?.[0];
-      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+      const tradeRecord = await storage.getExchangeTradeByTradeId(tradeId);
+      if (!tradeRecord) return res.status(404).json({ error: 'Trade not found.' });
 
-      const buyerEmail = String(trade.account_email || '').toLowerCase();
-
-      const sellerEmailRes = await db.execute(sql`
-        SELECT seller_email FROM exchange_rfq_matches
-        WHERE rfq_id::text = ${tradeId}
-           OR listing_id::text = ${tradeId}
-        LIMIT 1
-      `);
-      const sellerEmailFromMatch = (sellerEmailRes as any).rows?.[0]?.seller_email || '';
-      const resolvedSellerEmail = String(
-        trade.seller_email_from_profile || sellerEmailFromMatch || ''
-      ).toLowerCase();
+      const buyerEmail = String(tradeRecord.accountEmail || '').toLowerCase();
+      const resolvedSellerEmail = String(tradeRecord.sellerEmail || '').toLowerCase();
 
       const isBuyer = email === buyerEmail;
-      const isSeller = resolvedSellerEmail && email === resolvedSellerEmail;
+      const isSeller = resolvedSellerEmail.length > 0 && email === resolvedSellerEmail;
       if (!isBuyer && !isSeller) {
         return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
       }
+
+      const trade = tradeRecord as any;
 
       const pdfBuffer = await generateTradePDF({
         trade_id:            tradeId,
         side:                trade.side || 'buy',
         standard:            trade.standard || '',
-        volume_tonnes:       Number(trade.volume_tonnes || 0),
-        price_eur_per_tonne: Number(trade.price_eur_per_tonne || 0),
-        gross_eur:           Number(trade.gross_eur || 0),
-        fee_eur:             Number(trade.fee_eur || 0),
-        receipt_hash:        trade.receipt_hash || '',
-        prev_receipt_hash:   trade.prev_receipt_hash || '',
-        payment_intent_id:   trade.payment_intent_id || '',
-        stripe_charge_id:    trade.stripe_charge_id || '',
-        settled_at:          trade.settled_at || trade.created_at || new Date().toISOString(),
+        volume_tonnes:       Number(trade.volumeTonnes || 0),
+        price_eur_per_tonne: Number(trade.pricePerTonne || 0),
+        gross_eur:           Number(trade.grossEur || 0),
+        fee_eur:             Number(trade.feeEur || 0),
+        receipt_hash:        trade.receiptHash || '',
+        prev_receipt_hash:   '',
+        payment_intent_id:   '',
+        stripe_charge_id:    '',
+        settled_at:          trade.createdAt ? String(trade.createdAt) : new Date().toISOString(),
         buyer_email:         buyerEmail,
         seller_email:        resolvedSellerEmail || undefined,
-        buyer_registry_account_id: trade.buyer_registry_account_id || '',
-        buyer_registry_name:       trade.buyer_registry_name || '',
-        seller_registry_name:      trade.seller_registry_name || '',
-        seller_registry_serial:    trade.seller_registry_serial || '',
-        vintage_year:              trade.vintage_year ? Number(trade.vintage_year) : undefined,
-        retirement_status:         trade.retirement_status || undefined,
+        buyer_registry_account_id: trade.buyerRegistryAccountId || '',
+        buyer_registry_name:       trade.buyerRegistryName || '',
+        seller_registry_name:      trade.sellerRegistryName || '',
+        seller_registry_serial:    trade.sellerRegistrySerial || '',
+        vintage_year:              trade.vintageYear ? Number(trade.vintageYear) : undefined,
+        retirement_status:         trade.retirementStatus || undefined,
       });
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -2723,38 +2706,42 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
       if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
 
+      const currentYear = new Date().getFullYear();
+      const validationErrors: string[] = [];
+      for (let i = 0; i < listings.length; i++) {
+        const item = listings[i];
+        const label = item?.name || `item[${i}]`;
+        if (!item.name || !item.standard || !item.pricePerTonne) {
+          validationErrors.push(`${label}: missing required fields (name, standard, pricePerTonne)`);
+        }
+        if (typeof item.standard !== 'string' || (item.standard && item.standard.trim().length === 0)) {
+          validationErrors.push(`${label}: standard must be a non-empty string`);
+        }
+        if (item.volume_tonnes !== undefined) {
+          const pv = parseFloat(item.volume_tonnes);
+          if (isNaN(pv) || pv <= 0) {
+            validationErrors.push(`${label}: volume_tonnes must be a positive number`);
+          }
+        }
+        if (!item.registry_serial) {
+          validationErrors.push(`${label}: registry_serial is required`);
+        }
+        if (!item.registry_name || !(ALLOWED_REGISTRY_NAMES as readonly string[]).includes(item.registry_name)) {
+          validationErrors.push(`${label}: registry_name must be one of: ${ALLOWED_REGISTRY_NAMES.join(', ')}`);
+        }
+        const vy = parseInt(item.vintage_year);
+        if (!vy || vy < 2010 || vy > currentYear) {
+          validationErrors.push(`${label}: vintage_year must be an integer between 2010 and ${currentYear}`);
+        }
+      }
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ error: 'Validation failed. No listings were inserted.', details: validationErrors });
+      }
+
       const inserted: string[] = [];
       const errors: string[]   = [];
-
-      const currentYear = new Date().getFullYear();
       for (const item of listings) {
         try {
-          if (!item.name || !item.standard || !item.pricePerTonne) {
-            errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
-            continue;
-          }
-          if (typeof item.standard !== 'string' || item.standard.trim().length === 0) {
-            errors.push(`Skipped (standard must be a non-empty string): ${item.name}`);
-            continue;
-          }
-          const parsedVolume = parseFloat(item.volume_tonnes);
-          if (item.volume_tonnes !== undefined && (isNaN(parsedVolume) || parsedVolume <= 0)) {
-            errors.push(`Skipped (volume_tonnes must be a positive number): ${item.name}`);
-            continue;
-          }
-          if (!item.registry_serial) {
-            errors.push(`Skipped (missing registry_serial): ${item.name}`);
-            continue;
-          }
-          if (!item.registry_name || !(ALLOWED_REGISTRY_NAMES as readonly string[]).includes(item.registry_name)) {
-            errors.push(`Skipped (invalid registry_name '${item.registry_name}'): ${item.name}. Allowed: ${ALLOWED_REGISTRY_NAMES.join(', ')}`);
-            continue;
-          }
-          const vintageYearNum = parseInt(item.vintage_year);
-          if (!vintageYearNum || vintageYearNum < 2010 || vintageYearNum > currentYear) {
-            errors.push(`Skipped (invalid vintage_year '${item.vintage_year}'): ${item.name}. Must be 2010–${currentYear}`);
-            continue;
-          }
           await storage.seedExchangeListings([{
             standard:          item.standard,
             badgeLabel:        item.badgeLabel || item.standard,
@@ -2767,7 +2754,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             isAcceptingOrders: true,
             registrySerial:    item.registry_serial || null,
             registryName:      item.registry_name || null,
-            vintageYear:       vintageYearNum,
+            vintageYear:       parseInt(item.vintage_year),
           }]);
           inserted.push(item.name);
         } catch (itemErr: any) {

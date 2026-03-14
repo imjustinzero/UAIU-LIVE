@@ -410,6 +410,8 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         askingPricePerTonne: String(askingPricePerTonne),
         projectOrigin,
         registrySerial: registrySerial || null,
+        registryName: registryName || null,
+        vintageYear: vintageYear ? parseInt(String(vintageYear)) : null,
       });
 
       const verificationResult = await db.execute(sql`
