@@ -16,7 +16,7 @@ import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
 import { insertAlertSubscriberSchema, insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
-import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
+import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, exchangeTrades, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import { registerOpsRoutes } from "./ops-routes";
@@ -2407,6 +2407,27 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  const complianceFieldsSchema = z.object({
+    operator_id: z.string().max(100).nullable().optional(),
+    installation_id: z.string().max(100).nullable().optional(),
+    activity_type: z.string().max(100).nullable().optional(),
+    verified_emissions_quantity: z.number().min(0).nullable().optional(),
+    corsia_eligible: z.boolean().nullable().optional(),
+    icao_operator_code: z.string().max(50).nullable().optional(),
+    eligible_program: z.string().max(200).nullable().optional(),
+    vessel_imo: z.string().max(50).nullable().optional(),
+    voyage_reference: z.string().max(100).nullable().optional(),
+    fuel_consumption_offset: z.number().min(0).nullable().optional(),
+  }).strict();
+
+  const snakeToCamel: Record<string, string> = {
+    operator_id: 'operatorId', installation_id: 'installationId',
+    activity_type: 'activityType', verified_emissions_quantity: 'verifiedEmissionsQuantity',
+    corsia_eligible: 'corsiaEligible', icao_operator_code: 'icaoOperatorCode',
+    eligible_program: 'eligibleProgram', vessel_imo: 'vesselImo',
+    voyage_reference: 'voyageReference', fuel_consumption_offset: 'fuelConsumptionOffset',
+  };
+
   app.patch('/api/exchange/trades/:tradeId/compliance', requireExchangeAuth, async (req, res) => {
     try {
       const email = String((req as any).exchangeEmail || '').toLowerCase();
@@ -2422,34 +2443,25 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
       }
 
-      const allowed = [
-        'operatorId', 'installationId', 'activityType', 'verifiedEmissionsQuantity',
-        'corsiaEligible', 'icaoOperatorCode', 'eligibleProgram',
-        'vesselImo', 'voyageReference', 'fuelConsumptionOffset',
-      ] as const;
-      const updates: Record<string, any> = {};
-      const colMap: Record<string, string> = {
-        operatorId: 'operator_id', installationId: 'installation_id',
-        activityType: 'activity_type', verifiedEmissionsQuantity: 'verified_emissions_quantity',
-        corsiaEligible: 'corsia_eligible', icaoOperatorCode: 'icao_operator_code',
-        eligibleProgram: 'eligible_program', vesselImo: 'vessel_imo',
-        voyageReference: 'voyage_reference', fuelConsumptionOffset: 'fuel_consumption_offset',
-      };
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      const parsed = complianceFieldsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid compliance fields.', details: parsed.error.flatten().fieldErrors });
       }
-      if (Object.keys(updates).length === 0) {
+
+      const data = parsed.data;
+      const setFields: Record<string, any> = {};
+      for (const [snakeKey, val] of Object.entries(data)) {
+        if (val !== undefined) {
+          const camelKey = snakeToCamel[snakeKey];
+          if (camelKey) setFields[camelKey] = val;
+        }
+      }
+
+      if (Object.keys(setFields).length === 0) {
         return res.status(400).json({ error: 'No valid compliance fields provided.' });
       }
 
-      const setClauses = Object.entries(updates).map(([k, v]) => {
-        const col = colMap[k];
-        if (v === null) return `${col} = NULL`;
-        if (typeof v === 'boolean') return `${col} = ${v}`;
-        if (typeof v === 'number') return `${col} = ${v}`;
-        return `${col} = '${String(v).replace(/'/g, "''")}'`;
-      });
-      await db.execute(sql.raw(`UPDATE exchange_trades SET ${setClauses.join(', ')} WHERE trade_id = '${tradeId.replace(/'/g, "''")}'`));
+      await db.update(exchangeTrades).set(setFields).where(eq(exchangeTrades.tradeId, tradeId));
 
       const updated = await storage.getExchangeTradeByTradeId(tradeId);
       res.json({ success: true, trade: updated });
@@ -2458,9 +2470,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  function computeExportHash(payload: Record<string, any>): string {
-    const stable = JSON.stringify(payload, Object.keys(payload).sort());
+  function computeExportHash(body: Record<string, any>): string {
+    const keys = Object.keys(body).sort();
+    const stable = JSON.stringify(body, keys);
     return createHash('sha256').update(stable).digest('hex');
+  }
+
+  function sendSignedExport(res: any, payload: Record<string, any>): void {
+    const hash = computeExportHash(payload);
+    payload.export_hash = hash;
+    res.setHeader('X-Export-Hash', hash);
+    res.json(payload);
   }
 
   app.get('/api/exchange/trades/:tradeId/export/eu-ets', requireExchangeAuth, async (req, res) => {
@@ -2483,29 +2503,27 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const payload: Record<string, any> = {
-        exportType: 'EU_ETS',
+        export_type: 'EU_ETS',
         platform: 'UAIU.LIVE/X',
-        tradeId: trade.tradeId,
+        trade_id: trade.tradeId,
         standard: trade.standard,
-        vintageYear: trade.vintageYear || null,
-        volumeTonnes: trade.volumeTonnes,
-        pricePerTonne: trade.pricePerTonne,
-        grossEur: trade.grossEur,
-        feeEur: trade.feeEur,
-        receiptHash: trade.receiptHash || null,
-        operatorId: trade.operatorId,
-        installationId: trade.installationId,
-        activityType: trade.activityType || null,
-        verifiedEmissionsQuantity: trade.verifiedEmissionsQuantity || null,
-        buyerEmail: buyerEmail,
-        sellerRegistrySerial: trade.sellerRegistrySerial || null,
-        sellerRegistryName: trade.sellerRegistryName || null,
-        retirementStatus: trade.retirementStatus || null,
-        exportTimestamp: new Date().toISOString(),
+        vintage_year: trade.vintageYear || null,
+        volume_tonnes: trade.volumeTonnes,
+        price_per_tonne: trade.pricePerTonne,
+        gross_eur: trade.grossEur,
+        fee_eur: trade.feeEur,
+        receipt_hash: trade.receiptHash || null,
+        operator_id: trade.operatorId,
+        installation_id: trade.installationId,
+        activity_type: trade.activityType || null,
+        verified_emissions_quantity: trade.verifiedEmissionsQuantity || null,
+        buyer_email: buyerEmail,
+        seller_registry_serial: trade.sellerRegistrySerial || null,
+        seller_registry_name: trade.sellerRegistryName || null,
+        retirement_status: trade.retirementStatus || null,
+        export_timestamp: new Date().toISOString(),
       };
-      const hash = computeExportHash(payload);
-      res.setHeader('X-Export-Hash', hash);
-      res.json({ ...payload, exportHash: hash });
+      sendSignedExport(res, payload);
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }
@@ -2531,28 +2549,26 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const payload: Record<string, any> = {
-        exportType: 'CORSIA',
+        export_type: 'CORSIA',
         platform: 'UAIU.LIVE/X',
-        tradeId: trade.tradeId,
+        trade_id: trade.tradeId,
         standard: trade.standard,
-        vintageYear: trade.vintageYear || null,
-        volumeTonnes: trade.volumeTonnes,
-        pricePerTonne: trade.pricePerTonne,
-        grossEur: trade.grossEur,
-        feeEur: trade.feeEur,
-        receiptHash: trade.receiptHash || null,
-        corsiaEligible: true,
-        icaoOperatorCode: trade.icaoOperatorCode || null,
-        eligibleProgram: trade.eligibleProgram || null,
-        buyerEmail: buyerEmail,
-        sellerRegistrySerial: trade.sellerRegistrySerial || null,
-        sellerRegistryName: trade.sellerRegistryName || null,
-        retirementStatus: trade.retirementStatus || null,
-        exportTimestamp: new Date().toISOString(),
+        vintage_year: trade.vintageYear || null,
+        volume_tonnes: trade.volumeTonnes,
+        price_per_tonne: trade.pricePerTonne,
+        gross_eur: trade.grossEur,
+        fee_eur: trade.feeEur,
+        receipt_hash: trade.receiptHash || null,
+        corsia_eligible: true,
+        icao_operator_code: trade.icaoOperatorCode || null,
+        eligible_program: trade.eligibleProgram || null,
+        buyer_email: buyerEmail,
+        seller_registry_serial: trade.sellerRegistrySerial || null,
+        seller_registry_name: trade.sellerRegistryName || null,
+        retirement_status: trade.retirementStatus || null,
+        export_timestamp: new Date().toISOString(),
       };
-      const hash = computeExportHash(payload);
-      res.setHeader('X-Export-Hash', hash);
-      res.json({ ...payload, exportHash: hash });
+      sendSignedExport(res, payload);
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }
@@ -2578,28 +2594,26 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const payload: Record<string, any> = {
-        exportType: 'IMO_MRV',
+        export_type: 'IMO_MRV',
         platform: 'UAIU.LIVE/X',
-        tradeId: trade.tradeId,
+        trade_id: trade.tradeId,
         standard: trade.standard,
-        vintageYear: trade.vintageYear || null,
-        volumeTonnes: trade.volumeTonnes,
-        pricePerTonne: trade.pricePerTonne,
-        grossEur: trade.grossEur,
-        feeEur: trade.feeEur,
-        receiptHash: trade.receiptHash || null,
-        vesselImo: trade.vesselImo,
-        voyageReference: trade.voyageReference || null,
-        fuelConsumptionOffset: trade.fuelConsumptionOffset || null,
-        buyerEmail: buyerEmail,
-        sellerRegistrySerial: trade.sellerRegistrySerial || null,
-        sellerRegistryName: trade.sellerRegistryName || null,
-        retirementStatus: trade.retirementStatus || null,
-        exportTimestamp: new Date().toISOString(),
+        vintage_year: trade.vintageYear || null,
+        volume_tonnes: trade.volumeTonnes,
+        price_per_tonne: trade.pricePerTonne,
+        gross_eur: trade.grossEur,
+        fee_eur: trade.feeEur,
+        receipt_hash: trade.receiptHash || null,
+        vessel_imo: trade.vesselImo,
+        voyage_reference: trade.voyageReference || null,
+        fuel_consumption_offset: trade.fuelConsumptionOffset || null,
+        buyer_email: buyerEmail,
+        seller_registry_serial: trade.sellerRegistrySerial || null,
+        seller_registry_name: trade.sellerRegistryName || null,
+        retirement_status: trade.retirementStatus || null,
+        export_timestamp: new Date().toISOString(),
       };
-      const hash = computeExportHash(payload);
-      res.setHeader('X-Export-Hash', hash);
-      res.json({ ...payload, exportHash: hash });
+      sendSignedExport(res, payload);
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }
