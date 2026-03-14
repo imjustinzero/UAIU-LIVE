@@ -300,6 +300,7 @@ export const exchangeListings = pgTable("exchange_listings", {
   pricePerTonne: real("price_per_tonne").notNull(),
   changePercent: real("change_percent").notNull().default(0),
   changeDirection: varchar("change_direction").notNull().default('up'),
+  registryStatus: varchar("registry_status").notNull().default('active'),
   status: varchar("status").notNull().default('active'),
   isAcceptingOrders: boolean("is_accepting_orders").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

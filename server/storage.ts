@@ -561,11 +561,11 @@ export class DbStorage implements IStorage {
   async getExchangeListings(standard?: string): Promise<ExchangeListing[]> {
     if (standard && standard !== 'ALL') {
       return db.select().from(exchangeListings)
-        .where(and(eq(exchangeListings.status, 'active'), eq(exchangeListings.standard, standard)))
+        .where(and(eq(exchangeListings.status, 'active'), eq(exchangeListings.registryStatus, 'active'), eq(exchangeListings.standard, standard)))
         .orderBy(desc(exchangeListings.pricePerTonne));
     }
     return db.select().from(exchangeListings)
-      .where(eq(exchangeListings.status, 'active'))
+      .where(and(eq(exchangeListings.status, 'active'), eq(exchangeListings.registryStatus, 'active')))
       .orderBy(desc(exchangeListings.pricePerTonne));
   }
 
@@ -743,6 +743,7 @@ export class DbStorage implements IStorage {
       LEFT JOIN seller_profiles sp ON sp.id = el.seller_profile_id
       WHERE el.standard = ${standard}
         AND el.status = 'active'
+        AND el.registry_status = 'active'
       ORDER BY el.created_at DESC
     `);
     return ((result as any).rows || []) as ExchangeListing[];
