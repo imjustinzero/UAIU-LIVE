@@ -384,8 +384,8 @@ export default function Exchange() {
   const [location] = useLocation();
   const { session, profile, sessionExpired, clearSessionExpired } = useAuth();
   useSEO({
-    title: 'UAIU.LIVE/X — Carbon Procurement Desk',
-    description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — institutional-grade audit artifacts, Stripe escrow settlement, and AI due diligence on every listing.',
+    title: 'Carbon Credit Exchange',
+    description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
     path: '/x',
   });
   const cursorRef = useRef<HTMLDivElement>(null);
@@ -509,8 +509,9 @@ export default function Exchange() {
   const [instSuccess, setInstSuccess] = useState(false);
 
   const [tradeSuccessBanner, setTradeSuccessBanner] = useState<{ show: boolean; tradeId: string } | null>(null);
+  const [kycDoneReturn, setKycDoneReturn] = useState(false);
+  const kycPollStartedRef = useRef(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
-  const [pendingKycPoll, setPendingKycPoll] = useState(false);
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
@@ -574,34 +575,32 @@ export default function Exchange() {
       .finally(() => setDbTradesLoading(false));
   }, [sessionAccount, exchangeToken]);
 
-  // Check URL for trade=success (return from Stripe Checkout)
+  // Check URL params (returns from Stripe)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('trade') === 'success') {
+    const hasTradeSuccess = params.get('trade') === 'success';
+    const hasKycDone = params.get('kyc') === 'done';
+
+    if (!hasTradeSuccess && !hasKycDone) return;
+
+    if (hasTradeSuccess) {
       const id = params.get('id') || '';
       setTradeSuccessBanner({ show: true, tradeId: id });
-      window.history.replaceState({}, '', '/x');
-      if (sessionAccount?.email) {
-        setTimeout(() => {
-          const tok2 = exchangeToken || getExchangeTokenStorage();
-          fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} }).then(r => r.ok ? r.json() : []).then((data: any[]) => {
-            setDbTrades(Array.isArray(data) ? data : []);
-          }).catch(() => {});
-        }, 2000);
-      }
     }
-    if (params.get('kyc') === 'done') {
+    if (hasKycDone) {
+      setKycDoneReturn(true);
       showToast('Identity verification submitted. Checking verification status...');
-      setPendingKycPoll(true);
-      window.history.replaceState({}, '', '/x');
     }
+
+    window.history.replaceState({}, '', '/x');
   }, []);
 
   useEffect(() => {
-    if (!pendingKycPoll) return;
+    if (!kycDoneReturn || kycPollStartedRef.current) return;
     const sessionId = sessionAccount?.kycProviderReference;
     if (!sessionAccount?.email || !sessionId) return;
 
+    kycPollStartedRef.current = true;
     let attempts = 0;
     const timer = window.setInterval(async () => {
       attempts += 1;
@@ -611,21 +610,37 @@ export default function Exchange() {
         if (body.status === 'verified') {
           setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'verified', kycCompletedAt: new Date().toISOString() } : prev);
           showToast('Identity verification completed. Trading unlocked.');
-          setPendingKycPoll(false);
           window.clearInterval(timer);
+          setKycDoneReturn(false);
           return;
         }
-      } catch {}
-
+      } catch {
+        // no-op
+      }
       if (attempts >= 10) {
-        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
-        setPendingKycPoll(false);
         window.clearInterval(timer);
+        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+        setKycDoneReturn(false);
       }
     }, 3000);
 
     return () => window.clearInterval(timer);
-  }, [pendingKycPoll, sessionAccount?.email, sessionAccount?.kycProviderReference]);
+  }, [kycDoneReturn, sessionAccount?.email, sessionAccount?.kycProviderReference, exchangeToken]);
+
+
+  useEffect(() => {
+    if (!tradeSuccessBanner?.show || !sessionAccount?.email) return;
+    const timeout = window.setTimeout(() => {
+      const tok2 = exchangeToken || getExchangeTokenStorage();
+      fetch(`/api/exchange/trades`, { headers: tok2 ? { 'X-Exchange-Token': tok2 } : {} })
+        .then(r => r.ok ? r.json() : [])
+        .then((data: any[]) => {
+          setDbTrades(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => window.clearTimeout(timeout);
+  }, [tradeSuccessBanner?.show, sessionAccount?.email, exchangeToken]);
 
   function exchangeHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const token = exchangeToken || getExchangeTokenStorage();
@@ -835,7 +850,7 @@ export default function Exchange() {
 
     if (sessionAccount?.email && mode === 'buy') {
       try {
-        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: (sessionAccount as any)?.registryAccountId || '', registryName: (sessionAccount as any)?.registryName || '', ddAcknowledged: true }) });
+        const res = await fetch('/api/exchange/spot-checkout', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ standard: currentListing?.standard || 'EU ETS', volumeTonnes: tradeQty, tradeId, side: mode.toUpperCase(), registryAccountId: (sessionAccount as any)?.registryAccountId || '', registryName: (sessionAccount as any)?.registryName || '' }) });
         const data = await res.json();
         if (data.url) { window.location.href = data.url; return; }
       } catch (e) {
