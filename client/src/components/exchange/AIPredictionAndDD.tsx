@@ -362,6 +362,7 @@ export function DueDiligenceReport({
   const [report, setReport] = useState<DDReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [reportUnavailable, setReportUnavailable] = useState(false);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -384,8 +385,9 @@ export function DueDiligenceReport({
         if (data.report) { setReport(data.report); setGenerated(true); setLoading(false); return; }
       }
     } catch {}
-    setReport(getMockReport(listing, currentIndexPrice));
+    setReport(null);
     setGenerated(true);
+    setReportUnavailable(true);
     setLoading(false);
   };
 
@@ -509,6 +511,21 @@ export function DueDiligenceReport({
     );
   }
 
+  if (reportUnavailable) {
+    return (
+      <div style={overlay}>
+        <div style={{ background: isDark ? "#0d1b2e" : "#ffffff", border: "1px solid rgba(212,168,67,0.3)", borderRadius: "16px", maxWidth: "520px", width: "100%", padding: "24px" }}>
+          <h3 style={{ marginTop: 0 }}>Report Unavailable</h3>
+          <p style={{ color: isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)" }}>We could not generate a due diligence report right now.</p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={generateReport} style={{ background: "#D4A843", border: "none", color: "#060810", padding: "10px 12px", fontWeight: 700, cursor: "pointer" }}>Retry</button>
+            <button onClick={handleClose} style={{ background: "transparent", border: "1px solid rgba(212,168,67,0.3)", color: "#D4A843", padding: "10px 12px", cursor: "pointer" }}>Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!report) return null;
 
   return (
@@ -587,7 +604,19 @@ export function DueDiligenceReport({
           </div>
 
           {/* Sections */}
-          {report.sections.map((s, i) => (
+          {(() => {
+            const required = [
+              "Project Summary",
+              "Registry Status",
+              "Additionality Assessment",
+              "Risk Flags",
+              "Recommendation",
+            ];
+            const mappedSections = required.map((title) => {
+              const found = report.sections.find((sec) => sec.title.toLowerCase().includes(title.toLowerCase().split(" ")[0]));
+              return found || { title, content: report.summary };
+            });
+            return mappedSections.map((s, i) => (
             <div key={i} style={{ marginBottom:'20px',
               paddingBottom:'20px',
               borderBottom: i<report.sections.length-1 ? '1px solid rgba(212,168,67,0.08)' : 'none' }}>
@@ -607,7 +636,8 @@ export function DueDiligenceReport({
                 }}
               />
             </div>
-          ))}
+            ));
+          })()}
 
           {/* Action buttons */}
           <div style={{ display:'flex', gap:'10px', marginTop:'24px', flexWrap:'wrap' }}>

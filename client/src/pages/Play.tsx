@@ -17,6 +17,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { MatchmakingLobby } from "@/components/MatchmakingLobby";
 import { getSessionId, getUserData, setUserData, clearAllSession } from "@/lib/sessionHelper";
 import logoImg from "@assets/IMG_2786_1763969320612.jpeg";
+import DemoRequestModal from "@/components/DemoRequestModal";
 
 interface User {
   id: string;
@@ -63,6 +64,7 @@ export default function Play() {
   const [betAmount, setBetAmount] = useState<number>(1);
   const [availableGames, setAvailableGames] = useState<Game[]>([]);
   const [queuedPlayers, setQueuedPlayers] = useState<any[]>([]);
+  const [showDemoModal, setShowDemoModal] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -310,6 +312,9 @@ export default function Play() {
                 <Button variant="outline" size="sm" data-testid="button-contact">
                   Contact
                 </Button>
+                <Button size="sm" onClick={() => setShowDemoModal(true)} id="request-demo">Request a Demo</Button>
+                <a href="/maritime" className="text-sm text-muted-foreground">Solutions</a>
+                <a href="/navigator" className="text-sm text-muted-foreground">Tools</a>
               </a>
               {user && (
                 <Badge variant="secondary" className="text-base font-semibold hidden sm:flex">
@@ -992,6 +997,46 @@ export default function Play() {
           </div>
           </div>
         )}
+
+        <section className="container mx-auto px-4 py-14">
+          <h2 className="text-3xl font-bold mb-4">Verified Partners</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { initials: 'SX', name: 'Swiss X REDD UK Limited', type: 'Credit Supplier — MOU', href: '/partners/swiss-x-redd-uk-limited' },
+              { initials: 'TP', name: 'Future Partner Slot', type: 'Pending Partner', href: '/partners/future-1' },
+              { initials: 'TP', name: 'Future Partner Slot', type: 'Pending Partner', href: '/partners/future-2' },
+            ].map((p) => (
+              <Card key={p.href} className="p-5">
+                <div className="w-12 h-12 rounded bg-primary/10 border border-primary/30 flex items-center justify-center font-bold mb-3">{p.initials}</div>
+                <h3 className="font-semibold">{p.name}</h3>
+                <p className="text-sm text-muted-foreground">{p.type}</p>
+                <a href={p.href} className="text-primary text-sm">View MOU</a>
+              </Card>
+            ))}
+          </div>
+          <Button className="mt-4" variant="outline">Become a Partner</Button>
+        </section>
+
+        <section className="container mx-auto px-4 pb-14">
+          <Card className="p-6 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-2xl font-semibold">UAIU Navigator</h3>
+              <p className="text-muted-foreground">Verra registration made simple</p>
+            </div>
+            <a href="/navigator" className="text-primary font-semibold">Launch Tool →</a>
+          </Card>
+        </section>
+
+        <section className="w-full bg-primary text-primary-foreground py-10 mt-8">
+          <div className="container mx-auto px-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-2xl font-semibold">Need help planning your carbon strategy?</h3>
+              <p>Get a desk-led walkthrough for buying, selling, and reporting.</p>
+            </div>
+            <Button variant="secondary" onClick={() => setShowDemoModal(true)}>Request a Demo</Button>
+          </div>
+        </section>
+
       </main>
 
       <AuthModal
@@ -1001,13 +1046,16 @@ export default function Play() {
       />
 
       {user && (
-        <PayoutModal
+        <>
+          <DemoRequestModal open={showDemoModal} onClose={() => setShowDemoModal(false)} />
+          <PayoutModal
           open={showPayoutModal}
           onClose={() => setShowPayoutModal(false)}
           credits={user.credits}
           userId={user.id}
           onPayoutSuccess={handlePayoutSuccess}
         />
+        </>
       )}
     </div>
   );
