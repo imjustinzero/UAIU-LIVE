@@ -2662,7 +2662,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const contractText = `I, ${resolvedFullName.trim()}, hereby confirm and acknowledge this carbon credit trade (ID: ${tradeId}) on the UAIU.LIVE/X platform. I agree to the terms of trade including the specified volume, pricing, and settlement conditions.`;
       const contractTextHash = createHash('sha256').update(contractText).digest('hex');
 
-      const signerIp = getClientIp(req);
+      const signerIp = req.ip || req.socket?.remoteAddress || 'unknown';
       const signerUserAgent = String(req.headers['user-agent'] || 'unknown').slice(0, 512);
       const signedAt = new Date();
 
