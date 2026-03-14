@@ -173,3 +173,20 @@ CREATE TABLE IF NOT EXISTS calendar_subscriptions (
   created_at TIMESTAMPTZ DEFAULT now(),
   active BOOLEAN DEFAULT true
 );
+
+CREATE TABLE IF NOT EXISTS demo_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  company TEXT NOT NULL,
+  role TEXT NOT NULL,
+  email TEXT NOT NULL,
+  interest TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS navigator_waitlist (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
