@@ -2942,10 +2942,32 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!name || !company || !role || !email || !interest) {
         return res.status(400).json({ error: 'All fields are required.' });
       }
-      const supabase = req.app.locals.supabase;
-      if (!supabase) return res.status(500).json({ error: 'Supabase unavailable.' });
-      const { error } = await supabase.from('demo_requests').insert({ name, company, role, email, interest });
-      if (error) return res.status(500).json({ error: error.message });
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS demo_requests (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          company TEXT NOT NULL,
+          role TEXT NOT NULL,
+          email TEXT NOT NULL,
+          interest TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await db.execute(sql`
+        INSERT INTO demo_requests (name, company, role, email, interest)
+        VALUES (${name}, ${company}, ${role}, ${email}, ${interest})
+      `);
+
+      sendExchangeEmail('Demo Request Submission', {
+        Name: name,
+        Company: company,
+        Role: role,
+        Email: email,
+        Interest: interest,
+      }).catch((err) => console.error('[Demo Request Email]', safeError(err)));
+
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });

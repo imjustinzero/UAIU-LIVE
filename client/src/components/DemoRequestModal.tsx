@@ -41,12 +41,16 @@ export default function DemoRequestModal({ open, onClose }: DemoRequestModalProp
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Could not submit request.");
+        const apiError = typeof data?.error === "string" ? data.error : "";
+        const friendlyError = apiError && !/TypeError|ReferenceError|SyntaxError|Unhandled|stack|Cannot\s+/i.test(apiError)
+          ? apiError
+          : "We couldn't submit your request right now. Please try again in a moment.";
+        setError(friendlyError);
         return;
       }
       setSuccess(true);
     } catch {
-      setError("Network error. Please try again.");
+      setError("We couldn't submit your request right now. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
