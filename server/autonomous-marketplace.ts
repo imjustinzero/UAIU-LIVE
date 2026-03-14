@@ -997,6 +997,59 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
     }
   });
 
+  // Admin queue action — triage items in listing review queue or exception queue
+  app.post("/api/admin/autonomous-marketplace/queue", requireAdminHeader, async (req, res) => {
+    try {
+      const { itemId, queueType, action, note } = req.body;
+      if (!itemId || !queueType || !action) {
+        return res.status(400).json({ error: 'itemId, queueType, and action are required.' });
+      }
+      const allowedTypes = ['listing_review', 'exception'];
+      const allowedActions = ['approve', 'reject', 'escalate', 'flag', 'dismiss'];
+      if (!allowedTypes.includes(queueType)) {
+        return res.status(400).json({ error: `queueType must be one of: ${allowedTypes.join(', ')}` });
+      }
+      if (!allowedActions.includes(action)) {
+        return res.status(400).json({ error: `action must be one of: ${allowedActions.join(', ')}` });
+      }
+
+      // Audit intent BEFORE mutation — failure blocks the operation
+      await logAdminAction(req, 'queue_action', `Admin queue action — type: ${queueType}, item: ${itemId}, action: ${action}`, {
+        affectedRecordId: itemId,
+        critical: true,
+        metadata: { queue_type: queueType, action, note: note || null },
+      });
+
+      if (queueType === 'listing_review') {
+        await db.execute(sql`
+          UPDATE exchange_listing_review_queue
+          SET decision = ${action}, updated_at = NOW()
+          WHERE id = ${itemId}
+        `);
+      } else if (queueType === 'exception') {
+        const who = String(req.headers['x-admin-key'] ? 'admin_key_holder' : 'admin');
+        const exceptionStatus = action === 'dismiss' ? 'resolved' : action;
+        const resolvedAt = action === 'dismiss' ? new Date() : null;
+        await db.execute(sql`
+          UPDATE exchange_exception_queue
+          SET status = ${exceptionStatus},
+              resolved_at = ${resolvedAt},
+              resolved_by = ${who}
+          WHERE id = ${itemId}
+        `);
+      }
+
+      logAdminAction(req, 'queue_action_complete', `Queue action completed — type: ${queueType}, item: ${itemId}, action: ${action}`, {
+        affectedRecordId: itemId,
+        metadata: { queue_type: queueType, action },
+      });
+
+      return res.json({ success: true, itemId, queueType, action });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
   // Exception resolution
   app.post("/api/admin/exceptions/:id/resolve", requireAdminHeader, async (req, res) => {
     try {

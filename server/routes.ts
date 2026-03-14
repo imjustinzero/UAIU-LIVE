@@ -2043,7 +2043,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account || account.kycStatus !== 'verified') {
-        return res.status(403).json({ error: 'KYC verification required before trading.' });
+        return res.status(403).json({ error: 'KYC verification required.' });
       }
       const buyerRegistryAccountId = registryAccountId || (account as any).registryAccountId || '';
       const buyerRegistryName = registryName || (account as any).registryName || '';
@@ -2309,7 +2309,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const account = await storage.getExchangeAccountByEmail(email);
       if (!account || account.kycStatus !== 'verified') {
-        return res.status(403).json({ error: 'KYC verification required before trading.' });
+        return res.status(403).json({ error: 'KYC verification required.' });
       }
 
       const trade = await storage.getExchangeTradeByTradeId(tradeId);
