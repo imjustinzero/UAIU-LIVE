@@ -578,6 +578,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           UPDATE exchange_rfqs
           SET status = 'accepted'
           WHERE id = ${rfqId} AND status = 'active'
+            AND (expires_at IS NULL OR expires_at > NOW())
           RETURNING id
         ),
         new_match AS (
