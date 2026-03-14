@@ -519,6 +519,27 @@ export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRe
   id: true,
   createdAt: true,
 });
+export const tradeSignatures = pgTable("trade_signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tradeId: varchar("trade_id").notNull(),
+  documentHash: varchar("document_hash").notNull(),
+  contractTextHash: varchar("contract_text_hash").notNull(),
+  signerFullName: varchar("signer_full_name").notNull(),
+  signerEmail: varchar("signer_email").notNull(),
+  signerIp: varchar("signer_ip").notNull(),
+  signerUserAgent: varchar("signer_user_agent").notNull(),
+  signedAt: timestamp("signed_at").notNull().defaultNow(),
+  explicitConsent: boolean("explicit_consent").notNull(),
+  retentionUntil: timestamp("retention_until").notNull(),
+  platformAttestation: varchar("platform_attestation").notNull(),
+}, (table) => ({
+  uniqueTradeSignerPair: unique('idx_trade_signatures_trade_email').on(table.tradeId, table.signerEmail),
+}));
+
+export const insertTradeSignatureSchema = createInsertSchema(tradeSignatures).omit({
+  id: true,
+});
+
 export const insertAlertSubscriberSchema = createInsertSchema(alertSubscribers).omit({
   id: true,
   createdAt: true,
@@ -541,6 +562,8 @@ export type InsertExchangeTrade = z.infer<typeof insertExchangeTradeSchema>;
 export type TradeRetirementCertificate = typeof tradeRetirementCertificates.$inferSelect;
 export type AlertSubscriber = typeof alertSubscribers.$inferSelect;
 export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
+export type TradeSignature = typeof tradeSignatures.$inferSelect;
+export type InsertTradeSignature = z.infer<typeof insertTradeSignatureSchema>;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
