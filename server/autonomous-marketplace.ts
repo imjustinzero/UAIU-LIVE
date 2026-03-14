@@ -1,10 +1,26 @@
 import type { Express, Request } from "express";
 import rateLimit from "express-rate-limit";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
 import { requireAdminHeader, requireExchangeAuth, safeError } from "./exchange-auth";
 import { createHash } from "crypto";
+
+const LISTING_ALLOWED_REGISTRIES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
+
+const listingSubmitSchema = z.object({
+  orgName: z.string().min(1),
+  contactName: z.string().min(1),
+  standard: z.string().min(1, 'standard must be a non-empty string'),
+  creditType: z.string().min(1),
+  volumeTonnes: z.coerce.number().positive('volume_tonnes must be a positive number'),
+  askingPricePerTonne: z.coerce.number().positive(),
+  projectOrigin: z.string().min(1),
+  registrySerial: z.string().optional().nullable(),
+  registryName: z.enum(LISTING_ALLOWED_REGISTRIES, { errorMap: () => ({ message: `registry_name must be one of: ${LISTING_ALLOWED_REGISTRIES.join(', ')}` }) }),
+  vintageYear: z.coerce.number().int().min(2010).max(new Date().getFullYear(), { message: `vintage_year must be between 2010 and ${new Date().getFullYear()}` }),
+});
 import {
   createConnectAccount,
   createOnboardingLink,
@@ -353,6 +369,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
   app.post("/api/seller/listing/auto-submit", requireExchangeAuth, async (req, res) => {
     try {
       const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const parsed = listingSubmitSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        const details = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`);
+        return res.status(400).json({ error: "Validation failed.", details });
+      }
       const {
         orgName,
         contactName,
@@ -364,30 +385,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         registrySerial,
         registryName,
         vintageYear,
-      } = req.body || {};
-
-      if (!orgName || !contactName || !standard || !creditType || !volumeTonnes || !askingPricePerTonne || !projectOrigin) {
-        return res.status(400).json({ error: "Missing required listing fields." });
-      }
-
-      const LISTING_ALLOWED_REGISTRIES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'];
-      const parsedVolume = parseFloat(String(volumeTonnes));
-      if (isNaN(parsedVolume) || parsedVolume <= 0) {
-        return res.status(400).json({ error: "volume_tonnes must be a positive number." });
-      }
-      if (String(standard).trim().length === 0) {
-        return res.status(400).json({ error: "standard must be a non-empty string." });
-      }
-      if (registryName !== undefined && !LISTING_ALLOWED_REGISTRIES.includes(String(registryName))) {
-        return res.status(400).json({ error: `registry_name must be one of: ${LISTING_ALLOWED_REGISTRIES.join(', ')}.` });
-      }
-      if (vintageYear !== undefined) {
-        const currentYear = new Date().getFullYear();
-        const vy = parseInt(String(vintageYear));
-        if (isNaN(vy) || vy < 2010 || vy > currentYear) {
-          return res.status(400).json({ error: `vintage_year must be an integer between 2010 and ${currentYear}.` });
-        }
-      }
+      } = parsed.data;
 
       const sellerProfileResult = await db.execute(sql`
         SELECT * FROM seller_profiles WHERE exchange_account_email = ${email} LIMIT 1

@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import express from "express";
+import { z } from "zod";
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import rateLimit from "express-rate-limit";
 import { requireExchangeAuth, requireAdminHeader, createExchangeSession, safeError, verifyExchangeToken } from "./exchange-auth";
@@ -34,6 +35,20 @@ import { getLivePrices, getPriceHistory } from "./exchange-prices";
 import { registerNavigatorRoutes } from "./navigator-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
+
+const partnerListingItemSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  standard: z.string().min(1, 'standard must be a non-empty string'),
+  pricePerTonne: z.coerce.number().positive('pricePerTonne must be a positive number'),
+  volume_tonnes: z.coerce.number().positive('volume_tonnes must be a positive number'),
+  registry_serial: z.string().min(1, 'registry_serial is required'),
+  registry_name: z.enum(ALLOWED_REGISTRY_NAMES, { errorMap: () => ({ message: `registry_name must be one of: ${ALLOWED_REGISTRY_NAMES.join(', ')}` }) }),
+  vintage_year: z.coerce.number().int().min(2010).max(new Date().getFullYear(), { message: `vintage_year must be between 2010 and ${new Date().getFullYear()}` }),
+  badgeLabel: z.string().optional(),
+  origin: z.string().optional(),
+  changePercent: z.coerce.number().optional(),
+  changeDirection: z.string().optional(),
+});
 
 async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any>; critical?: boolean }): Promise<void> {
   const adminKey = String(req.headers['x-admin-key'] || '');
@@ -2706,32 +2721,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!Array.isArray(listings) || listings.length === 0) return res.status(400).json({ error: 'listings array required' });
       if (listings.length > 100) return res.status(400).json({ error: 'Max 100 listings per request' });
 
-      const currentYear = new Date().getFullYear();
       const validationErrors: string[] = [];
+      const validatedItems: z.infer<typeof partnerListingItemSchema>[] = [];
       for (let i = 0; i < listings.length; i++) {
-        const item = listings[i];
-        const label = item?.name || `item[${i}]`;
-        if (!item.name || !item.standard || !item.pricePerTonne) {
-          validationErrors.push(`${label}: missing required fields (name, standard, pricePerTonne)`);
-        }
-        if (typeof item.standard !== 'string' || (item.standard && item.standard.trim().length === 0)) {
-          validationErrors.push(`${label}: standard must be a non-empty string`);
-        }
-        if (item.volume_tonnes !== undefined) {
-          const pv = parseFloat(item.volume_tonnes);
-          if (isNaN(pv) || pv <= 0) {
-            validationErrors.push(`${label}: volume_tonnes must be a positive number`);
+        const parsed = partnerListingItemSchema.safeParse(listings[i]);
+        if (!parsed.success) {
+          const label = listings[i]?.name || `item[${i}]`;
+          for (const issue of parsed.error.issues) {
+            validationErrors.push(`${label}: ${issue.path.join('.')}: ${issue.message}`);
           }
-        }
-        if (!item.registry_serial) {
-          validationErrors.push(`${label}: registry_serial is required`);
-        }
-        if (!item.registry_name || !(ALLOWED_REGISTRY_NAMES as readonly string[]).includes(item.registry_name)) {
-          validationErrors.push(`${label}: registry_name must be one of: ${ALLOWED_REGISTRY_NAMES.join(', ')}`);
-        }
-        const vy = parseInt(item.vintage_year);
-        if (!vy || vy < 2010 || vy > currentYear) {
-          validationErrors.push(`${label}: vintage_year must be an integer between 2010 and ${currentYear}`);
+        } else {
+          validatedItems.push(parsed.data);
         }
       }
       if (validationErrors.length > 0) {
@@ -2740,21 +2740,21 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const inserted: string[] = [];
       const errors: string[]   = [];
-      for (const item of listings) {
+      for (const item of validatedItems) {
         try {
           await storage.seedExchangeListings([{
             standard:          item.standard,
             badgeLabel:        item.badgeLabel || item.standard,
             name:              item.name,
             origin:            item.origin || 'Caribbean Basin',
-            pricePerTonne:     parseFloat(item.pricePerTonne),
-            changePercent:     parseFloat(item.changePercent) || 0,
+            pricePerTonne:     item.pricePerTonne,
+            changePercent:     item.changePercent || 0,
             changeDirection:   item.changeDirection || 'up',
             status:            'active',
             isAcceptingOrders: true,
-            registrySerial:    item.registry_serial || null,
-            registryName:      item.registry_name || null,
-            vintageYear:       parseInt(item.vintage_year),
+            registrySerial:    item.registry_serial,
+            registryName:      item.registry_name,
+            vintageYear:       item.vintage_year,
           }]);
           inserted.push(item.name);
         } catch (itemErr: any) {
