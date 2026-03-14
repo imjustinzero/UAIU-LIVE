@@ -2733,6 +2733,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             errors.push(`Skipped (missing fields): ${JSON.stringify(item).slice(0, 60)}`);
             continue;
           }
+          if (typeof item.standard !== 'string' || item.standard.trim().length === 0) {
+            errors.push(`Skipped (standard must be a non-empty string): ${item.name}`);
+            continue;
+          }
+          const parsedVolume = parseFloat(item.volume_tonnes);
+          if (item.volume_tonnes !== undefined && (isNaN(parsedVolume) || parsedVolume <= 0)) {
+            errors.push(`Skipped (volume_tonnes must be a positive number): ${item.name}`);
+            continue;
+          }
           if (!item.registry_serial) {
             errors.push(`Skipped (missing registry_serial): ${item.name}`);
             continue;
@@ -2756,6 +2765,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             changeDirection:   item.changeDirection || 'up',
             status:            'active',
             isAcceptingOrders: true,
+            registrySerial:    item.registry_serial || null,
+            registryName:      item.registry_name || null,
+            vintageYear:       vintageYearNum,
           }]);
           inserted.push(item.name);
         } catch (itemErr: any) {

@@ -564,17 +564,17 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           - (targetPrice > 0 ? Math.min(15, Math.round(((Number(viable.price_per_tonne) - targetPrice) / targetPrice) * 100)) : 0)
       );
 
-      const claimResult = await db.execute(sql`
-        UPDATE exchange_rfqs
-        SET status = 'accepted'
-        WHERE id = ${rfqId} AND status = 'active'
-        RETURNING id
-      `);
-      if (!((claimResult as any).rows?.length)) {
-        return res.status(409).json({ error: "RFQ has already been accepted or is no longer available." });
-      }
+      const matchedVolume = Math.min(Number(rfq.volume_tonnes), 999999999);
+      const matchedPrice = Number(viable.price_per_tonne);
+      const negotiationSummary = `Auto-match proposed from active listing ${viable.name}.`;
 
-      const matchResult = await db.execute(sql`
+      const atomicResult = await db.execute(sql`
+        WITH claimed AS (
+          UPDATE exchange_rfqs
+          SET status = 'accepted'
+          WHERE id = ${rfqId} AND status = 'active'
+          RETURNING id
+        )
         INSERT INTO exchange_rfq_matches (
           rfq_id,
           listing_id,
@@ -588,25 +588,29 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           negotiation_summary,
           confidence
         )
-        VALUES (
-          ${rfqId},
+        SELECT
+          claimed.id,
           ${viable.id},
           ${viable.seller_profile_id},
           ${buyerEmail},
           ${viable.seller_email},
           ${rfq.standard},
-          ${Math.min(Number(rfq.volume_tonnes), 999999999)},
-          ${Number(viable.price_per_tonne)},
+          ${matchedVolume},
+          ${matchedPrice},
           'proposed',
-          ${`Auto-match proposed from active listing ${viable.name}.`},
+          ${negotiationSummary},
           ${confidence}
-        )
+        FROM claimed
         RETURNING *
       `);
 
+      if (!((atomicResult as any).rows?.length)) {
+        return res.status(409).json({ error: "RFQ has already been accepted or is no longer available." });
+      }
+
       return res.json({
         success: true,
-        match: (matchResult as any).rows?.[0] || null,
+        match: (atomicResult as any).rows?.[0] || null,
         listing: viable,
       });
     } catch (e: any) {
