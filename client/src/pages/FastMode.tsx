@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
+import ElectrolyteTracker from "./ElectrolyteTracker";
 
 // ─── BLUEPRINT DATA ───────────────────────────────────────────────────────────
 const BLUEPRINT_MEALS = [
@@ -176,6 +177,7 @@ const Ic = ({ n, size = 20, color = "currentColor" }) => {
     chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
     blueprint: <><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></>,
     profile: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    zap: <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>,
     fire: <><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></>,
     plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
     check: <><polyline points="20 6 9 17 4 12"/></>,
@@ -1327,6 +1329,7 @@ export default function FastMode() {
     { id: "home", icon: "home", label: "Home" },
     { id: "timer", icon: "timer", label: "Fast" },
     { id: "food", icon: "food", label: "Food" },
+    { id: "electrolytes", icon: "zap", label: "Electro" },
     ...(profile.useBlueprint ? [{ id: "blueprint", icon: "blueprint", label: "Blueprint" }] : []),
     { id: "progress", icon: "chart", label: "Progress" },
   ];
@@ -1339,6 +1342,13 @@ export default function FastMode() {
           {tab === "home" && <Dashboard profile={profile} fastState={fastState} foodLogs={foodLogs} weightLogs={weightLogs} peptideLogs={peptideLogs} waterLogs={waterLogs} onNav={setTab} />}
           {tab === "timer" && <TimerScreen profile={profile} fastState={fastState} setFastState={setFastState} />}
           {tab === "food" && <FoodScreen profile={profile} foodLogs={foodLogs} setFoodLogs={setFoodLogs} waterLogs={waterLogs} setWaterLogs={setWaterLogs} />}
+          {tab === "electrolytes" && (
+            <ElectrolyteTracker
+              profile={profile}
+              weightLogs={weightLogs}
+              fastState={fastState}
+            />
+          )}
           {tab === "blueprint" && <BlueprintScreen profile={profile} foodLogs={foodLogs} setFoodLogs={setFoodLogs} />}
           {tab === "progress" && <ProgressScreen profile={profile} weightLogs={weightLogs} setWeightLogs={setWeightLogs} fastState={fastState} foodLogs={foodLogs} />}
           {tab === "peptide" && <PeptideScreen profile={profile} setProfile={setProfile} peptideLogs={peptideLogs} setPeptideLogs={setPeptideLogs} />}
