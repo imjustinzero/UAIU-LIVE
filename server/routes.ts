@@ -1876,7 +1876,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
 
 
-  app.get('/api/public/ledger', async (req, res) => {
+  const ledgerHandler = async (req: any, res: any) => {
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
     const offset = (page - 1) * limit;
@@ -1924,7 +1924,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       pages,
       total,
     });
-  });
+  };
+  app.get('/api/public/ledger', ledgerHandler);
+  app.get('/api/exchange/ledger', ledgerHandler);
 
   app.get('/api/public/index', async (_req, res) => {
     const weekly = await db.execute(sql`
@@ -2067,6 +2069,21 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.json(listings);
     } catch (error) {
       console.error('Exchange listings error:', error);
+      res.status(500).json({ message: 'Failed to fetch listings' });
+    }
+  });
+
+  app.get('/api/exchange/listings/:standard', async (req, res) => {
+    try {
+      const standard = req.params.standard;
+      const cacheKey = `listings:${standard}`;
+      const cached = getCachedListings(cacheKey);
+      if (cached) return res.json(cached);
+      const listings = await storage.getExchangeListings(standard);
+      setCachedListings(cacheKey, listings);
+      res.json(listings);
+    } catch (error) {
+      console.error('Exchange listings by standard error:', error);
       res.status(500).json({ message: 'Failed to fetch listings' });
     }
   });
