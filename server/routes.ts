@@ -2657,8 +2657,24 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         return res.status(400).json({ message: 'Invalid form data', errors: parsed.error.flatten() });
       }
 
+      const authenticatedEmail = String((req as any).userEmail || '').toLowerCase();
+      const submittedEmail = String(parsed.data.email || '').toLowerCase();
+      if (authenticatedEmail && submittedEmail && authenticatedEmail !== submittedEmail) {
+        return res.status(403).json({ error: 'Listing email must match your authenticated account.' });
+      }
+      const listingEmail = authenticatedEmail || submittedEmail;
+      if (!listingEmail) {
+        return res.status(400).json({ error: 'Email is required.' });
+      }
+      const listingKycAccount = await storage.getExchangeAccountByEmail(listingEmail);
+      if (!listingKycAccount || listingKycAccount.kycStatus !== 'verified') {
+        return res.status(403).json({ error: 'KYC verification required.' });
+      }
+
+      const dataWithBoundEmail = { ...parsed.data, email: listingEmail };
+
       // Save as 'pending' — admin must approve before appearing on marketplace
-      const listing = await storage.createExchangeCreditListing(parsed.data);
+      const listing = await storage.createExchangeCreditListing(dataWithBoundEmail);
       const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
       const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
 
