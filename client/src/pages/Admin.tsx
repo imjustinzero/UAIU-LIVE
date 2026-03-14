@@ -110,6 +110,7 @@ export default function Admin() {
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
+  const [kycQueue, setKycQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [platformStatus, setPlatformStatus] = useState<{ status: 'ok' | 'degraded' | 'incident'; message: string }>({
     status: 'ok',
@@ -153,15 +154,17 @@ export default function Admin() {
   async function loadData() {
     setLoading(true);
     try {
-      const [lRes, wRes, hRes, sRes] = await Promise.all([
+      const [lRes, wRes, hRes, sRes, kRes] = await Promise.all([
         fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/status/public`),
+        fetch(`/api/admin/kyc/pending`, { headers: adminHeaders(adminKey) }),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
       if (hRes.ok) setHealthData(await hRes.json());
+      if (kRes.ok) setKycQueue(await kRes.json());
       if (sRes.ok) {
         const sd = await sRes.json();
         const s: 'ok' | 'degraded' | 'incident' =
@@ -219,6 +222,18 @@ export default function Admin() {
       toast(`Retry complete: ${d.action}`);
       setWebhookFailures(prev => prev.filter(f => f.id !== id));
     } catch (e: any) { toast(e.message, 'err'); }
+  }
+
+
+  async function manualVerifyKyc(id: string) {
+    try {
+      const r = await fetch(`/api/admin/kyc/manual-verify/${id}`, { method: 'POST', headers: adminHeaders(adminKey) });
+      if (!r.ok) throw new Error('Manual verify failed');
+      toast('KYC manually verified');
+      setKycQueue((prev) => prev.filter((row) => row.id !== id));
+    } catch (e: any) {
+      toast(e.message, 'err');
+    }
   }
 
   if (!authed) {
@@ -323,7 +338,25 @@ export default function Admin() {
         </div>
 
         {/* Panel 1: Listings */}
-        {activeTab === 'listings' && (
+        
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20, marginBottom: 18 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 10, fontFamily: F.syne }}>KYC Queue</h3>
+          {!kycQueue.length ? <div style={{ color: C.muted, fontSize: 12 }}>No pending KYC records.</div> : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {kycQueue.map((row) => (
+                <div key={row.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, padding: 10, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12 }}>
+                    <div>{row.email}</div>
+                    <div style={{ color: C.muted, fontFamily: F.mono, fontSize: 11 }}>Stripe Session ID: {row.kyc_provider_reference || row.kyc_session_id || 'N/A'}</div>
+                  </div>
+                  <Badge label={(row.kyc_status || 'pending').toUpperCase()} variant={row.kyc_status === 'verified' ? 'green' : 'yellow'} />
+                  <button onClick={() => manualVerifyKyc(row.id)} style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}>Manually Verify</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+{activeTab === 'listings' && (
           <div style={{ animation: 'fadeIn .3s ease' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
               <div>

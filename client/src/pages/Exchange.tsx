@@ -22,6 +22,7 @@ import { AIMarketIntelligence, AIRFQAssistant } from "../components/exchange/AIF
 import { FarmCarbonCalculator, ProjectPipeline } from "../components/exchange/SupplyFeatures";
 import { PortfolioDashboard, MultiSigApproval, generatePDFReport } from "../components/exchange/InstitutionalFeatures";
 import { Globe3D, DarkModeToggle, MobileNav, VisionVerification, useDarkMode } from "../components/exchange/VisualFeatures";
+import DemoRequestModal from "@/components/DemoRequestModal";
 
 // ── RESPONSIVE UTILS ──────────────────────────────────────
 const CONTAINER_STYLE: React.CSSProperties = {
@@ -508,6 +509,8 @@ export default function Exchange() {
   const [instSuccess, setInstSuccess] = useState(false);
 
   const [tradeSuccessBanner, setTradeSuccessBanner] = useState<{ show: boolean; tradeId: string } | null>(null);
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [pendingKycPoll, setPendingKycPoll] = useState(false);
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
@@ -536,6 +539,7 @@ export default function Exchange() {
         kycStatus: profile.kyc_status || prev.kycStatus || 'not_started',
         kybStatus: profile.kyb_status || prev.kybStatus || 'not_started',
         kycCompletedAt: profile.kyc_completed_at || prev.kycCompletedAt || null,
+        kycProviderReference: profile.kyc_provider_reference || prev.kycProviderReference || null,
         company: profile.company_name || prev.company,
         accountType: profile.role || prev.accountType,
       };
@@ -587,14 +591,41 @@ export default function Exchange() {
       }
     }
     if (params.get('kyc') === 'done') {
-      showToast('Identity verification submitted. Confirmation within 24 hours.');
+      showToast('Identity verification submitted. Checking verification status...');
+      setPendingKycPoll(true);
       window.history.replaceState({}, '', '/x');
-      if (sessionAccount?.email) {
-        fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: exchangeHeaders(), body: JSON.stringify({ kycStatus: 'pending' }) }).catch(() => {});
-        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
-      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!pendingKycPoll) return;
+    const sessionId = sessionAccount?.kycProviderReference;
+    if (!sessionAccount?.email || !sessionId) return;
+
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const r = await fetch(`/api/kyc/status/${encodeURIComponent(sessionId)}`, { headers: exchangeHeaders() });
+        const body = await r.json().catch(() => ({}));
+        if (body.status === 'verified') {
+          setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'verified', kycCompletedAt: new Date().toISOString() } : prev);
+          showToast('Identity verification completed. Trading unlocked.');
+          setPendingKycPoll(false);
+          window.clearInterval(timer);
+          return;
+        }
+      } catch {}
+
+      if (attempts >= 10) {
+        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+        setPendingKycPoll(false);
+        window.clearInterval(timer);
+      }
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [pendingKycPoll, sessionAccount?.email, sessionAccount?.kycProviderReference]);
 
   function exchangeHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const token = exchangeToken || getExchangeTokenStorage();
@@ -626,6 +657,7 @@ export default function Exchange() {
             acceptedTermsAt: account.acceptedTermsAt,
             kycStatus: account.kycStatus || 'not_started',
             kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+            kycProviderReference: (account as any).kycProviderReference || null,
           });
         } else {
           clearExchangeTokenStorage();
@@ -993,7 +1025,7 @@ export default function Exchange() {
         return;
       }
 
-      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending', kycProviderReference: data.session_id || prev.kycProviderReference || null } : prev);
 
       const verificationUrl = data.url || data.verification_url || data.verificationUrl;
       if (verificationUrl) {
@@ -1106,6 +1138,7 @@ export default function Exchange() {
           acceptedTermsAt: account.acceptedTermsAt,
           kycStatus: account.kycStatus || 'not_started',
             kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+            kycProviderReference: (account as any).kycProviderReference || null,
         };
         const token = account.token;
         if (token) {
@@ -1270,11 +1303,12 @@ export default function Exchange() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 2vw, 20px)' }}>
               <div className="x-nav-center x-hide-mobile" style={{ display: 'flex', gap: 'clamp(12px, 2vw, 28px)' }}>
-                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify'],['/navigator','Navigator']].map(([id,label]) => (
+                {[['marketplace','Markets'],['intelligence','Intel'],['institutional','Desk'],['rfq','RFQ'],['trust','Verify'],['/maritime','Solutions'],['/navigator','Tools']].map(([id,label]) => (
                   <Link key={id} href={String(id).startsWith('/') ? String(id) : `#${id}`} className="x-nav-link" onClick={e => { if(String(id).startsWith('/')) return; e.preventDefault(); scrollTo(id); }} style={{ fontSize: 10 }}>{label}</Link>
                 ))}
               </div>
               <DarkModeToggle isDark={isDark} onToggle={toggleDark} />
+              <button className="x-btn-nav" onClick={() => setShowDemoModal(true)} style={{ fontSize: 'clamp(9px, 1.5vw, 11px)', padding: 'clamp(6px, 1.2vw, 10px) clamp(12px, 2vw, 22px)' }}>Request Demo</button>
               <button 
                 className="x-btn-nav" 
                 onClick={() => { setAcctSuccess(false); setAcctModalTab(sessionAccount ? 'signin' : 'open'); setShowAccountModal(true); }} 
@@ -2235,7 +2269,7 @@ export default function Exchange() {
                 {sessionAccount.kycStatus !== 'verified' && (
                   <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '14px 18px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'Verification in progress — we will notify you when complete' : 'Complete KYC to unlock trading on the platform.'}</div>
-                    {sessionAccount.kycStatus !== 'pending' && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">Verify Identity →</button>}
+                    {(sessionAccount.kycStatus !== 'pending' || !sessionAccount.kycProviderReference) && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">{sessionAccount.kycStatus === 'pending' ? 'Retry Verification →' : 'Verify Identity →'}</button>}
                   </div>
                 )}
 
@@ -2273,6 +2307,7 @@ export default function Exchange() {
                           {t.status === 'completed' && t.side === 'BUY' && (
                             <button onClick={() => { setRetireTrade(t); setShowRetireModal(true); }} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-retire-${t.tradeId || i}`}>Retire →</button>
                           )}
+                          <button onClick={() => window.open(`/api/exchange/trade/${encodeURIComponent(t.tradeId || t.trade_id || '')}/audit-pack`, '_blank')} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-audit-pack-${t.tradeId || i}`}>Download EU ETS Audit Pack (.pdf)</button>
                           {t.status === 'retired' && (
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               <button onClick={() => downloadRetirementCertificate(t.tradeId, 'dark')} style={{ background: 'none', border: `1px solid ${C.goldborder}`, color: C.gold, padding: '5px 10px', fontFamily: F.mono, fontSize: 9, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }} data-testid={`button-cert-dark-${t.tradeId || i}`}>Certificate (Dark)</button>
@@ -2398,6 +2433,8 @@ export default function Exchange() {
           onSkip={() => setShowMultiSig(false)}
         />
       )}
+
+      <DemoRequestModal open={showDemoModal} onClose={() => setShowDemoModal(false)} />
 
       {showTermsModal && (
         <div className="x-modal-overlay" style={{ zIndex: 9100 }} onClick={e => { if (e.target === e.currentTarget) setShowTermsModal(false); }}>

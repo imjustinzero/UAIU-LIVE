@@ -1,14 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { useSEO } from "@/lib/seo";
 
 type VerifyResponse = {
-  verified: true;
+  verified: boolean;
   tradeId: string;
-  standard: string;
-  volumeTonnes: number;
-  grossEur: number;
-  settledAt: string;
+  creditType: string;
+  vintageYear: number | null;
+  registry: string;
+  registryReference: string;
+  quantity: number;
+  pricePerTonne: number;
+  totalValue: number;
+  buyer: string;
+  sellerName: string;
+  settlementDate: string;
   receiptHash: string;
+  verifyOnRegistryUrl?: string | null;
 };
 
 const C = {
@@ -20,16 +28,6 @@ const C = {
   cream3: 'rgba(242,234,216,0.6)',
 };
 
-const DEMO_TRADE: VerifyResponse = {
-  verified: true,
-  tradeId: 'UAIU-2026-0041',
-  standard: 'Verra VCS — REDD+ Forest Conservation',
-  volumeTonnes: 10000,
-  grossEur: 132190,
-  settledAt: new Date().toISOString(),
-  receiptHash: '8b1f6d67f3ca8d6c3819e74274f5e93a63ea9e7f2d3db8f1fce5d705d6b8a14c',
-};
-
 export default function VerifyTrade() {
   const [matchX, paramsX] = useRoute<{ hash: string }>("/x/verify/:hash");
   const [matchRoot, paramsRoot] = useRoute<{ hash: string }>("/verify/:hash");
@@ -39,15 +37,21 @@ export default function VerifyTrade() {
   const [data, setData] = useState<VerifyResponse | null>(null);
   const [error, setError] = useState('');
 
+  const ogDescription = useMemo(() => {
+    if (!data) return 'Public verification record for a settled UAIU carbon trade.';
+    return `${data.tradeId} · ${data.creditType} · ${data.quantity.toLocaleString()} tCO₂e · €${data.totalValue.toLocaleString()}`;
+  }, [data]);
+
+  useSEO({
+    title: 'Verified Carbon Trade — UAIU.LIVE/X',
+    description: ogDescription,
+    path: `/verify/${encodeURIComponent(hash || 'trade')}`,
+    ogType: 'article',
+  });
+
   useEffect(() => {
     if (!match || !hash) return;
     let mounted = true;
-
-    if (hash === 'UAIU-2026-0041') {
-      setData(DEMO_TRADE);
-      setLoading(false);
-      return;
-    }
 
     setLoading(true);
     setError('');
@@ -56,7 +60,7 @@ export default function VerifyTrade() {
         if (!r.ok) throw new Error('not_found');
         return r.json();
       })
-      .then((body) => {
+      .then((body: VerifyResponse) => {
         if (!mounted) return;
         setData(body);
       })
@@ -71,15 +75,19 @@ export default function VerifyTrade() {
     };
   }, [match, hash]);
 
+  const copy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // no-op
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: C.ink, color: C.cream, fontFamily: "'Syne', sans-serif", padding: '80px 20px' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto', background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '32px 28px' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto', background: C.ink2, border: `1px solid ${C.goldborder}`, padding: '32px 28px' }}>
         <h1 style={{ margin: '0 0 6px', color: C.gold, fontSize: 28, fontFamily: "'Playfair Display', serif" }}>Public Trade Verification</h1>
-        <p style={{ margin: 0, color: C.cream3, fontSize: 13 }}>UAIU.LIVE/X receipt hash verification.</p>
-
-        <div style={{ marginTop: 22, padding: '14px 16px', border: `1px solid ${C.goldborder}`, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, wordBreak: 'break-all', color: C.cream3 }}>
-          Lookup Key: {hash || 'n/a'}
-        </div>
+        <p style={{ margin: 0, color: C.cream3, fontSize: 13 }}>UAIU.LIVE/X public settlement receipt verification.</p>
 
         {loading && <p style={{ marginTop: 20, color: C.cream3 }}>Verifying receipt…</p>}
 
@@ -92,18 +100,35 @@ export default function VerifyTrade() {
         {!loading && data && (
           <div style={{ marginTop: 20, display: 'grid', gap: 10 }}>
             {[
-              ['Trade ID', data.tradeId],
-              ['Standard', data.standard],
-              ['Volume', `${Number(data.volumeTonnes || 0).toLocaleString()} tonnes`],
-              ['Gross Amount', `€${Number(data.grossEur || 0).toLocaleString()}`],
-              ['Settled At', data.settledAt ? new Date(data.settledAt).toISOString() : 'n/a'],
-              ['Receipt Hash', data.receiptHash],
-            ].map(([k, v]) => (
-              <div key={k} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12, borderBottom: `1px solid ${C.goldborder}`, paddingBottom: 8 }}>
+              ['Trade ID', data.tradeId, true],
+              ['Credit Type', data.creditType],
+              ['Vintage Year', data.vintageYear ? String(data.vintageYear) : 'N/A'],
+              ['Registry', data.registry],
+              ['Registry Reference', data.registryReference],
+              ['Quantity', `${Number(data.quantity || 0).toLocaleString()} tonnes`],
+              ['Price per Tonne', `€${Number(data.pricePerTonne || 0).toLocaleString()}`],
+              ['Total Value', `€${Number(data.totalValue || 0).toLocaleString()}`],
+              ['Buyer', data.buyer],
+              ['Seller', data.sellerName],
+              ['Settlement Date', data.settlementDate ? new Date(data.settlementDate).toISOString() : 'n/a'],
+              ['SHA-256 Receipt Hash', data.receiptHash, true],
+            ].map(([k, v, canCopy]) => (
+              <div key={String(k)} style={{ display: 'grid', gridTemplateColumns: '200px 1fr auto', gap: 12, borderBottom: `1px solid ${C.goldborder}`, paddingBottom: 8, alignItems: 'center' }}>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cream3 }}>{k}</div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, wordBreak: 'break-word' }}>{v}</div>
+                {canCopy ? (
+                  <button onClick={() => copy(String(v))} style={{ border: `1px solid ${C.goldborder}`, background: 'transparent', color: C.gold, fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}>
+                    Copy
+                  </button>
+                ) : <div />}
               </div>
             ))}
+
+            {data.verifyOnRegistryUrl && (
+              <a href={data.verifyOnRegistryUrl} target="_blank" rel="noreferrer" style={{ color: C.gold, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, marginTop: 6 }}>
+                Verify on Registry →
+              </a>
+            )}
             <div style={{ marginTop: 6, color: '#4ade80', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>✓ Verified</div>
           </div>
         )}

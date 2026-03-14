@@ -8,6 +8,7 @@ interface AuthProfile {
   kyc_status: string;
   kyb_status: string;
   kyc_completed_at: string | null;
+  kyc_provider_reference: string | null;
   company_name: string | null;
   role: string | null;
 }
@@ -36,11 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    let data: any = null;
+    let data: Record<string, unknown> | null = null;
     try {
       const profileLookup = await supabase
         .from("profiles")
-        .select("kyc_status, kyb_status, kyc_completed_at, org_name, account_type")
+        .select("kyc_status, kyb_status, kyc_completed_at, kyc_provider_reference, org_name, account_type")
         .eq("email", email)
         .maybeSingle();
       data = profileLookup.data;
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data) {
       const fallbackLookup = await supabase
         .from("exchange_accounts")
-        .select("kyc_status, kyb_status, kyc_completed_at, org_name, account_type")
+        .select("kyc_status, kyb_status, kyc_completed_at, kyc_provider_reference, org_name, account_type")
         .eq("email", email)
         .maybeSingle();
       data = fallbackLookup.data;
@@ -63,11 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setProfile({
-      kyc_status: data.kyc_status || "not_started",
-      kyb_status: data.kyb_status || "not_started",
-      kyc_completed_at: data.kyc_completed_at || null,
-      company_name: data.org_name || null,
-      role: data.account_type || null,
+      kyc_status: String(data.kyc_status || "not_started"),
+      kyb_status: String(data.kyb_status || "not_started"),
+      kyc_completed_at: data.kyc_completed_at ? String(data.kyc_completed_at) : null,
+      kyc_provider_reference: data.kyc_provider_reference ? String(data.kyc_provider_reference) : null,
+      company_name: data.org_name ? String(data.org_name) : null,
+      role: data.account_type ? String(data.account_type) : null,
     });
   }, []);
 
