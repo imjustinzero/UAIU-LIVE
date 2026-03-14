@@ -2478,9 +2478,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   function sendSignedExport(res: any, payload: Record<string, any>): void {
     const hash = computeExportHash(payload);
-    payload.export_hash = hash;
+    const response = {
+      ...payload,
+      export_hash: hash,
+      export_hash_algorithm: 'SHA-256',
+      export_hash_scope: 'Computed over all fields except export_hash, export_hash_algorithm, and export_hash_scope. To verify: remove these three keys, sort remaining keys, JSON.stringify, then SHA-256 hex.',
+    };
     res.setHeader('X-Export-Hash', hash);
-    res.json(payload);
+    res.json(response);
   }
 
   app.get('/api/exchange/trades/:tradeId/export/eu-ets', requireExchangeAuth, async (req, res) => {
