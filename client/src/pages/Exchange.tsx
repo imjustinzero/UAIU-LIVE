@@ -510,6 +510,7 @@ export default function Exchange() {
 
   const [tradeSuccessBanner, setTradeSuccessBanner] = useState<{ show: boolean; tradeId: string } | null>(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [pendingKycPoll, setPendingKycPoll] = useState(false);
   const [chatHandle] = useState(() => `Trader-${Math.random().toString(36).slice(2,6).toUpperCase()}`);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
   const [escrowTrade, setEscrowTrade] = useState<{ tradeId: string; amountEur: number; volumeTonnes: number; standard: string } | null>(null);
@@ -591,30 +592,40 @@ export default function Exchange() {
     }
     if (params.get('kyc') === 'done') {
       showToast('Identity verification submitted. Checking verification status...');
+      setPendingKycPoll(true);
       window.history.replaceState({}, '', '/x');
-      const sessionId = sessionAccount?.kycProviderReference;
-      if (sessionAccount?.email && sessionId) {
-        let attempts = 0;
-        const timer = window.setInterval(async () => {
-          attempts += 1;
-          try {
-            const r = await fetch(`/api/kyc/status/${encodeURIComponent(sessionId)}`, { headers: exchangeHeaders() });
-            const body = await r.json().catch(() => ({}));
-            if (body.status === 'verified') {
-              setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'verified', kycCompletedAt: new Date().toISOString() } : prev);
-              showToast('Identity verification completed. Trading unlocked.');
-              window.clearInterval(timer);
-              return;
-            }
-          } catch {}
-          if (attempts >= 10) {
-            window.clearInterval(timer);
-            setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
-          }
-        }, 3000);
-      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!pendingKycPoll) return;
+    const sessionId = sessionAccount?.kycProviderReference;
+    if (!sessionAccount?.email || !sessionId) return;
+
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const r = await fetch(`/api/kyc/status/${encodeURIComponent(sessionId)}`, { headers: exchangeHeaders() });
+        const body = await r.json().catch(() => ({}));
+        if (body.status === 'verified') {
+          setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'verified', kycCompletedAt: new Date().toISOString() } : prev);
+          showToast('Identity verification completed. Trading unlocked.');
+          setPendingKycPoll(false);
+          window.clearInterval(timer);
+          return;
+        }
+      } catch {}
+
+      if (attempts >= 10) {
+        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+        setPendingKycPoll(false);
+        window.clearInterval(timer);
+      }
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [pendingKycPoll, sessionAccount?.email, sessionAccount?.kycProviderReference]);
 
   function exchangeHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const token = exchangeToken || getExchangeTokenStorage();
@@ -1014,7 +1025,7 @@ export default function Exchange() {
         return;
       }
 
-      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending', kycProviderReference: data.session_id || prev.kycProviderReference || null } : prev);
 
       const verificationUrl = data.url || data.verification_url || data.verificationUrl;
       if (verificationUrl) {
