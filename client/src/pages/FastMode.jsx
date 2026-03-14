@@ -383,20 +383,16 @@ function Toast({ msg, onDone }) {
 // ─── AI COACH ────────────────────────────────────────────────────────────────
 async function askAI(prompt) {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/fastmode/ai-coach", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: "You are FASTMODE AI Coach — an expert in intermittent fasting, fat loss, longevity nutrition (Bryan Johnson Blueprint protocol), and peptide optimization. Give concise, actionable, science-backed advice in 2-4 sentences. Be direct and motivating. No fluff. Format with line breaks for readability.",
-        messages: [{ role: "user", content: prompt }]
-      })
+      body: JSON.stringify({ prompt })
     });
+    if (!res.ok) return "AI Coach is currently unavailable.";
     const data = await res.json();
-    return data.content?.[0]?.text || "Unable to connect. Please try again.";
+    return data.message || "Unable to get coaching tip. Try again later.";
   } catch {
-    return "AI Coach offline. Check connection.";
+    return "AI Coach is currently unavailable.";
   }
 }
 
@@ -662,9 +658,11 @@ function TimerScreen({ profile, fastState, setFastState }) {
       const tick = () => setElapsed(Math.floor((Date.now() - fastState.startTime) / 1000));
       tick();
       ref.current = setInterval(tick, 1000);
-    } else setElapsed(0);
+    } else {
+      setElapsed(fastState.pausedElapsed || 0);
+    }
     return () => clearInterval(ref.current);
-  }, [fastState.active, fastState.startTime]);
+  }, [fastState.active, fastState.startTime, fastState.pausedElapsed]);
 
   const fasting_stages = [
     { h: 0, icon: "🍽", label: "Digestion", desc: "Body processing last meal" },
@@ -706,8 +704,8 @@ function TimerScreen({ profile, fastState, setFastState }) {
 
         <div className="brow" style={{ width: "100%", maxWidth: 280 }}>
           {!fastState.active
-            ? <button className="btn dan" onClick={() => setFastState(p => ({ ...p, active: true, startTime: Date.now(), streak: (p.streak || 0) + (p.lastFastDate !== today() ? 1 : 0), lastFastDate: today() }))}>START FAST</button>
-            : <><button className="btn suc" onClick={() => setFastState(p => ({ ...p, active: false, startTime: null }))}>PAUSE</button><button className="btn gho" onClick={() => setFastState(p => ({ ...p, active: false, startTime: null }))}>END</button></>}
+            ? <button className="btn dan" data-testid="button-start-fast" onClick={() => setFastState(p => ({ ...p, active: true, startTime: Date.now() - (p.pausedElapsed || 0) * 1000, pausedElapsed: 0, streak: (p.streak || 0) + (p.lastFastDate !== today() ? 1 : 0), lastFastDate: today() }))}>{fastState.pausedElapsed ? "RESUME FAST" : "START FAST"}</button>
+            : <><button className="btn suc" data-testid="button-pause-fast" onClick={() => setFastState(p => ({ ...p, active: false, pausedElapsed: Math.floor((Date.now() - p.startTime) / 1000), startTime: null }))}>PAUSE</button><button className="btn gho" data-testid="button-end-fast" onClick={() => setFastState(p => ({ ...p, active: false, startTime: null, pausedElapsed: 0 }))}>END</button></>}
         </div>
 
         {/* Fast stats */}
@@ -1238,7 +1236,7 @@ function PeptideScreen({ profile, setProfile, peptideLogs, setPeptideLogs }) {
           </div>
           <div className="flex ac jb" style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
             <span className="sm fw6">Today's Dose</span>
-            <button onClick={() => toggle(p.id)} style={{ background: "none", border: `2px solid ${done ? "var(--grn)" : "var(--b2)"}`, borderRadius: 8, width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: done ? "var(--grn)" : "transparent", transition: "all .2s" }}>
+            <button onClick={() => toggle(p.id)} style={{ border: `2px solid ${done ? "var(--grn)" : "var(--b2)"}`, borderRadius: 8, width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: done ? "var(--grn)" : "transparent", transition: "all .2s" }}>
               {done && <Ic n="check" size={16} color="#000" />}
             </button>
           </div>
