@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
 import { requireAdminHeader, requireExchangeAuth, safeError } from "./exchange-auth";
+import { invalidateListingCache } from "./routes";
 import { createHash } from "crypto";
 
 const LISTING_ALLOWED_REGISTRIES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
@@ -475,6 +476,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
 
       if (rules.decision === "approved") {
         const approved = await storage.approveCreditListing(listing.id);
+        invalidateListingCache();
         return res.json({
           success: true,
           mode: "auto_approved",
@@ -486,6 +488,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
 
       if (rules.decision === "rejected") {
         await storage.rejectCreditListing(listing.id);
+        invalidateListingCache();
         await raiseException("listing_submission", listing.id, "listing_auto_rejected", rules.reason, { ruleHits: rules.ruleHits }, "high");
         return res.status(422).json({
           success: false,

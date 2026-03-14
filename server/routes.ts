@@ -149,6 +149,24 @@ async function getMostRecentReceiptHash(): Promise<string> {
   }
 }
 
+const LISTING_CACHE_TTL_MS = 5 * 60 * 1000;
+const listingCache = new Map<string, { data: any; expiresAt: number }>();
+
+function getCachedListings(key: string): any | null {
+  const entry = listingCache.get(key);
+  if (entry && Date.now() < entry.expiresAt) return entry.data;
+  if (entry) listingCache.delete(key);
+  return null;
+}
+
+function setCachedListings(key: string, data: any): void {
+  listingCache.set(key, { data, expiresAt: Date.now() + LISTING_CACHE_TTL_MS });
+}
+
+export function invalidateListingCache(): void {
+  listingCache.clear();
+}
+
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -457,6 +475,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                     UPDATE exchange_listings SET status = 'sold'
                     WHERE id = ${webhookListingId} AND status IN ('reserved', 'active')
                   `).catch((e: any) => console.error('[Webhook] Failed to mark listing as sold', e.message));
+                  invalidateListingCache();
                 }
 
                 try {
@@ -1837,7 +1856,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
 
 
-  app.get('/api/public/ledger', async (_req, res) => {
+  app.get('/api/public/ledger', async (req, res) => {
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const offset = (page - 1) * limit;
     const totalsRes = await db.execute(sql`
       SELECT
         COUNT(*)::int AS trades,
@@ -1849,9 +1871,11 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       SELECT trade_id, created_at, standard, seller_registry_name, vintage_year, volume_tonnes, price_per_tonne, status
       FROM exchange_trades
       ORDER BY created_at DESC
-      LIMIT 200
+      LIMIT ${limit} OFFSET ${offset}
     `);
     const totals = (totalsRes as any).rows?.[0] || {};
+    const total = Number(totals.trades || 0);
+    const pages = Math.ceil(total / limit) || 1;
     const entries = ((rowsRes as any).rows || []).map((r: any) => {
       const p = Number(r.price_per_tonne || 0);
       const low = Math.max(0, p - 1).toFixed(0);
@@ -1870,11 +1894,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
     return res.json({
       totals: {
-        trades: Number(totals.trades || 0),
+        trades: total,
         retiredTco2e: Number(totals.retired_tco2e || 0),
         totalVolumeEur: Number(totals.total_volume_eur || 0),
       },
       entries,
+      page,
+      pages,
+      total,
     });
   });
 
@@ -2006,12 +2033,16 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.get('/api/exchange/listings', async (req, res) => {
     try {
       const standard = req.query.standard as string | undefined;
+      const cacheKey = `listings:${standard || 'ALL'}`;
+      const cached = getCachedListings(cacheKey);
+      if (cached) return res.json(cached);
       let listings = await storage.getExchangeListings(standard);
       if (listings.length === 0 && !exchangeSeeded) {
         exchangeSeeded = true;
         await storage.seedExchangeListings(EXCHANGE_SEED_LISTINGS);
         listings = await storage.getExchangeListings(standard);
       }
+      setCachedListings(cacheKey, listings);
       res.json(listings);
     } catch (error) {
       console.error('Exchange listings error:', error);
