@@ -185,8 +185,19 @@ async function ensureExchangeIndexes(): Promise<void> {
   console.log('[Indexes] Exchange performance indexes ensured');
 }
 
+async function fixKycDefaults(): Promise<void> {
+  await db.execute(sql`ALTER TABLE exchange_accounts ALTER COLUMN kyc_status SET DEFAULT 'not_started'`).catch(() => {});
+  const result = await db.execute(sql`UPDATE exchange_accounts SET kyc_status = 'not_started' WHERE kyc_status = 'pending' AND kyc_provider_reference IS NULL`);
+  const rowCount = (result as any).rowCount ?? 0;
+  if (rowCount > 0) {
+    console.log(`[KYC Fix] Reset ${rowCount} stuck account(s) from 'pending' to 'not_started'`);
+  }
+  console.log('[KYC Fix] DB default and stuck accounts verified');
+}
+
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
   ensureExchangeIndexes().catch((e: any) => console.error('[Indexes] Failed to ensure indexes:', e.message));
+  fixKycDefaults().catch((e: any) => console.error('[KYC Fix] Failed:', e.message));
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -2152,10 +2163,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const { email, password } = req.body;
       if (!email || !password) return res.status(400).json({ error: 'email and password required' });
       if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-      const account = await storage.getExchangeAccountByEmail(email.trim().toLowerCase());
+      const normalizedEmail = email.trim().toLowerCase();
+      const account = await storage.getExchangeAccountByEmail(normalizedEmail);
       if (!account) return res.status(404).json({ error: 'Account not found.' });
+      if (account.passwordHash) {
+        const token = String(req.headers['x-exchange-token'] || '').trim();
+        if (!token) return res.status(401).json({ error: 'Authentication required to change an existing password.' });
+        const session = await verifyExchangeToken(token);
+        if (!session || String(session.email).toLowerCase() !== normalizedEmail) {
+          return res.status(403).json({ error: 'Not authorized to change this password.' });
+        }
+      }
       const hash = await bcrypt.hash(password, 12);
-      await storage.updateExchangeAccountPassword(email.trim().toLowerCase(), hash);
+      await storage.updateExchangeAccountPassword(normalizedEmail, hash);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
@@ -3681,6 +3701,33 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!id) return res.status(400).json({ error: 'id required' });
       await db.execute(sql`UPDATE exchange_accounts SET kyc_status = 'verified', kyc_completed_at = NOW() WHERE id = ${id}`);
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/admin/exchange/accounts/:id/reset-kyc', requireAdminHeader, async (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id required' });
+      const result = await db.execute(sql`UPDATE exchange_accounts SET kyc_status = 'not_started', kyc_provider_reference = NULL, kyc_completed_at = NULL WHERE id = ${id}`);
+      const rowCount = (result as any).rowCount ?? (result as any).rows?.length ?? 0;
+      if (rowCount === 0) return res.status(404).json({ error: 'Account not found.' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/admin/exchange/accounts', requireAdminHeader, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT id, email, first_name, last_name, org_name, account_type, kyc_status, kyc_provider_reference, kyc_completed_at, accepted_terms_at, password_hash IS NOT NULL as has_password, created_at
+        FROM exchange_accounts
+        ORDER BY created_at DESC
+        LIMIT 200
+      `);
+      res.json((rows as any).rows || []);
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }

@@ -106,11 +106,12 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup' | 'accounts'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
   const [kycQueue, setKycQueue] = useState<any[]>([]);
+  const [exchangeAccountsList, setExchangeAccountsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [platformStatus, setPlatformStatus] = useState<{ status: 'ok' | 'degraded' | 'incident'; message: string }>({
     status: 'ok',
@@ -154,17 +155,19 @@ export default function Admin() {
   async function loadData() {
     setLoading(true);
     try {
-      const [lRes, wRes, hRes, sRes, kRes] = await Promise.all([
+      const [lRes, wRes, hRes, sRes, kRes, aRes] = await Promise.all([
         fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/status/public`),
         fetch(`/api/admin/kyc/pending`, { headers: adminHeaders(adminKey) }),
+        fetch(`/api/admin/exchange/accounts`, { headers: adminHeaders(adminKey) }),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
       if (hRes.ok) setHealthData(await hRes.json());
       if (kRes.ok) setKycQueue(await kRes.json());
+      if (aRes.ok) setExchangeAccountsList(await aRes.json());
       if (sRes.ok) {
         const sd = await sRes.json();
         const s: 'ok' | 'degraded' | 'incident' =
@@ -231,6 +234,25 @@ export default function Admin() {
       if (!r.ok) throw new Error('Manual verify failed');
       toast('KYC manually verified');
       setKycQueue((prev) => prev.filter((row) => row.id !== id));
+      setExchangeAccountsList((prev) => prev.map((a) => a.id === id ? { ...a, kyc_status: 'verified' } : a));
+    } catch (e: any) {
+      toast(e.message, 'err');
+    }
+  }
+
+  async function resetKyc(id: string) {
+    try {
+      const r = await fetch(`/api/admin/exchange/accounts/${id}/reset-kyc`, { method: 'POST', headers: adminHeaders(adminKey) });
+      if (!r.ok) throw new Error('Reset KYC failed');
+      toast('KYC status reset to not_started');
+      setExchangeAccountsList((prev) => prev.map((a) => a.id === id ? { ...a, kyc_status: 'not_started', kyc_provider_reference: null, kyc_completed_at: null } : a));
+      setKycQueue((prev) => {
+        const exists = prev.find((row) => row.id === id);
+        if (exists) return prev.map((row) => row.id === id ? { ...row, kyc_status: 'not_started' } : row);
+        const acct = exchangeAccountsList.find((a) => a.id === id);
+        if (acct) return [{ id, email: acct.email, kyc_status: 'not_started', kyc_provider_reference: null }, ...prev];
+        return prev;
+      });
     } catch (e: any) {
       toast(e.message, 'err');
     }
@@ -305,6 +327,7 @@ export default function Admin() {
         <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', borderBottom: `1px solid ${C.border}` }}>
           {[
             { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
+            { id: 'accounts', label: 'Exchange Accounts', count: exchangeAccountsList.length },
             { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
             { id: 'health', label: 'System Health', count: null },
             { id: 'autonomy', label: 'Autonomous Marketplace', count: null },
@@ -395,6 +418,55 @@ export default function Admin() {
                   <RegistryProofStatus listing={l} adminKey={adminKey} adminHeaders={adminHeaders} />
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* Panel: Exchange Accounts */}
+        {activeTab === 'accounts' && (
+          <div style={{ animation: 'fadeIn .3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>Exchange Accounts</h2>
+                <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>All registered exchange accounts with KYC status. Reset KYC for support cases.</p>
+              </div>
+              <button data-testid="button-refresh-accounts" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}><div className="spinner" style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+            ) : exchangeAccountsList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No exchange accounts found.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {exchangeAccountsList.map((acct: any) => (
+                  <div key={acct.id} data-testid={`card-account-${acct.id}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginBottom: '4px', fontFamily: F.syne }}>{acct.org_name || `${acct.first_name || ''} ${acct.last_name || ''}`.trim() || acct.email}</div>
+                        <div style={{ fontSize: '12px', color: C.muted, fontFamily: F.mono, marginBottom: 6 }}>{acct.email}</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <Badge label={(acct.kyc_status || 'not_started').toUpperCase()} variant={acct.kyc_status === 'verified' ? 'green' : acct.kyc_status === 'pending' ? 'yellow' : 'muted'} />
+                          {acct.has_password ? <Badge label="PASSWORD SET" variant="green" /> : <Badge label="NO PASSWORD" variant="red" />}
+                          {acct.accepted_terms_at ? <Badge label="T&C ACCEPTED" variant="green" /> : <Badge label="T&C NOT ACCEPTED" variant="red" />}
+                          {acct.account_type && <Badge label={acct.account_type} variant="blue" />}
+                        </div>
+                        {acct.kyc_completed_at && <div style={{ fontSize: '11px', color: C.muted, fontFamily: F.mono, marginTop: 4 }}>KYC verified: {new Date(acct.kyc_completed_at).toLocaleDateString('en-GB')}</div>}
+                        {acct.kyc_provider_reference && <div style={{ fontSize: '11px', color: C.muted, fontFamily: F.mono, marginTop: 2 }}>Ref: {acct.kyc_provider_reference}</div>}
+                        <div style={{ fontSize: '11px', color: C.muted, fontFamily: F.mono, marginTop: 4 }}>Created: {acct.created_at ? new Date(acct.created_at).toLocaleDateString('en-GB') : '—'}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {acct.kyc_status !== 'not_started' && (
+                          <button data-testid={`button-reset-kyc-${acct.id}`} onClick={() => resetKyc(acct.id)} style={{ background: C.yellow, color: C.bg, border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Reset KYC</button>
+                        )}
+                        {acct.kyc_status !== 'verified' && (
+                          <button data-testid={`button-verify-kyc-${acct.id}`} onClick={() => manualVerifyKyc(acct.id)} style={{ background: C.green, color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Verify KYC</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

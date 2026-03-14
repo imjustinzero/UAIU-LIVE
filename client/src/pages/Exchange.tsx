@@ -485,6 +485,14 @@ export default function Exchange() {
   const [termsAccepting, setTermsAccepting] = useState(false);
   const [pendingTradeAction, setPendingTradeAction] = useState<(() => void) | null>(null);
 
+  const [showPasswordGate, setShowPasswordGate] = useState(false);
+  const [passwordGateValue, setPasswordGateValue] = useState('');
+  const [passwordGateConfirm, setPasswordGateConfirm] = useState('');
+  const [passwordGateError, setPasswordGateError] = useState('');
+  const [passwordGateLoading, setPasswordGateLoading] = useState(false);
+
+  const [showTermsGate, setShowTermsGate] = useState(false);
+
   const [dbTrades, setDbTrades] = useState<any[]>([]);
   const [dbTradesLoading, setDbTradesLoading] = useState(false);
 
@@ -661,7 +669,7 @@ export default function Exchange() {
       .then(r => r.ok ? r.json() : null)
       .then(account => {
         if (account?.email) {
-          setSessionAccount({
+          const restored = {
             id: account.id,
             email: account.email,
             firstName: account.firstName || '',
@@ -673,7 +681,11 @@ export default function Exchange() {
             kycStatus: account.kycStatus || 'not_started',
             kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
             kycProviderReference: (account as any).kycProviderReference || null,
-          });
+            hasPassword: !!account.passwordHash,
+          };
+          setSessionAccount(restored);
+          if (!account.passwordHash) setShowPasswordGate(true);
+          else if (!account.acceptedTermsAt) setShowTermsGate(true);
         } else {
           clearExchangeTokenStorage();
           setExchangeToken(null);
@@ -876,7 +888,7 @@ export default function Exchange() {
   }
 
   async function handleAcceptTerms() {
-    if (!sessionAccount?.email) { setShowTermsModal(false); return; }
+    if (!sessionAccount?.email) { setShowTermsModal(false); setShowTermsGate(false); return; }
     setTermsAccepting(true);
     try {
       const res = await fetch('/api/exchange/account/accept-terms', { method: 'PATCH', headers: exchangeHeaders() });
@@ -884,9 +896,29 @@ export default function Exchange() {
       const newSession = { ...sessionAccount, acceptedTermsAt: updated.acceptedTermsAt || new Date().toISOString() };
       setSessionAccount(newSession);
       setShowTermsModal(false);
+      setShowTermsGate(false);
       if (pendingTradeAction) { const fn = pendingTradeAction; setPendingTradeAction(null); fn(); }
     } catch { showToast('Failed to accept terms. Please try again.'); }
     finally { setTermsAccepting(false); }
+  }
+
+  async function handlePasswordGateSubmit() {
+    if (!passwordGateValue || passwordGateValue.length < 8) { setPasswordGateError('Password must be at least 8 characters.'); return; }
+    if (passwordGateValue !== passwordGateConfirm) { setPasswordGateError('Passwords do not match.'); return; }
+    if (!sessionAccount?.email) return;
+    setPasswordGateLoading(true);
+    setPasswordGateError('');
+    try {
+      const res = await fetch('/api/exchange/account/set-password', { method: 'POST', headers: exchangeHeaders(), body: JSON.stringify({ email: sessionAccount.email, password: passwordGateValue }) });
+      if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || 'Failed to set password'); }
+      setSessionAccount((prev: any) => prev ? { ...prev, hasPassword: true } : prev);
+      setShowPasswordGate(false);
+      setPasswordGateValue('');
+      setPasswordGateConfirm('');
+      showToast('Password set successfully.');
+      if (!sessionAccount.acceptedTermsAt) setShowTermsGate(true);
+    } catch (e: any) { setPasswordGateError(e.message || 'Failed to set password.'); }
+    finally { setPasswordGateLoading(false); }
   }
 
   async function handleRetireSubmit() {
@@ -986,10 +1018,18 @@ export default function Exchange() {
         annualCo2: parseInt(acctCo2) || 10000,
         acceptedTermsAt: null,
         kycStatus: 'not_started',
+        hasPassword: !!acctPassword,
       };
+      if (data.token) {
+        setExchangeTokenStorage(data.token);
+        setExchangeToken(data.token);
+      }
       setSessionAccount(newSession);
       setAcctSuccess(true);
       setAcctShowKyc(true);
+      if (!acctPassword) {
+        setShowPasswordGate(true);
+      }
       showToast('Account created — verify your identity to begin trading');
       dbInsert('entities', { name: `${acctFirstName} ${acctLastName}`.trim(), contact_name: `${acctFirstName} ${acctLastName}`.trim(), email: acctEmail, phone: acctPhone || null, entity_type: acctType, annual_co2_exposure: acctCo2 || null, status: 'pending_kyc' }).catch((e: any) => console.warn('[Exchange] Supabase save failed:', e?.message));
     } catch {
@@ -1152,8 +1192,9 @@ export default function Exchange() {
           annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
           acceptedTermsAt: account.acceptedTermsAt,
           kycStatus: account.kycStatus || 'not_started',
-            kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
-            kycProviderReference: (account as any).kycProviderReference || null,
+          kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+          kycProviderReference: (account as any).kycProviderReference || null,
+          hasPassword: !!account.passwordHash,
         };
         const token = account.token;
         if (token) {
@@ -1163,6 +1204,11 @@ export default function Exchange() {
         setSessionAccount(sessionData);
         setShowAccountModal(false);
         setSigninEmail(''); setSigninPassword(''); setSigninError(''); setSigninNeedsPassword(false);
+        if (!account.passwordHash) {
+          setShowPasswordGate(true);
+        } else if (!account.acceptedTermsAt) {
+          setShowTermsGate(true);
+        }
         showToast(`Welcome back, ${sessionData.company || sessionData.firstName || 'trader'}.`);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -2450,6 +2496,56 @@ export default function Exchange() {
       )}
 
       <DemoRequestModal open={showDemoModal} onClose={() => setShowDemoModal(false)} />
+
+      {showPasswordGate && sessionAccount && (
+        <div className="x-modal-overlay" style={{ zIndex: 9200 }}>
+          <div className="x-modal" style={{ maxWidth: 440 }}>
+            <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}` }}>
+              <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 4 }}>Security Required</div>
+              <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700 }}>Set Your Password</div>
+            </div>
+            <div style={{ padding: '28px 36px' }}>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3, lineHeight: 1.7, marginBottom: 20 }}>
+                Your account does not have a password. Set one now to secure your account and continue using the platform.
+              </div>
+              <div style={s.fg}>
+                <label style={s.fl as React.CSSProperties}>New Password</label>
+                <input className="x-fi" style={s.fi} type="password" placeholder="Min. 8 characters" value={passwordGateValue} onChange={e => { setPasswordGateValue(e.target.value); setPasswordGateError(''); }} data-testid="input-password-gate" />
+              </div>
+              <div style={s.fg}>
+                <label style={s.fl as React.CSSProperties}>Confirm Password</label>
+                <input className="x-fi" style={s.fi} type="password" placeholder="Re-enter password" value={passwordGateConfirm} onChange={e => { setPasswordGateConfirm(e.target.value); setPasswordGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') handlePasswordGateSubmit(); }} data-testid="input-password-gate-confirm" />
+              </div>
+              {passwordGateError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }} data-testid="text-password-gate-error">{passwordGateError}</div>}
+              <button className="x-btn-primary" onClick={handlePasswordGateSubmit} disabled={passwordGateLoading} style={{ width: '100%', padding: '14px', opacity: passwordGateLoading ? 0.6 : 1 }} data-testid="button-password-gate-submit">{passwordGateLoading ? 'Setting password...' : 'Set Password & Continue'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTermsGate && sessionAccount && !showPasswordGate && (
+        <div className="x-modal-overlay" style={{ zIndex: 9150 }}>
+          <div className="x-modal" style={{ maxWidth: 600, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '28px 36px', borderBottom: `1px solid ${C.goldborder}`, flexShrink: 0 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 4 }}>Required Agreement</div>
+              <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700 }}>Accept Terms & Conditions</div>
+            </div>
+            <div style={{ padding: '28px 36px', overflowY: 'auto', flex: 1, fontSize: 13, color: C.cream3, lineHeight: 1.8 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.gold, marginBottom: 16, lineHeight: 1.6 }}>You must accept the UAIU Trading Agreement before continuing.</div>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>1. Instrument Definition.</strong> Carbon credits ("Credits") traded on UAIU.LIVE/X are environmental commodities representing verified reductions or removals of one metric tonne of CO₂-equivalent (1 tCO₂e). Credits are not securities and are not regulated by securities regulators.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>2. Settlement Terms.</strong> Standard settlement is T+1 (one business day following trade execution). Credits are transferred to Buyer's designated registry account.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>3. Fees.</strong> A platform fee of 0.75% of gross trade value is deducted at point of execution. This fee is non-refundable upon settlement.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>4. Risk Disclosure.</strong> Carbon credit prices are volatile and may decline materially. Past performance is not indicative of future results.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>5. KYC & Compliance.</strong> All account holders must complete identity verification ("KYC") prior to executing trades.</p>
+              <p style={{ marginBottom: 20 }}><strong style={{ color: C.cream, fontFamily: F.playfair }}>6. Jurisdiction.</strong> This agreement is governed by the laws of the State of Wyoming, United States.</p>
+              <p style={{ color: C.cream4, fontSize: 11, fontFamily: F.mono }}>UAIU Holdings Corp. · Wyoming LLC · Registered 2025</p>
+            </div>
+            <div style={{ padding: '20px 36px', borderTop: `1px solid ${C.goldborder}`, flexShrink: 0 }}>
+              <button className="x-btn-primary" onClick={handleAcceptTerms} disabled={termsAccepting} style={{ width: '100%', padding: '14px', fontFamily: F.mono, fontSize: 12, letterSpacing: '0.1em', opacity: termsAccepting ? 0.6 : 1 }} data-testid="button-accept-terms-gate">{termsAccepting ? 'Accepting...' : 'I Accept These Terms & Continue'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showTermsModal && (
         <div className="x-modal-overlay" style={{ zIndex: 9100 }} onClick={e => { if (e.target === e.currentTarget) setShowTermsModal(false); }}>
