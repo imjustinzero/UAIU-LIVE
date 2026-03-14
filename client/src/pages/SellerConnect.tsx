@@ -319,6 +319,12 @@ export default function SellerConnect() {
                         {p.failure_reason && (
                           <div style={{ fontSize: 11, color: C.red, marginTop: 4 }}>{p.failure_reason}</div>
                         )}
+                        <button
+                          onClick={() => window.open(`/api/exchange/trade/${encodeURIComponent(p.trade_id)}/audit-pack`, '_blank')}
+                          style={{ marginTop: 8, background: 'transparent', border: `1px solid ${C.border}`, color: C.gold, borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}
+                        >
+                          Download EU ETS Audit Pack (.pdf)
+                        </button>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: `${statusColor(p.payout_status)}22`, color: statusColor(p.payout_status), border: `1px solid ${statusColor(p.payout_status)}44` }}>
