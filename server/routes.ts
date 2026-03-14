@@ -167,7 +167,27 @@ export function invalidateListingCache(): void {
   listingCache.clear();
 }
 
+async function ensureExchangeIndexes(): Promise<void> {
+  const indexes = [
+    `CREATE INDEX IF NOT EXISTS idx_exchange_trades_account_email ON exchange_trades (account_email)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_trades_receipt_hash ON exchange_trades (receipt_hash)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_trades_status_created ON exchange_trades (status, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_trades_receipt_notnull ON exchange_trades (created_at DESC, receipt_hash) WHERE receipt_hash IS NOT NULL AND receipt_hash != ''`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_trades_seller_serial_status ON exchange_trades (seller_registry_serial, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_listings_status_standard ON exchange_listings (status, standard)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_rfqs_email ON exchange_rfqs (email)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_rfqs_status ON exchange_rfqs (status)`,
+    `CREATE INDEX IF NOT EXISTS idx_exchange_rfq_matches_rfq_id ON exchange_rfq_matches (rfq_id)`,
+  ];
+  for (const stmt of indexes) {
+    await db.execute(sql.raw(stmt)).catch((e: any) => console.error('[Index]', e.message));
+  }
+  console.log('[Indexes] Exchange performance indexes ensured');
+}
+
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
+  ensureExchangeIndexes().catch((e: any) => console.error('[Indexes] Failed to ensure indexes:', e.message));
+
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 8,
@@ -1898,6 +1918,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         retiredTco2e: Number(totals.retired_tco2e || 0),
         totalVolumeEur: Number(totals.total_volume_eur || 0),
       },
+      trades: entries,
       entries,
       page,
       pages,
@@ -3270,6 +3291,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       }
 
       const newListing = await storage.approveCreditListing(req.params.id);
+      invalidateListingCache();
       logAdminAction(req, 'approve_listing', `Listing ${req.params.id} approved — ${newListing.name}`, { affectedRecordId: req.params.id, metadata: { listing_name: newListing.name, standard: newListing.standard } }).catch(() => {});
       sendExchangeEmail('Listing Approved — Now Live on Marketplace', {
         'Listing ID':   req.params.id,
@@ -3291,6 +3313,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.post('/api/admin/listings/:id/reject', requireAdminHeader, async (req, res) => {
     try {
       const rejected = await storage.rejectCreditListing(req.params.id);
+      invalidateListingCache();
       logAdminAction(req, 'reject_listing', `Listing ${req.params.id} rejected — ${rejected.orgName || req.params.id}${req.body.reason ? ` (reason: ${req.body.reason})` : ''}`, { affectedRecordId: req.params.id, metadata: { org: rejected.orgName, reason: req.body.reason || null } }).catch(() => {});
       const reason = req.body.reason || 'Your listing did not meet our current marketplace requirements.';
       const html = `<div style="font-family:Arial;background:#022c22;color:#ecfdf5;padding:20px"><h2 style="color:#34d399">UAIU.LIVE/X — Listing Review</h2><p>Thank you for submitting your carbon credits to UAIU.LIVE/X.</p><p>After review, we are unable to approve your listing at this time.</p><p><strong>Reason:</strong> ${reason}</p><p>Please contact info@uaiu.live if you have questions.</p></div>`;
