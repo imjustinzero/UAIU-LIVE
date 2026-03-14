@@ -498,6 +498,8 @@ export default function Exchange() {
 
   const [showTermsGate, setShowTermsGate] = useState(false);
 
+  const [sellerConnectReady, setSellerConnectReady] = useState<boolean | null>(null);
+
   const [dbTrades, setDbTrades] = useState<any[]>([]);
   const [dbTradesLoading, setDbTradesLoading] = useState(false);
 
@@ -701,6 +703,17 @@ export default function Exchange() {
         setExchangeToken(null);
       });
   }, []);
+
+  useEffect(() => {
+    if (!exchangeToken) { setSellerConnectReady(null); return; }
+    fetch('/api/seller/connect/status', { headers: { 'X-Exchange-Token': exchangeToken } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.connectAccountId && data?.connectStatus?.chargesEnabled) setSellerConnectReady(true);
+        else setSellerConnectReady(false);
+      })
+      .catch(() => setSellerConnectReady(null));
+  }, [exchangeToken]);
 
   useEffect(() => {
     // Session ID (crypto-grade random)
@@ -1102,6 +1115,7 @@ export default function Exchange() {
   async function handleListSubmit() {
     if (botDetected()) { showToast('Submission blocked.'); return; }
     if (!rateOk('listing', 3)) return;
+    if (sellerConnectReady !== true && sessionAccount?.email) { showToast('Complete seller onboarding with Stripe Connect before submitting listings. Visit the Seller Onboarding page.'); return; }
     if (!listOrgName || !listContact || !listEmail || !listStandard || !listType || !listVolume || !listPrice || !listOrigin) { showToast('Please fill in all required fields.'); return; }
     if (!listEmail.includes('@')) { showToast('Please enter a valid email address.'); return; }
     setListSubmitting(true);
@@ -1758,6 +1772,15 @@ export default function Exchange() {
                   <div style={{ fontFamily: F.playfair, fontSize: 26, fontWeight: 700, marginBottom: 4 }}>List Your Credits</div>
                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em' }}>Submit for 48-hour verification</div>
                 </div>
+                {sellerConnectReady !== true && sessionAccount?.email && (
+                  <div data-testid="listing-gate-banner" style={{ margin: '16px 20px 0', padding: '14px 18px', background: 'rgba(234,179,8,0.08)', border: `1px solid rgba(234,179,8,0.25)`, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Lock size={16} color={C.gold} />
+                    <div>
+                      <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 2 }}>Seller Setup Required</div>
+                      <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, lineHeight: 1.5 }}>Complete seller onboarding with Stripe Connect before submitting listings. <a href="/x/seller" style={{ color: C.gold, textDecoration: 'underline' }} data-testid="link-seller-onboarding">Complete Setup</a></div>
+                    </div>
+                  </div>
+                )}
                 {listSuccess ? (
                   <div style={{ padding: '40px 36px', textAlign: 'center' }}>
                     <div style={{ marginBottom: 20 }}><CheckCircle size={56} color={C.gold} /></div>

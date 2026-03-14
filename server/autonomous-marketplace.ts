@@ -811,6 +811,10 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         return res.status(404).json({ error: "Seller profile not found. Complete seller onboarding first." });
       }
 
+      if (profile.onboarding_status !== 'active') {
+        return res.status(403).json({ error: 'Business verification (KYB) must be approved before setting up Stripe Connect.' });
+      }
+
       let connectAccountId = profile.stripe_connect_account_id;
 
       if (!connectAccountId) {
@@ -877,7 +881,43 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         connectDetailsSubmitted: profile.connect_details_submitted,
         connectStatus,
         payoutHistory: profile.payout_history || [],
+        sellerProfile: {
+          id: profile.id,
+          legal_entity_name: profile.legal_entity_name,
+          trading_name: profile.trading_name,
+          seller_type: profile.seller_type,
+          country: profile.country,
+          registry_name: profile.registry_name,
+          registry_account_id: profile.registry_account_id,
+          website: profile.website,
+          tax_id: profile.tax_id,
+          onboarding_status: profile.onboarding_status,
+          kyb_status: profile.kyb_status,
+          kyc_status: profile.kyc_status,
+        },
       });
+    } catch (e: any) {
+      return res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get("/api/seller/my-listings", requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || "").toLowerCase();
+      const result = await db.execute(sql`
+        SELECT ecl.id, ecl.org_name AS name, ecl.standard, ecl.status,
+               ecl.asking_price_per_tonne AS "pricePerTonne",
+               ecl.volume_tonnes AS "volumeTonnes",
+               ecl.project_origin AS origin,
+               ecl.registry_serial AS "registrySerial",
+               ecl.registry_name AS "registryName",
+               ecl.vintage_year AS "vintageYear",
+               ecl.created_at AS "createdAt"
+        FROM exchange_credit_listings ecl
+        WHERE ecl.email = ${email}
+        ORDER BY ecl.created_at DESC
+      `);
+      return res.json((result as any).rows || []);
     } catch (e: any) {
       return res.status(500).json({ error: safeError(e) });
     }
@@ -900,6 +940,9 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const profile = (profileResult as any).rows?.[0];
       if (!profile?.stripe_connect_account_id) {
         return res.status(404).json({ error: "No Connect account found. Start onboarding first." });
+      }
+      if (profile.onboarding_status !== 'active') {
+        return res.status(403).json({ error: 'Business verification (KYB) must be approved before setting up Stripe Connect.' });
       }
       const onboardingUrl = await createOnboardingLink(profile.stripe_connect_account_id, baseUrl);
       return res.json({ success: true, onboardingUrl });
