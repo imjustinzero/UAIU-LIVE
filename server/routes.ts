@@ -35,22 +35,26 @@ import { registerNavigatorRoutes } from "./navigator-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
-async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any> }): Promise<void> {
-  try {
-    const adminKey = String(req.headers['x-admin-key'] || '');
-    const userId = adminKey
-      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
-      : 'unknown';
-    const structuredMessage = JSON.stringify({
-      action: type,
-      affected_record_id: details?.affectedRecordId || null,
-      notes: message,
-      ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
-      timestamp: new Date().toISOString(),
-      ...(details?.metadata || {}),
-    });
+async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any>; critical?: boolean }): Promise<void> {
+  const adminKey = String(req.headers['x-admin-key'] || '');
+  const userId = adminKey
+    ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+    : 'unknown';
+  const structuredMessage = JSON.stringify({
+    action: type,
+    affected_record_id: details?.affectedRecordId || null,
+    notes: message,
+    ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
+    timestamp: new Date().toISOString(),
+    ...(details?.metadata || {}),
+  });
+  if (details?.critical) {
+    // For high-risk actions, audit write failure blocks the operation
     await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
-  } catch (_) {}
+  } else {
+    storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage })
+      .catch(err => console.error(`[AUDIT] Failed to write log for action ${type}:`, err));
+  }
 }
 
 function createRetirementUploadToken(): { token: string; tokenHash: string } {
@@ -3151,8 +3155,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const failure = failures.find(f => f.id === req.params.id);
       if (!failure) return res.status(404).json({ error: 'Failure record not found' });
 
+      // Audit write BEFORE any mutation — failure blocks the operation
+      await logAdminAction(req, 'webhook_retry', `Webhook failure ${req.params.id} retry initiated — event: ${failure.eventType || 'unknown'}, trade: ${failure.tradeId || 'n/a'}`, { affectedRecordId: req.params.id, critical: true, metadata: { event_type: failure.eventType, trade_id: failure.tradeId } });
       await storage.incrementWebhookRetry(req.params.id);
-      logAdminAction(req, 'webhook_retry', `Webhook failure ${req.params.id} retried — event: ${failure.eventType || 'unknown'}, trade: ${failure.tradeId || 'n/a'}`, { affectedRecordId: req.params.id, metadata: { event_type: failure.eventType, trade_id: failure.tradeId } }).catch(() => {});
 
       // If we have a PI ID, attempt to re-capture
       if (failure.paymentIntentId && stripeReady) {
@@ -4260,12 +4265,15 @@ Respond with a JSON object (no markdown) with these exact fields:
         return res.status(403).json({ error: `T+1 hold not yet elapsed — ${remainingHrs}h remaining` });
       }
 
+      // Audit intent BEFORE irreversible Stripe capture — failure blocks the operation
+      await logAdminAction(req, 'escrow_release_intent', `Escrow release initiated — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, amount: €${(piCheck.amount / 100).toFixed(2)}`, { affectedRecordId: trade_id || payment_intent_id, critical: true, metadata: { payment_intent_id, trade_id, amount_eur: piCheck.amount / 100 } });
+
       const captured = await stripe.paymentIntents.capture(payment_intent_id);
       const gross = captured.amount / 100;
       const uaiu_fee = gross * 0.0075;
       const seller_net = gross - uaiu_fee;
       const escrowPaymentModel = String((captured.metadata as any)?.payment_model || 'platform_collect');
-      logAdminAction(req, 'escrow_release', `Escrow released — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, gross: €${gross.toFixed(2)}, model: ${escrowPaymentModel}`, { affectedRecordId: trade_id || payment_intent_id, metadata: { payment_intent_id, trade_id, gross_eur: gross, payment_model: escrowPaymentModel } }).catch(() => {});
+      logAdminAction(req, 'escrow_release', `Escrow captured — PI: ${payment_intent_id}, trade: ${trade_id || 'n/a'}, gross: €${gross.toFixed(2)}, model: ${escrowPaymentModel}`, { affectedRecordId: trade_id || payment_intent_id, metadata: { payment_intent_id, trade_id, gross_eur: gross, payment_model: escrowPaymentModel } });
       await (req.app.locals.supabase as any)?.from('escrow_settlements').update({ status: 'settled', settled_at: new Date().toISOString(), uaiu_fee_eur: uaiu_fee, seller_net_eur: seller_net, stripe_charge_id: captured.latest_charge }).eq('payment_intent_id', payment_intent_id);
       if (escrowPaymentModel === 'destination_charge' && (captured.metadata as any)?.seller_profile_id) {
         const escrowSellerLookup = await db.execute(sql`

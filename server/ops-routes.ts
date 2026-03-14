@@ -9,22 +9,25 @@ import { existsSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { storage } from './storage';
 
-async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any> }): Promise<void> {
-  try {
-    const adminKey = String(req.headers['x-admin-key'] || '');
-    const userId = adminKey
-      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
-      : 'unknown';
-    const structuredMessage = JSON.stringify({
-      action: type,
-      affected_record_id: details?.affectedRecordId || null,
-      notes: message,
-      ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
-      timestamp: new Date().toISOString(),
-      ...(details?.metadata || {}),
-    });
+async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any>; critical?: boolean }): Promise<void> {
+  const adminKey = String(req.headers['x-admin-key'] || '');
+  const userId = adminKey
+    ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+    : 'unknown';
+  const structuredMessage = JSON.stringify({
+    action: type,
+    affected_record_id: details?.affectedRecordId || null,
+    notes: message,
+    ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
+    timestamp: new Date().toISOString(),
+    ...(details?.metadata || {}),
+  });
+  if (details?.critical) {
     await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
-  } catch (_) {}
+  } else {
+    storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage })
+      .catch(err => console.error(`[AUDIT] Failed to write log for action ${type}:`, err));
+  }
 }
 
 export function registerOpsRoutes(app: Express) {

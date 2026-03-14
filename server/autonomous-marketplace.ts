@@ -13,22 +13,25 @@ import {
   getBaseUrl,
 } from "./stripe-connect";
 
-async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any> }): Promise<void> {
-  try {
-    const adminKey = String(req.headers['x-admin-key'] || '');
-    const userId = adminKey
-      ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
-      : 'unknown';
-    const structuredMessage = JSON.stringify({
-      action: type,
-      affected_record_id: details?.affectedRecordId || null,
-      notes: message,
-      ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
-      timestamp: new Date().toISOString(),
-      ...(details?.metadata || {}),
-    });
+async function logAdminAction(req: any, type: string, message: string, details?: { affectedRecordId?: string; metadata?: Record<string, any>; critical?: boolean }): Promise<void> {
+  const adminKey = String(req.headers['x-admin-key'] || '');
+  const userId = adminKey
+    ? createHash('sha256').update(adminKey).digest('hex').slice(0, 16)
+    : 'unknown';
+  const structuredMessage = JSON.stringify({
+    action: type,
+    affected_record_id: details?.affectedRecordId || null,
+    notes: message,
+    ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(),
+    timestamp: new Date().toISOString(),
+    ...(details?.metadata || {}),
+  });
+  if (details?.critical) {
     await storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage });
-  } catch (_) {}
+  } else {
+    storage.addActionLog({ userId, userName: 'admin', type, message: structuredMessage })
+      .catch(err => console.error(`[AUDIT] Failed to write log for action ${type}:`, err));
+  }
 }
 
 type RuleEval = {
@@ -643,6 +646,9 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const gross = Number(trade.grossEur || 0);
       const sellerNet = Math.max(0, gross - fee);
 
+      // Audit intent BEFORE any DB mutation — failure blocks the operation
+      await logAdminAction(req, 'settlement_run_intent', `Settlement run initiated — trade: ${tradeId}, seller: ${seller.seller_email}, net: €${sellerNet.toFixed(2)}`, { affectedRecordId: tradeId, critical: true, metadata: { seller_email: seller.seller_email, seller_net_eur: sellerNet, gross_eur: gross } });
+
       const existingPayoutResult = await db.execute(sql`
         SELECT * FROM seller_payouts WHERE trade_id = ${tradeId} ORDER BY created_at DESC LIMIT 1
       `);
@@ -707,7 +713,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         )
       `);
 
-      logAdminAction(req, 'settlement_run', `Settlement run for trade ${tradeId} — seller: ${seller.seller_email}, net: €${sellerNet.toFixed(2)}`).catch(() => {});
+      logAdminAction(req, 'settlement_run', `Settlement run completed — trade: ${tradeId}, seller: ${seller.seller_email}, net: €${sellerNet.toFixed(2)}`, { affectedRecordId: tradeId, metadata: { seller_email: seller.seller_email, seller_net_eur: sellerNet } });
 
       return res.json({
         success: true,
@@ -853,7 +859,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       if (payout.payout_status === "paid" || payout.payout_status === "released") {
         return res.json({ success: true, alreadyReleased: true, payout });
       }
-      logAdminAction(req, 'payout_release', `Payout release initiated — trade: ${tradeId}, seller: ${payout.seller_email || 'n/a'}, net: €${payout.seller_net_eur || '?'}`).catch(() => {});
+      await logAdminAction(req, 'payout_release', `Payout release initiated — trade: ${tradeId}, seller: ${payout.seller_email || 'n/a'}, net: €${payout.seller_net_eur || '?'}`, { affectedRecordId: tradeId, critical: true, metadata: { seller_email: payout.seller_email, seller_net_eur: payout.seller_net_eur } });
 
       // ── Destination charge: funds already with seller — no transfer needed
       if (payout.settlement_method === 'destination_charge') {
