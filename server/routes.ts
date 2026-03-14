@@ -2477,15 +2477,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   }
 
   function sendSignedExport(res: any, payload: Record<string, any>): void {
-    const hash = computeExportHash(payload);
-    const response = {
-      ...payload,
-      export_hash: hash,
-      export_hash_algorithm: 'SHA-256',
-      export_hash_scope: 'Computed over all fields except export_hash, export_hash_algorithm, and export_hash_scope. To verify: remove these three keys, sort remaining keys, JSON.stringify, then SHA-256 hex.',
-    };
+    const keys = Object.keys(payload).sort();
+    const canonicalBody = JSON.stringify(payload, keys);
+    const hash = createHash('sha256').update(canonicalBody).digest('hex');
     res.setHeader('X-Export-Hash', hash);
-    res.json(response);
+    res.setHeader('Content-Type', 'application/json');
+    res.send(canonicalBody);
   }
 
   app.get('/api/exchange/trades/:tradeId/export/eu-ets', requireExchangeAuth, async (req, res) => {
@@ -2512,20 +2509,20 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         platform: 'UAIU.LIVE/X',
         trade_id: trade.tradeId,
         standard: trade.standard,
-        vintage_year: trade.vintageYear || null,
+        vintage_year: trade.vintageYear ?? null,
         volume_tonnes: trade.volumeTonnes,
         price_per_tonne: trade.pricePerTonne,
         gross_eur: trade.grossEur,
         fee_eur: trade.feeEur,
-        receipt_hash: trade.receiptHash || null,
+        receipt_hash: trade.receiptHash ?? null,
         operator_id: trade.operatorId,
         installation_id: trade.installationId,
-        activity_type: trade.activityType || null,
-        verified_emissions_quantity: trade.verifiedEmissionsQuantity || null,
+        activity_type: trade.activityType ?? null,
+        verified_emissions_quantity: trade.verifiedEmissionsQuantity ?? null,
         buyer_email: buyerEmail,
-        seller_registry_serial: trade.sellerRegistrySerial || null,
-        seller_registry_name: trade.sellerRegistryName || null,
-        retirement_status: trade.retirementStatus || null,
+        seller_registry_serial: trade.sellerRegistrySerial ?? null,
+        seller_registry_name: trade.sellerRegistryName ?? null,
+        retirement_status: trade.retirementStatus ?? null,
         export_timestamp: new Date().toISOString(),
       };
       sendSignedExport(res, payload);
@@ -2558,19 +2555,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         platform: 'UAIU.LIVE/X',
         trade_id: trade.tradeId,
         standard: trade.standard,
-        vintage_year: trade.vintageYear || null,
+        vintage_year: trade.vintageYear ?? null,
         volume_tonnes: trade.volumeTonnes,
         price_per_tonne: trade.pricePerTonne,
         gross_eur: trade.grossEur,
         fee_eur: trade.feeEur,
-        receipt_hash: trade.receiptHash || null,
+        receipt_hash: trade.receiptHash ?? null,
         corsia_eligible: true,
-        icao_operator_code: trade.icaoOperatorCode || null,
-        eligible_program: trade.eligibleProgram || null,
+        icao_operator_code: trade.icaoOperatorCode ?? null,
+        eligible_program: trade.eligibleProgram ?? null,
         buyer_email: buyerEmail,
-        seller_registry_serial: trade.sellerRegistrySerial || null,
-        seller_registry_name: trade.sellerRegistryName || null,
-        retirement_status: trade.retirementStatus || null,
+        seller_registry_serial: trade.sellerRegistrySerial ?? null,
+        seller_registry_name: trade.sellerRegistryName ?? null,
+        retirement_status: trade.retirementStatus ?? null,
         export_timestamp: new Date().toISOString(),
       };
       sendSignedExport(res, payload);
@@ -2603,19 +2600,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
         platform: 'UAIU.LIVE/X',
         trade_id: trade.tradeId,
         standard: trade.standard,
-        vintage_year: trade.vintageYear || null,
+        vintage_year: trade.vintageYear ?? null,
         volume_tonnes: trade.volumeTonnes,
         price_per_tonne: trade.pricePerTonne,
         gross_eur: trade.grossEur,
         fee_eur: trade.feeEur,
-        receipt_hash: trade.receiptHash || null,
+        receipt_hash: trade.receiptHash ?? null,
         vessel_imo: trade.vesselImo,
-        voyage_reference: trade.voyageReference || null,
-        fuel_consumption_offset: trade.fuelConsumptionOffset || null,
+        voyage_reference: trade.voyageReference ?? null,
+        fuel_consumption_offset: trade.fuelConsumptionOffset ?? null,
         buyer_email: buyerEmail,
-        seller_registry_serial: trade.sellerRegistrySerial || null,
-        seller_registry_name: trade.sellerRegistryName || null,
-        retirement_status: trade.retirementStatus || null,
+        seller_registry_serial: trade.sellerRegistrySerial ?? null,
+        seller_registry_name: trade.sellerRegistryName ?? null,
+        retirement_status: trade.retirementStatus ?? null,
         export_timestamp: new Date().toISOString(),
       };
       sendSignedExport(res, payload);
