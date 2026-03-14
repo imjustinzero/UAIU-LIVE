@@ -320,6 +320,15 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 const trade_id = pi.metadata?.trade_id || 'unknown';
                 console.log(`[Webhook] payment_intent.payment_failed — PI: ${pi.id}, trade: ${trade_id}`);
 
+                const failedListingId = pi.metadata?.listing_id;
+                if (failedListingId) {
+                  await db.execute(sql`
+                    UPDATE exchange_listings SET status = 'active'
+                    WHERE id = ${failedListingId} AND status = 'reserved'
+                  `).catch(() => {});
+                  console.log(`[Webhook] payment_intent.payment_failed — restored listing ${failedListingId} to active`);
+                }
+
                 await db.execute(sql`
                   UPDATE escrow_settlements_log
                   SET status = 'payment_failed', settled_at = NOW()
@@ -402,6 +411,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   }
                   console.log(`[KYC] Account ${account_id} verified via webhook`);
                 }
+              } else if (event.type === 'checkout.session.expired') {
+                const expiredCs = event.data.object as any;
+                const expiredMeta = expiredCs.metadata || {};
+                const expiredListingId = expiredMeta.listing_id;
+                if (expiredListingId) {
+                  await db.execute(sql`
+                    UPDATE exchange_listings SET status = 'active'
+                    WHERE id = ${expiredListingId} AND status = 'reserved'
+                  `).catch((e: any) => console.error('[Webhook] Failed to restore listing on session expired', e.message));
+                  console.log(`[Webhook] checkout.session.expired — restored listing ${expiredListingId} to active`);
+                }
               } else if (event.type === 'checkout.session.completed') {
                 const cs = event.data.object as any;
                 const meta = cs.metadata || {};
@@ -417,8 +437,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                 const settled_at  = new Date().toISOString();
                 const receiptData = `${tradeId}:${cs.id}:${grossEur}:${settled_at}`;
                 const receiptHash = createHash('sha256').update(receiptData).digest('hex');
+                const prevReceiptHashVal = await getMostRecentReceiptHash();
+                const webhookListingId = meta.listing_id || null;
 
-                // Store trade record in DB
                 let sellerEmail = '';
                 let destinationTransferId = '';
                 if (meta.seller_profile_id) {
@@ -431,7 +452,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   sellerEmail = (sellerProfileLookup as any).rows?.[0]?.exchange_account_email || '';
                 }
 
-                storage.createExchangeTrade({
+                if (webhookListingId) {
+                  await db.execute(sql`
+                    UPDATE exchange_listings SET status = 'sold'
+                    WHERE id = ${webhookListingId} AND status IN ('reserved', 'active')
+                  `).catch((e: any) => console.error('[Webhook] Failed to mark listing as sold', e.message));
+                }
+
+                await storage.createExchangeTrade({
                   accountEmail:    email,
                   tradeId,
                   side,
@@ -441,6 +469,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   grossEur,
                   feeEur,
                   receiptHash,
+                  prevReceiptHash: prevReceiptHashVal,
+                  sellerProfileId: meta.seller_profile_id || null,
+                  listingId:       webhookListingId,
                   stripeSessionId: cs.id,
                   buyerRegistryAccountId: meta.buyer_registry_account_id || null,
                   buyerRegistryName: meta.buyer_registry_name || null,
@@ -450,65 +481,63 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                   vintageYear: meta.vintage_year ? Number(meta.vintage_year) : null,
                   paymentModel:    paymentModel,
                   status:          'completed',
-                }).catch((e: any) => console.error('[Exchange Trade DB]', e.message));
-                if (paymentModel === 'destination_charge' && cs.payment_intent) {
-                  try {
-                    const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
-                    const latestCharge: any = pi.latest_charge as any;
-                    destinationTransferId = typeof latestCharge?.transfer === 'string'
-                      ? latestCharge.transfer
-                      : latestCharge?.transfer?.id || '';
-                  } catch (err: any) {
-                    console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                });
+
+                try {
+                  if (paymentModel === 'destination_charge' && cs.payment_intent) {
+                    try {
+                      const pi = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge.transfer'] });
+                      const latestCharge: any = pi.latest_charge as any;
+                      destinationTransferId = typeof latestCharge?.transfer === 'string'
+                        ? latestCharge.transfer
+                        : latestCharge?.transfer?.id || '';
+                    } catch (err: any) {
+                      console.error('[Exchange Checkout] Failed to expand destination transfer', err.message);
+                    }
                   }
-                }
 
-                // Insert seller_payouts row — immediately paid for destination charges
-                if (meta.seller_profile_id) {
-                  await db.execute(sql`
-                    INSERT INTO seller_payouts (
-                      trade_id, seller_profile_id, seller_email,
-                      gross_eur, fee_eur, seller_net_eur,
-                      payout_status, payout_provider, payout_reference,
-                      settlement_method, stripe_destination_charge_id, stripe_transfer_id, released_at
-                    ) VALUES (
-                      ${tradeId},
-                      ${meta.seller_profile_id},
-                      ${sellerEmail || null},
-                      ${grossEur},
-                      ${feeEur},
-                      ${grossEur - feeEur},
-                      ${paymentModel === 'destination_charge' ? 'paid' : 'pending_release'},
-                      ${paymentModel === 'destination_charge' ? 'stripe_destination' : 'workflow_only'},
-                      ${paymentModel === 'destination_charge' ? (destinationTransferId || String(cs.payment_intent || cs.id)) : null},
-                      ${paymentModel},
-                      ${String(cs.payment_intent || '')},
-                      ${destinationTransferId || null},
-                      ${paymentModel === 'destination_charge' ? new Date() : null}
-                    )
-                  `).catch((e: any) => console.error('[seller_payouts insert]', e.message));
-                }
+                  if (meta.seller_profile_id) {
+                    await db.execute(sql`
+                      INSERT INTO seller_payouts (
+                        trade_id, seller_profile_id, seller_email,
+                        gross_eur, fee_eur, seller_net_eur,
+                        payout_status, payout_provider, payout_reference,
+                        settlement_method, stripe_destination_charge_id, stripe_transfer_id, released_at
+                      ) VALUES (
+                        ${tradeId},
+                        ${meta.seller_profile_id},
+                        ${sellerEmail || null},
+                        ${grossEur},
+                        ${feeEur},
+                        ${grossEur - feeEur},
+                        ${paymentModel === 'destination_charge' ? 'paid' : 'pending_release'},
+                        ${paymentModel === 'destination_charge' ? 'stripe_destination' : 'workflow_only'},
+                        ${paymentModel === 'destination_charge' ? (destinationTransferId || String(cs.payment_intent || cs.id)) : null},
+                        ${paymentModel},
+                        ${String(cs.payment_intent || '')},
+                        ${destinationTransferId || null},
+                        ${paymentModel === 'destination_charge' ? new Date() : null}
+                      )
+                    `);
+                  }
 
-                // Send seller payout email for destination charges
-                if (paymentModel === 'destination_charge' && sellerEmail) {
-                  sendSellerDestinationPayoutEmail({
-                    sellerEmail,
-                    tradeId,
-                    payoutAmountEur: grossEur - feeEur,
-                    chargeId: String(cs.payment_intent || ''),
-                  }).catch((e: any) => console.error('[Seller payout email]', e.message));
-                }
+                  if (paymentModel === 'destination_charge' && sellerEmail) {
+                    await sendSellerDestinationPayoutEmail({
+                      sellerEmail,
+                      tradeId,
+                      payoutAmountEur: grossEur - feeEur,
+                      chargeId: String(cs.payment_intent || ''),
+                    });
+                  }
 
-                // Create one-time retirement upload token for seller evidence collection
-                if (sellerEmail && tradeId) {
-                  try {
+                  if (sellerEmail && tradeId) {
                     const uploadToken = nanoid(40);
                     const uploadTokenHash = createHash('sha256').update(uploadToken).digest('hex');
                     await db.execute(sql`
                       INSERT INTO retirement_upload_tokens (trade_id, seller_email, token_hash, created_at)
                       VALUES (${tradeId}, ${sellerEmail}, ${uploadTokenHash}, NOW())
                       ON CONFLICT DO NOTHING
-                    `).catch(() => {});
+                    `);
                     const retireUrl = `https://uaiu.live/retire/${encodeURIComponent(tradeId)}?token=${encodeURIComponent(uploadToken)}`;
                     if (isZohoConfigured()) {
                       const regMeta = [
@@ -516,44 +545,55 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
                         meta.seller_registry_serial ? `<li><strong>Serial:</strong> ${meta.seller_registry_serial}</li>` : '',
                       ].join('');
                       const retireHtml = `<div style="font-family:Arial;background:#060810;color:#f2ead8;padding:24px"><h2 style="color:#d4a843">UAIU.LIVE/X — Upload Retirement Certificate</h2><p>A completed trade now needs retirement evidence.</p><ul><li><strong>Trade ID:</strong> ${tradeId}</li><li><strong>Volume:</strong> ${volumeT.toLocaleString()} tCO₂e ${standard}</li>${regMeta}<li><strong>Window:</strong> Due within 48 hours</li></ul><p><a href="${retireUrl}" style="color:#d4a843">Upload Retirement Certificate →</a></p><p style="font-size:11px;color:rgba(242,234,216,0.4)">This link is one-time use. Contact desk@uaiu.live for assistance.</p></div>`;
-                      sendZohoEmail(sellerEmail, `Retirement certificate upload required — ${tradeId}`, retireHtml).catch(() => {});
+                      await sendZohoEmail(sellerEmail, `Retirement certificate upload required — ${tradeId}`, retireHtml);
                     }
-                  } catch (tokenErr: any) {
-                    console.error('[Retirement token create]', tokenErr.message);
                   }
-                }
 
-                // Generate and email PDF receipt
-                const prevReceiptHashCheckout = await getMostRecentReceiptHash();
-                generateTradePDF({
-                  trade_id:            tradeId,
-                  side,
-                  standard,
-                  volume_tonnes:       volumeT,
-                  price_eur_per_tonne: pricePerT,
-                  gross_eur:           grossEur,
-                  fee_eur:             feeEur,
-                  receipt_hash:        receiptHash,
-                  prev_receipt_hash:   prevReceiptHashCheckout,
-                  payment_intent_id:   cs.payment_intent || '',
-                  stripe_charge_id:    '',
-                  settled_at,
-                  buyer_email:         email,
-                  seller_email:        sellerEmail || undefined,
-                  buyer_registry_account_id: meta.buyer_registry_account_id || '',
-                  buyer_registry_name: meta.buyer_registry_name || '',
-                  seller_registry_name: meta.seller_registry_name || '',
-                  seller_registry_serial: meta.seller_registry_serial || '',
-                  vintage_year: meta.vintage_year ? Number(meta.vintage_year) : undefined,
-                }).then(pdfBuffer => {
+                  const pdfBuffer = await generateTradePDF({
+                    trade_id:            tradeId,
+                    side,
+                    standard,
+                    volume_tonnes:       volumeT,
+                    price_eur_per_tonne: pricePerT,
+                    gross_eur:           grossEur,
+                    fee_eur:             feeEur,
+                    receipt_hash:        receiptHash,
+                    prev_receipt_hash:   prevReceiptHashVal,
+                    payment_intent_id:   cs.payment_intent || '',
+                    stripe_charge_id:    '',
+                    settled_at,
+                    buyer_email:         email,
+                    seller_email:        sellerEmail || undefined,
+                    buyer_registry_account_id: meta.buyer_registry_account_id || '',
+                    buyer_registry_name: meta.buyer_registry_name || '',
+                    seller_registry_name: meta.seller_registry_name || '',
+                    seller_registry_serial: meta.seller_registry_serial || '',
+                    vintage_year: meta.vintage_year ? Number(meta.vintage_year) : undefined,
+                  });
                   const recipients = ['info@uaiu.live'];
                   if (email && email !== 'info@uaiu.live') recipients.push(email);
                   const attachment = [{ filename: `UAIU-Trade-${tradeId}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }];
                   const emailHtml = `<div style="font-family:Arial;background:#0d1220;color:#e8dcc8;padding:28px;border:1px solid #d4a843"><h2 style="color:#d4a843;font-family:Georgia">UAIU.LIVE/X — Trade Confirmed</h2><p>Your trade <strong>${tradeId}</strong> has been executed successfully.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;color:#9b9b7a">Standard:</td><td style="padding:8px;color:#e8dcc8"><strong>${standard}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Volume:</td><td style="padding:8px;color:#e8dcc8"><strong>${volumeT.toLocaleString()} tCO₂e</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Gross:</td><td style="padding:8px;color:#d4a843"><strong>€${grossEur.toLocaleString()}</strong></td></tr><tr><td style="padding:8px;color:#9b9b7a">Settlement:</td><td style="padding:8px;color:#e8dcc8">T+1 (next business day)</td></tr></table><p style="font-size:12px;color:#9b9b7a">Receipt Hash: ${receiptHash.slice(0, 32)}...</p><p style="font-size:12px;color:#9b9b7a">UAIU Exchange · info@uaiu.live</p></div>`;
-                  return sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
-                }).catch((e: any) => console.error('[Exchange Trade PDF email]', e.message));
+                  await sendZohoEmail(recipients.join(','), `UAIU Trade Confirmation — ${tradeId}`, emailHtml, attachment);
+                } catch (postPaymentErr: any) {
+                  console.error(`[Webhook] Post-payment failure for trade ${tradeId}:`, postPaymentErr.message);
+                  await db.execute(sql`
+                    UPDATE exchange_trades
+                    SET status = 'registry_pending_review'
+                    WHERE trade_id = ${tradeId}
+                  `).catch(() => {});
+                  sendExchangeEmail('Post-Payment Failure — Trade Needs Review', {
+                    'Trade ID':  tradeId,
+                    'Buyer':     email,
+                    'Gross':     `EUR ${grossEur}`,
+                    'Error':     postPaymentErr.message,
+                    'Status':    'registry_pending_review',
+                    'Action':    'Manual review required — payment succeeded but post-payment step failed',
+                    'Timestamp': new Date().toISOString(),
+                  }).catch(() => {});
+                }
 
-                console.log(`[Exchange Checkout] ✅ Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: €${grossEur}`);
+                console.log(`[Exchange Checkout] Trade ${tradeId} completed via Stripe. Model: ${paymentModel}. Gross: EUR${grossEur}`);
               } else if (event.type === 'account.updated') {
                 const acct = event.data.object as any;
                 const accountId = acct.id;
@@ -708,10 +748,27 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           } else if (event2.type === 'payment_intent.succeeded') {
             const pi2 = event2.data.object as any;
             console.log(`[Webhook-Secondary] payment_intent.succeeded — PI: ${pi2.id}`);
+          } else if (event2.type === 'checkout.session.expired') {
+            const expiredCs2 = event2.data.object as any;
+            const expiredListingId2 = expiredCs2.metadata?.listing_id;
+            if (expiredListingId2) {
+              await db.execute(sql`
+                UPDATE exchange_listings SET status = 'active'
+                WHERE id = ${expiredListingId2} AND status = 'reserved'
+              `).catch(() => {});
+              console.log(`[Webhook-Secondary] checkout.session.expired — restored listing ${expiredListingId2} to active`);
+            }
           } else if (event2.type === 'payment_intent.payment_failed') {
             const pi2 = event2.data.object as any;
             const trade_id2 = pi2.metadata?.trade_id || 'unknown';
             console.log(`[Webhook-Secondary] payment_intent.payment_failed — PI: ${pi2.id} trade: ${trade_id2}`);
+            const failedListingId2 = pi2.metadata?.listing_id;
+            if (failedListingId2) {
+              await db.execute(sql`
+                UPDATE exchange_listings SET status = 'active'
+                WHERE id = ${failedListingId2} AND status = 'reserved'
+              `).catch(() => {});
+            }
             await db.execute(sql`
               UPDATE escrow_settlements_log
               SET status = 'payment_failed', settled_at = NOW()
@@ -2047,6 +2104,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // ── EXCHANGE: Spot trade Stripe Checkout ──────────────────────────────────
   app.post('/api/exchange/spot-checkout', requireExchangeAuth, exchangeCheckoutLimiter, async (req, res) => {
+    let reservedListingId: string | null = null;
     try {
       const email = (req as any).exchangeEmail;
       const { standard, volumeTonnes, pricePerTonne, tradeId, side, registryAccountId, registryName, ddAcknowledged } = req.body;
@@ -2075,6 +2133,29 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!activeListing) {
         return res.status(400).json({ error: 'No active listing found for that standard.' });
       }
+      const listingRegistrySerial = (activeListing as any).registry_serial || (activeListing as any).registrySerial || '';
+      if (listingRegistrySerial) {
+        const retiredCheck = await db.execute(sql`
+          SELECT id FROM exchange_trades
+          WHERE seller_registry_serial = ${listingRegistrySerial}
+            AND status IN ('completed', 'retired')
+          LIMIT 1
+        `);
+        if ((retiredCheck as any).rows?.length > 0) {
+          return res.status(409).json({ error: 'This registry serial has already been traded or retired.' });
+        }
+      }
+      const listingId = (activeListing as any).id;
+      const reserveResult = await db.execute(sql`
+        UPDATE exchange_listings
+        SET status = 'reserved'
+        WHERE id = ${listingId} AND status = 'active'
+        RETURNING id
+      `);
+      if ((reserveResult as any).rows?.length === 0) {
+        return res.status(409).json({ error: 'Listing is no longer available.' });
+      }
+      reservedListingId = listingId;
       const serverPrice = Number(activeListing.pricePerTonne);
       const submittedPrice = Number(pricePerTonne || 0);
       if (submittedPrice > 0) {
@@ -2127,6 +2208,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
           buyer_registry_account_id: buyerRegistryAccountId,
           buyer_registry_name: buyerRegistryName,
           payment_model: paymentModel,
+          listing_id: listingId,
+          vintage_year: String((activeListing as any).vintage_year || ''),
         },
         payment_intent_data: paymentModel === 'destination_charge' ? {
           application_fee_amount: applicationFeeAmount,
@@ -2136,12 +2219,14 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
             payment_model: paymentModel,
             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
             seller_connect_account_id: String(connectAccountId || ''),
+            listing_id: listingId,
           },
         } : {
           metadata: {
             trade_id: tradeId,
             payment_model: paymentModel,
             seller_profile_id: String((activeListing as any).seller_profile_id || ''),
+            listing_id: listingId,
           },
         },
         success_url: `${origin}/x?trade=success&id=${tradeId}`,
@@ -2151,6 +2236,12 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       await logSecurityEvent({ email, eventType: 'trade_executed', req, detail: { tradeId, standard, volumeTonnes, serverPrice } });
       res.json({ url: session.url });
     } catch (e: any) {
+      if (reservedListingId) {
+        await db.execute(sql`
+          UPDATE exchange_listings SET status = 'active'
+          WHERE id = ${reservedListingId} AND status = 'reserved'
+        `).catch(() => {});
+      }
       console.error('[Spot Checkout]', e.message);
       res.status(500).json({ error: safeError(e) });
     }

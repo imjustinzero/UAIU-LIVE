@@ -398,6 +398,18 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
         return res.status(403).json({ error: 'KYC verification required.' });
       }
 
+      if (registrySerial) {
+        const retiredSerialCheck = await db.execute(sql`
+          SELECT id FROM exchange_trades
+          WHERE seller_registry_serial = ${registrySerial}
+            AND status IN ('completed', 'retired')
+          LIMIT 1
+        `);
+        if ((retiredSerialCheck as any).rows?.length > 0) {
+          return res.status(409).json({ error: 'This registry serial has already been traded or retired and cannot be re-listed.' });
+        }
+      }
+
       const listing = await storage.createExchangeCreditListing({
         orgName,
         contactName,

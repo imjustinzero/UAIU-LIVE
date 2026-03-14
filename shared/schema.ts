@@ -356,6 +356,9 @@ export const exchangeTrades = pgTable("exchange_trades", {
   retirementCertificateGeneratedAt: timestamp("retirement_certificate_generated_at"),
   retirementPurpose: varchar("retirement_purpose"),
   paymentModel: varchar("payment_model"),
+  prevReceiptHash: varchar("prev_receipt_hash"),
+  sellerProfileId: varchar("seller_profile_id"),
+  listingId: varchar("listing_id"),
   status: varchar("status").notNull().default('completed'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
