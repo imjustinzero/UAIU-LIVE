@@ -2470,12 +2470,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
-  function computeExportHash(body: Record<string, any>): string {
-    const keys = Object.keys(body).sort();
-    const stable = JSON.stringify(body, keys);
-    return createHash('sha256').update(stable).digest('hex');
-  }
-
   function sendSignedExport(res: any, payload: Record<string, any>): void {
     const keys = Object.keys(payload).sort();
     const canonicalBody = JSON.stringify(payload, keys);
