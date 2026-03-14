@@ -39,6 +39,7 @@ import NavigatorTracker from "@/pages/navigator/Tracker";
 import NavigatorProjects from "@/pages/navigator/Projects";
 import Maritime from "@/pages/Maritime";
 import MaritimeCarbonOffsetting from "@/pages/maritime/CarbonOffsetting";
+import FastMode from "@/pages/FastMode";
 
 function Router() {
   return (
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/navigator/project/:id/tracker" component={NavigatorTracker} />
       <Route path="/maritime" component={Maritime} />
       <Route path="/maritime/carbon-offsetting" component={MaritimeCarbonOffsetting} />
+      <Route path="/fastmode" component={FastMode} />
       <Route component={NotFound} />
     </Switch>
   );
