@@ -17,69 +17,49 @@ interface PredictionResult {
   key_drivers: string[];
 }
 
-const MOCK_HISTORICAL: PricePoint[] = [
-  { date:'2026-01-01', price:58.40, type:'historical' },
-  { date:'2026-01-08', price:59.20, type:'historical' },
-  { date:'2026-01-15', price:60.10, type:'historical' },
-  { date:'2026-01-22', price:59.80, type:'historical' },
-  { date:'2026-02-01', price:61.30, type:'historical' },
-  { date:'2026-02-08', price:62.10, type:'historical' },
-  { date:'2026-02-15', price:61.90, type:'historical' },
-  { date:'2026-02-22', price:63.20, type:'historical' },
-  { date:'2026-03-01', price:63.80, type:'historical' },
-  { date:'2026-03-05', price:64.20, type:'historical' },
-];
-
-const MOCK_PREDICTION: PredictionResult = {
-  forecast_7d: 65.40,
-  forecast_30d: 68.20,
-  direction: 'bullish',
-  confidence: 78,
-  rationale: 'Supply compression from FuelEU Maritime enforcement and accelerating CORSIA Phase 1 demand are creating upward price pressure. Caribbean blue carbon supply pipeline is constrained through Q2, supporting premium pricing.',
-  range_7d: { low: 63.80, high: 67.10 },
-  range_30d: { low: 65.50, high: 71.80 },
-  key_drivers: [
-    'FuelEU Maritime enforcement creates 40% demand spike in shipping sector',
-    'CORSIA Phase 1 aviation offsetting accelerating',
-    'SwissX Caribbean supply constrained pending verification',
-    'EU ETS allowance price holding above €63 support level',
-    'SWF price floor providing downside protection'
-  ]
-};
 
 interface PricePredictionProps {
   currentPrice?: number;
   isDark?: boolean;
+  registry?: string;
+  vintage?: string;
+  volume?: number;
+  standard?: string;
 }
 
-export function AIPricePrediction({ currentPrice = 64.20, isDark = true }: PricePredictionProps) {
+export function AIPricePrediction({ currentPrice = 64.20, isDark = true, registry, vintage, volume, standard }: PricePredictionProps) {
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [chartData, setChartData] = useState<PricePoint[]>([]);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    buildChart();
     fetchPrediction();
-  }, [currentPrice]);
+  }, [currentPrice, registry, vintage, volume, standard]);
 
-  const buildChart = () => {
-    const today = new Date('2026-03-05');
-    const historical = MOCK_HISTORICAL.map(p => ({ ...p, price: p.price }));
-    // Add last actual point
-    historical[historical.length-1].price = currentPrice;
+  const buildChart = (pred: PredictionResult) => {
+    const today = new Date();
+    const dayMs = 86400000;
+    const historical: PricePoint[] = [];
+    for (let i = 9; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * dayMs * 3);
+      historical.push({
+        date: d.toISOString().split('T')[0],
+        price: currentPrice - (i * 0.4) + (Math.random() - 0.5) * 0.6,
+        type: 'historical',
+      });
+    }
+    historical[historical.length - 1].price = currentPrice;
 
     const forecasts: PricePoint[] = [];
-    const pred = MOCK_PREDICTION;
     for (let i = 1; i <= 30; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+      const d = new Date(today.getTime() + i * dayMs);
       const progress = i / 30;
       const price = currentPrice + (pred.forecast_30d - currentPrice) * progress
         + (Math.random() - 0.48) * 0.8;
       forecasts.push({
-        date: dateStr,
+        date: d.toISOString().split('T')[0],
         price: +price.toFixed(2),
         type: 'forecast',
         confidence: pred.confidence - (progress * 20)
@@ -90,25 +70,95 @@ export function AIPricePrediction({ currentPrice = 64.20, isDark = true }: Price
 
   const fetchPrediction = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/ai/price-prediction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_price: currentPrice, timestamp: Date.now() }),
+        body: JSON.stringify({ current_price: currentPrice, timestamp: Date.now(), registry, vintage, volume, standard }),
         signal: AbortSignal.timeout(15000)
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.prediction) { setPrediction(data.prediction); setLastFetch(new Date()); setLoading(false); return; }
+        if (data.prediction) {
+          setPrediction(data.prediction);
+          buildChart(data.prediction);
+          setLastFetch(new Date());
+          setLoading(false);
+          return;
+        }
       }
-    } catch {}
-    setPrediction(MOCK_PREDICTION);
-    setLastFetch(new Date());
+      const errData = await res.json().catch(() => ({}));
+      setError(errData.error || 'AI service temporarily unavailable. Please try again.');
+    } catch {
+      setError('AI service temporarily unavailable. Please try again.');
+    }
+    setPrediction(null);
     setLoading(false);
   };
 
-  const pred = prediction || MOCK_PREDICTION;
   const GOLD = '#D4A843';
+
+  if (error && !prediction) {
+    return (
+      <div style={{
+        padding: 'clamp(60px,8vw,100px) clamp(20px,5vw,80px)',
+        background: isDark ? '#0a0a0f' : '#ffffff'
+      }}>
+        <div style={{ maxWidth:'1100px', margin:'0 auto' }}>
+          <div style={{ marginBottom:'40px' }}>
+            <p style={{ margin:'0 0 8px', fontSize:'11px', fontWeight:700,
+              letterSpacing:'0.15em', textTransform:'uppercase', color:GOLD }}>
+              AI POWERED
+            </p>
+            <h2 style={{ margin:0, fontSize:'clamp(24px,4vw,36px)', fontWeight:800,
+              color: isDark?'#ffffff':'#0d1b3e', letterSpacing:'-0.02em' }}>
+              Price Prediction Engine.
+            </h2>
+          </div>
+          <div style={{ background: isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.04)',
+            border:'1px solid rgba(212,168,67,0.15)', borderRadius:'16px',
+            padding:'40px', textAlign:'center' }}>
+            <p data-testid="text-prediction-error" style={{ margin:'0 0 16px', fontSize:'14px',
+              color: isDark?'rgba(255,255,255,0.6)':'rgba(0,0,0,0.6)' }}>
+              {error}
+            </p>
+            <button onClick={fetchPrediction} data-testid="button-prediction-retry" style={{
+              padding:'7px 16px', borderRadius:'8px',
+              border:'1px solid rgba(212,168,67,0.3)',
+              background:'transparent', color:GOLD,
+              fontSize:'11px', cursor:'pointer', fontWeight:600
+            }}>Retry</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || !prediction) {
+    return (
+      <div style={{
+        padding: 'clamp(60px,8vw,100px) clamp(20px,5vw,80px)',
+        background: isDark ? '#0a0a0f' : '#ffffff'
+      }}>
+        <div style={{ maxWidth:'1100px', margin:'0 auto', textAlign:'center' }}>
+          <p style={{ margin:'0 0 8px', fontSize:'11px', fontWeight:700,
+            letterSpacing:'0.15em', textTransform:'uppercase', color:GOLD }}>
+            AI POWERED
+          </p>
+          <h2 style={{ margin:'0 0 24px', fontSize:'clamp(24px,4vw,36px)', fontWeight:800,
+            color: isDark?'#ffffff':'#0d1b3e', letterSpacing:'-0.02em' }}>
+            Price Prediction Engine.
+          </h2>
+          <p style={{ fontSize:'13px', color: isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.5)' }}>
+            Loading AI prediction...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const pred = prediction;
   const dirColor = pred.direction === 'bullish' ? '#4ade80' : pred.direction === 'bearish' ? '#f87171' : GOLD;
   const bg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
 
@@ -391,35 +441,6 @@ export function DueDiligenceReport({
     setLoading(false);
   };
 
-  const getMockReport = (l: DDListing, idx: number): DDReport => ({
-    summary: `${l.name} is a ${l.standard}-certified carbon project with ${l.volume_tonnes.toLocaleString()} tonnes of verified supply available at €${l.price.toFixed(2)}/tonne. Project origin: ${l.origin}. Risk score: LOW. Recommendation: BUY.`,
-    registry_status: `Verified and registered under ${l.standard} standard. Registry serial numbers available upon trade execution. Verification by accredited third-party verifier. Credits eligible for EU ETS compliance and voluntary retirement.`,
-    standard_analysis: `${l.standard} is a recognized carbon standard accepted for EU ETS compliance, CORSIA offsetting, and voluntary corporate commitments. Credits carry strong buyer recognition and secondary market liquidity.`,
-    risk_score: 22,
-    risk_factors: [
-      'Additionality verified by accredited third party',
-      'No known double-counting risk — registry serial tracking in place',
-      'Permanence risk: LOW — sovereign-backed project with long-term protection',
-      'Price risk: MITIGATED — SWF price floor mechanism active on UAIU.LIVE/X'
-    ],
-    comparable_trades: [
-      { date:'2026-02-15', price: l.price * 0.98, volume:5000, standard:l.standard },
-      { date:'2026-02-28', price: l.price * 1.01, volume:8000, standard:l.standard },
-      { date:'2026-03-01', price: l.price * 0.99, volume:3200, standard:l.standard },
-    ],
-    recommended_price_range: { low: l.price * 0.97, high: l.price * 1.04 },
-    recommendation: l.price <= idx * 1.05 ? 'strong_buy' : 'buy',
-    recommendation_rationale: `Current asking price of €${l.price.toFixed(2)} is ${l.price <= idx ? 'at or below' : 'near'} the UAIU Caribbean Premium Index of €${idx.toFixed(2)}. With SWF price floor protection and verified supply from ${l.origin}, this represents a compelling compliance buy.`,
-    sections: [
-      { title:'Project Overview', content:`${l.name} is located in ${l.origin} and generates verified carbon credits under the ${l.standard} standard. Available supply: ${l.volume_tonnes.toLocaleString()} tonnes. Vintage: ${l.vintage || '2025-2026'}. Methodology: ${l.methodology || 'Verified standard methodology with third-party audit'}.` },
-      { title:'Registry Verification', content:`Credits are registered under ${l.registry || l.standard + ' registry'} and verified by ${l.verifier || 'accredited third-party verifier'}. Serial numbers and verification reports available upon request. No known cancellations, retirements, or disputes on record.` },
-      { title:'Market Analysis', content:`At €${l.price.toFixed(2)}/tonne, this listing is priced ${l.price <= idx ? `€${(idx-l.price).toFixed(2)} below` : `€${(l.price-idx).toFixed(2)} above`} the UAIU Caribbean Premium Index. Three comparable trades in the past 30 days averaged €${(l.price * 0.993).toFixed(2)}/tonne. Supply is limited — ${l.volume_tonnes.toLocaleString()} tonnes available.` },
-      { title:'Risk Assessment', content:`Overall risk score: ${22}/100 (LOW). Key risks assessed: additionality (LOW), permanence (LOW), leakage (LOW), double-counting (LOW), price risk (MITIGATED by SWF floor). No material risk factors identified that would preclude purchase for compliance or voluntary use.` },
-      { title:'Compliance Suitability', content:`Credits are suitable for: EU ETS compliance (Scope 1 and Scope 2), CORSIA Phase 1 offsetting (if CORSIA eligible), IMO GHG strategy compliance, voluntary corporate net-zero commitments, CDP disclosure, and SEC climate disclosure purposes.` },
-      { title:'Settlement & Custody', content:`T+1 settlement via UAIU.LIVE/X exchange infrastructure. SHA-256 cryptographic receipt issued at settlement. Retirement certificates generated immediately upon buyer instruction. All records stored permanently on Supabase with public verification at uaiu.live/x#trust.` },
-      { title:'Recommendation', content:`RECOMMENDATION: ${l.price <= idx*1.02 ? 'STRONG BUY' : 'BUY'}. At current pricing with SWF price floor protection and verified supply from a recognized registry, this listing represents favorable value for institutional compliance buyers. Recommend executing via RFQ for orders over 10,000 tonnes to ensure allocation.` },
-    ]
-  });
 
   const GOLD = '#D4A843';
   const recColors: Record<string, string> = {

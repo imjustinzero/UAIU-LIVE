@@ -286,11 +286,17 @@ export function VisionVerification({ onReport }: VisionProps) {
             body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
           });
           const data = await res.json();
-          const rep = data.report || 'AI analysis complete. Please review manually.';
-          setReport(rep);
-          onReport(rep);
+          if (data.error) {
+            const errMsg = data.error || 'AI service temporarily unavailable. Please try again.';
+            setReport(errMsg);
+            onReport(errMsg);
+          } else {
+            const rep = data.report || 'AI analysis complete. Please review manually.';
+            setReport(rep);
+            onReport(rep);
+          }
         } catch {
-          const fallback = '[Demo Mode] AI Vision Analysis:\nLocation Assessment: Tropical coastal region detected\nVegetation Analysis: Dense canopy cover ~85%\nCarbon Estimate: 12-18 tCO₂e/ha/year\nRecommended Standard: Verra VCS Blue Carbon';
+          const fallback = 'AI service temporarily unavailable. Please try again.';
           setReport(fallback);
           onReport(fallback);
         }

@@ -4861,7 +4861,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!message) return res.status(400).json({ error: 'message required' });
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        return res.json({ parsed: { volume_tonnes: 50000, standard: 'EU ETS — European Allowances', side: 'BUY', notes: message }, summary: '[Demo] Parsed RFQ from your description.' });
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please fill the form manually.' });
       }
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
@@ -4888,11 +4888,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     try {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        return res.json({ cards: [
-          { eyebrow: 'EU ETS Market', headline: 'European allowances hold above €63 amid power sector demand', summary: 'EUA futures remained resilient as utility buyers absorbed supply ahead of winter. Analysts cite tightening Phase IV caps as the primary price floor.' },
-          { eyebrow: 'Shipping Emissions', headline: 'IMO 2030 compliance accelerates Caribbean blue carbon demand', summary: 'Shipping companies facing CII ratings are moving early into verified Caribbean blue carbon credits. Inquiry volume up 3x vs prior year.' },
-          { eyebrow: 'Caribbean Carbon Supply', headline: 'Antigua and Roatan projects near listing — Q2 2025 expected', summary: 'Two flagship UAIU projects have cleared preliminary review and are expected to list on UAIU.LIVE/X in Q2. Supply addition may moderate prices.' },
-        ]});
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
@@ -4921,7 +4917,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        return res.json({ report: '[Demo Mode] AI Vision Analysis:\nLocation Assessment: Tropical coastal region detected\nVegetation Analysis: Dense canopy cover ~85%\nCarbon Estimate: 12–18 tCO₂e/ha/year\nRecommended Standard: Verra VCS Blue Carbon' });
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
@@ -4940,7 +4936,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.json({ report });
     } catch (err: any) {
       console.error('AI vision error:', err?.message);
-      res.json({ report: '[Demo Mode] AI Vision Analysis:\nLocation Assessment: Project area detected\nVegetation Analysis: Moderate to dense coverage\nCarbon Estimate: 8–15 tCO₂e/ha/year\nRecommended Standard: Verra VCS' });
+      res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
     }
   });
 
@@ -4978,17 +4974,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        return res.json({
-          recommendation: {
-            action: 'ACCEPT',
-            counter_price: market?.indexPrice ? (market.indexPrice * 0.97).toFixed(2) : '62.50',
-            counter_volume: rfq.volume_tonnes || 5000,
-            rationale: '[Demo Mode] Based on current Caribbean carbon credit market conditions and your RFQ parameters, we recommend accepting near the index price with a slight discount for bulk volume. Standard settlement terms apply.',
-            risk_assessment: 'LOW',
-            settlement_days: 5,
-            confidence: 87,
-          }
-        });
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
 
       const prompt = `You are a carbon credit trade negotiator for UAIU.LIVE/X Caribbean Carbon Exchange.
@@ -5027,17 +5013,19 @@ Respond with a JSON object (no markdown) with these exact fields:
         messages: [{ role: 'user', content: prompt }],
       });
 
-      const text = (msg.content[0] as any).text?.trim() || '{}';
-      let recommendation: any;
-      try {
-        recommendation = JSON.parse(text);
-      } catch {
-        recommendation = { action: 'ACCEPT', counter_price: (market?.indexPrice || 67.43) * 0.97, counter_volume: rfq.volume_tonnes, rationale: text, risk_assessment: 'LOW', settlement_days: 5, confidence: 75 };
+      const text = (msg.content[0] as any).text?.trim() || '';
+      if (!text) {
+        return res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
+      }
+      const recommendation = JSON.parse(jsonMatch[0]);
       res.json({ recommendation });
     } catch (err: any) {
       console.error('Negotiate error:', err?.message);
-      res.status(500).json({ error: 'Negotiation engine error' });
+      res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
     }
   });
 
@@ -5251,7 +5239,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       const { messages, system } = req.body;
       if (!messages?.length) return res.status(400).json({ error: 'No messages' });
       const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.json({ reply: '[Demo Mode] I\'m the UAIU Carbon Compliance Co-Pilot. To activate AI responses, configure the ANTHROPIC_API_KEY secret.' });
+      if (!apiKey) return res.json({ reply: 'AI service is temporarily unavailable. Please try again later.' });
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
       const msg = await client.messages.create({
@@ -5268,33 +5256,46 @@ Respond with a JSON object (no markdown) with these exact fields:
     }
   });
 
-  let predictionCache: { data: any; ts: number } | null = null;
+  const predictionCacheMap = new Map<string, { data: any; ts: number }>();
+  const PREDICTION_CACHE_TTL = 6 * 60 * 60 * 1000;
 
   app.post('/api/ai/price-prediction', async (req, res) => {
     try {
-      if (predictionCache && Date.now() - predictionCache.ts < 6 * 60 * 60 * 1000) {
-        return res.json({ prediction: predictionCache.data, cached: true });
+      const { current_price, registry, vintage, volume, standard } = req.body;
+      const cacheKey = JSON.stringify({ current_price, registry, vintage, volume, standard });
+      const cached = predictionCacheMap.get(cacheKey);
+      if (cached && Date.now() - cached.ts < PREDICTION_CACHE_TTL) {
+        return res.json({ prediction: cached.data, cached: true });
       }
-      const { current_price } = req.body;
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        const mockPrediction = { forecast_7d: (current_price || 67.43) * 1.02, forecast_30d: (current_price || 67.43) * 1.05, direction: 'bullish', confidence: 72, rationale: '[Demo Mode] Caribbean premium carbon credits showing bullish momentum driven by EU ETS compliance demand and CORSIA Phase 1 requirements.', range_7d: { low: (current_price || 67.43) * 0.98, high: (current_price || 67.43) * 1.04 }, range_30d: { low: (current_price || 67.43) * 0.95, high: (current_price || 67.43) * 1.08 }, key_drivers: ['EU ETS surrender deadline Q3 2026', 'CORSIA Phase 1 aviation demand', 'Caribbean sovereign wealth fund floor', 'IMO GHG maritime compliance', 'USD/EUR exchange rate stability'] };
-        return res.json({ prediction: mockPrediction });
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
+      const listingContext = [
+        registry ? `Registry: ${registry}` : null,
+        vintage ? `Vintage: ${vintage}` : null,
+        volume ? `Volume: ${volume} tonnes` : null,
+        standard ? `Standard: ${standard}` : null,
+      ].filter(Boolean).join('. ');
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
       const msg = await client.messages.create({
         model: 'claude-sonnet-4-5',
         max_tokens: 800,
-        messages: [{ role: 'user', content: `You are a carbon market price analyst. Current UAIU Caribbean Premium Index: €${current_price}/tonne. Date: ${new Date().toDateString()}. Analyze and forecast. Respond ONLY with JSON no markdown: {"forecast_7d":number,"forecast_30d":number,"direction":"bullish"|"bearish"|"neutral","confidence":number,"rationale":"2-3 sentences","range_7d":{"low":number,"high":number},"range_30d":{"low":number,"high":number},"key_drivers":["5 specific market factors"]}` }],
+        messages: [{ role: 'user', content: `You are a carbon market price analyst. Current UAIU Caribbean Premium Index: €${current_price}/tonne. Date: ${new Date().toDateString()}.${listingContext ? ' Listing context: ' + listingContext + '.' : ''} Analyze and forecast. Respond ONLY with JSON no markdown: {"forecast_7d":number,"forecast_30d":number,"direction":"bullish"|"bearish"|"neutral","confidence":number,"rationale":"2-3 sentences","range_7d":{"low":number,"high":number},"range_30d":{"low":number,"high":number},"key_drivers":["5 specific market factors"]}` }],
       });
       const text = (msg.content.find((b: any) => b.type === 'text') as any)?.text || '{}';
       const prediction = JSON.parse(text.replace(/```json|```/g, '').trim());
-      predictionCache = { data: prediction, ts: Date.now() };
+      predictionCacheMap.set(cacheKey, { data: prediction, ts: Date.now() });
+      if (predictionCacheMap.size > 50) {
+        const entries = Array.from(predictionCacheMap.entries());
+        const oldest = entries.sort((a, b) => a[1].ts - b[1].ts)[0];
+        if (oldest) predictionCacheMap.delete(oldest[0]);
+      }
       res.json({ prediction });
     } catch (e: any) {
       console.error('Prediction error:', e);
-      res.status(500).json({ error: 'Prediction failed' });
+      res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
     }
   });
 
@@ -5304,8 +5305,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       if (!listing) return res.status(400).json({ error: 'No listing provided' });
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        const mockReport = { summary: `[Demo Mode] ${listing.name} is a verified Caribbean carbon credit listing with strong compliance credentials. Registry verification pending final confirmation.`, registry_status: 'Verified — VCS v4 Registry', standard_analysis: 'Meets CORSIA and EU ETS eligibility requirements.', risk_score: 28, risk_factors: ['Currency risk (EUR/USD)', 'Registry verification timeline', 'Vintage year alignment', 'Buyer compliance deadline proximity'], comparable_trades: [], recommended_price_range: { low: (market_price || 64) * 0.95, high: (market_price || 64) * 1.05 }, recommendation: 'buy', recommendation_rationale: 'Strong registry credentials and favorable pricing relative to EU ETS spot.', sections: [{ title: 'Project Overview', content: `${listing.name} is a Caribbean-origin carbon credit project meeting international verification standards.` }, { title: 'Recommendation', content: 'Recommended for institutional buyers seeking CORSIA-eligible Caribbean premium credits.' }] };
-        return res.json({ report: mockReport });
+        return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
       }
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey });
@@ -5319,7 +5319,7 @@ Respond with a JSON object (no markdown) with these exact fields:
       res.json({ report });
     } catch (e: any) {
       console.error('Due diligence error:', e);
-      res.status(500).json({ error: 'Due diligence generation failed' });
+      res.status(500).json({ error: 'AI service temporarily unavailable. Please try again.' });
     }
   });
 
