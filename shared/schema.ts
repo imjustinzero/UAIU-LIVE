@@ -521,7 +521,7 @@ export const insertTradeRetirementCertificateSchema = createInsertSchema(tradeRe
 });
 export const tradeSignatures = pgTable("trade_signatures", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tradeId: varchar("trade_id").notNull(),
+  tradeId: varchar("trade_id").notNull().references(() => exchangeTrades.tradeId),
   documentHash: varchar("document_hash").notNull(),
   contractTextHash: varchar("contract_text_hash").notNull(),
   signerFullName: varchar("signer_full_name").notNull(),

@@ -2670,26 +2670,40 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       const retentionUntil = retentionDate.toISOString().split('T')[0];
 
-      const platformAttestation = createHash('sha256').update(
-        `${tradeId}|${email}|${resolvedFullName.trim()}|${documentHash}|${contractTextHash}|${signedAt.toISOString()}|${signerIp}`
-      ).digest('hex');
+      const attestationInput = JSON.stringify({
+        contract_text_hash: contractTextHash,
+        document_hash: documentHash,
+        explicit_consent: true,
+        retention_until: retentionUntil,
+        signed_at: signedAt.toISOString(),
+        signer_email: email,
+        signer_full_name: resolvedFullName.trim(),
+        signer_ip: signerIp,
+        signer_user_agent: signerUserAgent,
+        trade_id: tradeId,
+      });
+      const platformAttestation = createHash('sha256').update(attestationInput).digest('hex');
 
-      await db.execute(sql`
+      const insertResult = await db.execute(sql`
         INSERT INTO trade_signatures (trade_id, document_hash, contract_text_hash, signer_full_name, signer_email, signer_ip, signer_user_agent, signed_at, explicit_consent, retention_until, platform_attestation)
         VALUES (${tradeId}, ${documentHash}, ${contractTextHash}, ${resolvedFullName.trim()}, ${email}, ${signerIp}, ${signerUserAgent}, ${signedAt.toISOString()}, ${true}, ${retentionUntil}::date, ${platformAttestation})
+        RETURNING id, trade_id, document_hash, contract_text_hash, signer_full_name, signer_email, signer_ip, signer_user_agent, signed_at, explicit_consent, retention_until, platform_attestation
       `);
+      const insertedRow = (insertResult as any).rows?.[0];
 
       await logSecurityEvent({ email, eventType: 'trade_signed', req, detail: JSON.stringify({ trade_id: tradeId, document_hash: documentHash }) });
 
-      res.status(201).json({
-        success: true,
+      res.status(201).json(insertedRow || {
         trade_id: tradeId,
         signer_full_name: resolvedFullName.trim(),
         signer_email: email,
         document_hash: documentHash,
         contract_text_hash: contractTextHash,
         platform_attestation: platformAttestation,
+        signer_ip: signerIp,
+        signer_user_agent: signerUserAgent,
         signed_at: signedAt.toISOString(),
+        explicit_consent: true,
         retention_until: retentionUntil,
       });
     } catch (e: any) {
