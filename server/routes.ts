@@ -4787,30 +4787,6 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   // ─── AI Exchange Routes ───────────────────────────────────────────
 
-  app.post('/api/fastmode/ai-coach', async (req, res) => {
-    try {
-      const prompt = String(req.body?.prompt || '').trim();
-      if (!prompt) return res.status(400).json({ error: 'prompt required' });
-
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.status(503).json({ error: 'AI Coach unavailable' });
-
-      const Anthropic = (await import('@anthropic-ai/sdk')).default;
-      const client = new Anthropic({ apiKey });
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        system: 'You are FASTMODE AI Coach — an expert in intermittent fasting, fat loss, longevity nutrition (Bryan Johnson Blueprint protocol), and peptide optimization. Give concise, actionable, science-backed advice in 2-4 sentences. Be direct and motivating. No fluff. Format with line breaks for readability.',
-        messages: [{ role: 'user', content: prompt }]
-      });
-      const message = response.content[0].type === 'text' ? response.content[0].text : '';
-      return res.json({ message });
-    } catch (err: any) {
-      console.error('[FASTMODE AI Coach] Error:', err.message);
-      return res.status(500).json({ error: 'AI Coach error' });
-    }
-  });
-
   app.post('/api/ai/parse-rfq', async (req, res) => {
     try {
       const text = String(req.body?.text || req.body?.prompt || '').trim();
