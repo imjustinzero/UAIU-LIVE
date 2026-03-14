@@ -36,6 +36,8 @@ import NavigatorGenerate from "@/pages/navigator/Generate";
 import NavigatorVvb from "@/pages/navigator/Vvb";
 import NavigatorTracker from "@/pages/navigator/Tracker";
 import NavigatorProjects from "@/pages/navigator/Projects";
+import Maritime from "@/pages/Maritime";
+import MaritimeCarbonOffsetting from "@/pages/maritime/CarbonOffsetting";
 
 function Router() {
   return (
@@ -69,6 +71,8 @@ function Router() {
       <Route path="/navigator/project/:id/generate" component={NavigatorGenerate} />
       <Route path="/navigator/project/:id/vvb" component={NavigatorVvb} />
       <Route path="/navigator/project/:id/tracker" component={NavigatorTracker} />
+      <Route path="/maritime" component={Maritime} />
+      <Route path="/maritime/carbon-offsetting" component={MaritimeCarbonOffsetting} />
       <Route component={NotFound} />
     </Switch>
   );

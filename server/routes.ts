@@ -1996,7 +1996,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!hash) return res.status(400).json({ error: 'Receipt hash required' });
 
       const result = await db.execute(sql`
-        SELECT trade_id, standard, volume_tonnes, gross_eur, created_at, receipt_hash
+        SELECT trade_id, standard, volume_tonnes, gross_eur, created_at, receipt_hash,
+               seller_registry_name, seller_registry_serial, vintage_year, price_per_tonne,
+               account_email, settled_at
         FROM exchange_trades
         WHERE receipt_hash = ${hash} OR trade_id = ${hash}
         LIMIT 1
@@ -2008,12 +2010,111 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       res.json({
         verified: true,
         tradeId: row.trade_id,
+        creditType: row.standard,
         standard: row.standard,
+        vintageYear: row.vintage_year ? Number(row.vintage_year) : null,
+        registry: row.seller_registry_name || 'N/A',
+        registryReference: row.seller_registry_serial || 'N/A',
         volumeTonnes: Number(row.volume_tonnes || 0),
+        quantity: Number(row.volume_tonnes || 0),
+        pricePerTonne: Number(row.price_per_tonne || 0),
         grossEur: Number(row.gross_eur || 0),
-        settledAt: row.created_at,
+        totalValue: Number(row.gross_eur || 0),
+        buyer: row.account_email ? String(row.account_email).replace(/(^.).*(@.*$)/, '$1***$2') : 'Anonymous Buyer',
+        sellerName: row.seller_registry_name || 'Verified Seller',
+        settledAt: row.settled_at || row.created_at,
+        settlementDate: row.settled_at || row.created_at,
         receiptHash: row.receipt_hash,
+        verifyOnRegistryUrl: row.seller_registry_name === 'Verra'
+          ? `https://registry.verra.org/app/projectDetail/VCS/${encodeURIComponent(String(row.seller_registry_serial || row.trade_id))}`
+          : row.seller_registry_name === 'Gold Standard'
+            ? `https://registry.goldstandard.org/projects/details/${encodeURIComponent(String(row.seller_registry_serial || row.trade_id))}`
+            : null,
       });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/exchange/trade/:tradeId/audit-pack', async (req, res) => {
+    try {
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required' });
+
+      const tradeRows = await db.execute(sql`SELECT * FROM exchange_trades WHERE trade_id = ${tradeId} LIMIT 1`);
+      const trade = (tradeRows as any).rows?.[0];
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+      const sellerRows = await db.execute(sql`
+        SELECT kyb_status, kyc_status, org_name
+        FROM exchange_accounts
+        WHERE LOWER(email) = LOWER(${trade.account_email || ''})
+        LIMIT 1
+      `);
+      const sellerAccount = (sellerRows as any).rows?.[0] || {};
+
+      const buffer = await generateTradePDF({
+        trade_id: String(trade.trade_id),
+        side: String(trade.side || 'buy'),
+        standard: String(trade.standard || 'N/A'),
+        volume_tonnes: Number(trade.volume_tonnes || 0),
+        price_eur_per_tonne: Number(trade.price_per_tonne || 0),
+        gross_eur: Number(trade.gross_eur || 0),
+        fee_eur: Number(trade.fee_eur || 0),
+        receipt_hash: String(trade.receipt_hash || ''),
+        prev_receipt_hash: String(trade.prev_receipt_hash || 'genesis'),
+        payment_intent_id: String(trade.payment_intent_id || ''),
+        stripe_charge_id: String(trade.stripe_charge_id || ''),
+        settled_at: String(trade.settled_at || trade.created_at || new Date().toISOString()),
+        buyer_email: String(trade.account_email || ''),
+        buyer_registry_account_id: String(trade.buyer_registry_account_id || ''),
+        buyer_registry_name: String(trade.buyer_registry_name || ''),
+        seller_registry_name: String(trade.seller_registry_name || sellerAccount.org_name || ''),
+        seller_registry_serial: String(trade.seller_registry_serial || ''),
+        vintage_year: trade.vintage_year ? Number(trade.vintage_year) : undefined,
+        retirement_status: String(trade.retirement_status || 'pending'),
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="UAIU-EU-ETS-Audit-Pack-${tradeId}.pdf"`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/demo-requests', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim();
+      const company = String(body.company || '').trim();
+      const role = String(body.role || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      const interest = String(body.interest || '').trim();
+      if (!name || !company || !role || !email || !interest) {
+        return res.status(400).json({ error: 'All fields are required.' });
+      }
+      const supabase = req.app.locals.supabase;
+      if (!supabase) return res.status(500).json({ error: 'Supabase unavailable.' });
+      const { error } = await supabase.from('demo_requests').insert({ name, company, role, email, interest });
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/navigator-waitlist', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!name || !email) return res.status(400).json({ error: 'name and email are required.' });
+      const supabase = req.app.locals.supabase;
+      if (!supabase) return res.status(500).json({ error: 'Supabase unavailable.' });
+      const { error } = await supabase.from('navigator_waitlist').insert({ name, email });
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }
@@ -2653,6 +2754,33 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (err: any) {
       console.error('[KYC Status]', err);
       res.status(500).json({ error: safeError(err) });
+    }
+  });
+
+
+  app.get('/api/admin/kyc/pending', requireAdminHeader, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT id, email, kyc_status, kyc_session_id, kyc_provider_reference, created_at
+        FROM exchange_accounts
+        WHERE kyc_status = 'pending' OR kyc_status = 'not_started'
+        ORDER BY created_at DESC
+        LIMIT 100
+      `);
+      res.json((rows as any).rows || []);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/admin/kyc/manual-verify/:id', requireAdminHeader, async (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id required' });
+      await db.execute(sql`UPDATE exchange_accounts SET kyc_status = 'verified', kyc_completed_at = NOW() WHERE id = ${id}`);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
     }
   });
 

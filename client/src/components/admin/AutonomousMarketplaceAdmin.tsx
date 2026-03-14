@@ -173,6 +173,7 @@ export function AutonomousMarketplaceAdmin({ adminKey }: Props) {
                       Release
                     </button>
                   )}
+                  <button onClick={() => window.open(`/api/exchange/trade/${encodeURIComponent(p.trade_id)}/audit-pack`, '_blank')} style={{ padding: '5px 12px', fontSize: 11, border: `1px solid ${C.border}`, background: 'transparent', color: C.gold, borderRadius: 6, cursor: 'pointer' }}>Download EU ETS Audit Pack (.pdf)</button>
                 </div>
               </div>
             ))
