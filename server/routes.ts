@@ -2407,6 +2407,204 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     }
   });
 
+  app.patch('/api/exchange/trades/:tradeId/compliance', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').toLowerCase();
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
+
+      const trade = await storage.getExchangeTradeByTradeId(tradeId);
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const buyerEmail = String(trade.accountEmail || '').toLowerCase();
+      const sellerEmail = String(trade.sellerEmail || '').toLowerCase();
+      if (email !== buyerEmail && (sellerEmail.length === 0 || email !== sellerEmail)) {
+        return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
+      }
+
+      const allowed = [
+        'operatorId', 'installationId', 'activityType', 'verifiedEmissionsQuantity',
+        'corsiaEligible', 'icaoOperatorCode', 'eligibleProgram',
+        'vesselImo', 'voyageReference', 'fuelConsumptionOffset',
+      ] as const;
+      const updates: Record<string, any> = {};
+      const colMap: Record<string, string> = {
+        operatorId: 'operator_id', installationId: 'installation_id',
+        activityType: 'activity_type', verifiedEmissionsQuantity: 'verified_emissions_quantity',
+        corsiaEligible: 'corsia_eligible', icaoOperatorCode: 'icao_operator_code',
+        eligibleProgram: 'eligible_program', vesselImo: 'vessel_imo',
+        voyageReference: 'voyage_reference', fuelConsumptionOffset: 'fuel_consumption_offset',
+      };
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: 'No valid compliance fields provided.' });
+      }
+
+      const setClauses = Object.entries(updates).map(([k, v]) => {
+        const col = colMap[k];
+        if (v === null) return `${col} = NULL`;
+        if (typeof v === 'boolean') return `${col} = ${v}`;
+        if (typeof v === 'number') return `${col} = ${v}`;
+        return `${col} = '${String(v).replace(/'/g, "''")}'`;
+      });
+      await db.execute(sql.raw(`UPDATE exchange_trades SET ${setClauses.join(', ')} WHERE trade_id = '${tradeId.replace(/'/g, "''")}'`));
+
+      const updated = await storage.getExchangeTradeByTradeId(tradeId);
+      res.json({ success: true, trade: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  function computeExportHash(payload: Record<string, any>): string {
+    const stable = JSON.stringify(payload, Object.keys(payload).sort());
+    return createHash('sha256').update(stable).digest('hex');
+  }
+
+  app.get('/api/exchange/trades/:tradeId/export/eu-ets', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').toLowerCase();
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
+
+      const trade = await storage.getExchangeTradeByTradeId(tradeId) as any;
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const buyerEmail = String(trade.accountEmail || '').toLowerCase();
+      const sellerEmail = String(trade.sellerEmail || '').toLowerCase();
+      if (email !== buyerEmail && (sellerEmail.length === 0 || email !== sellerEmail)) {
+        return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
+      }
+
+      if (!trade.operatorId || !trade.installationId) {
+        return res.status(400).json({ error: 'EU ETS export requires operator_id and installation_id fields to be populated. Use PATCH /api/exchange/trades/:tradeId/compliance to add them.' });
+      }
+
+      const payload: Record<string, any> = {
+        exportType: 'EU_ETS',
+        platform: 'UAIU.LIVE/X',
+        tradeId: trade.tradeId,
+        standard: trade.standard,
+        vintageYear: trade.vintageYear || null,
+        volumeTonnes: trade.volumeTonnes,
+        pricePerTonne: trade.pricePerTonne,
+        grossEur: trade.grossEur,
+        feeEur: trade.feeEur,
+        receiptHash: trade.receiptHash || null,
+        operatorId: trade.operatorId,
+        installationId: trade.installationId,
+        activityType: trade.activityType || null,
+        verifiedEmissionsQuantity: trade.verifiedEmissionsQuantity || null,
+        buyerEmail: buyerEmail,
+        sellerRegistrySerial: trade.sellerRegistrySerial || null,
+        sellerRegistryName: trade.sellerRegistryName || null,
+        retirementStatus: trade.retirementStatus || null,
+        exportTimestamp: new Date().toISOString(),
+      };
+      const hash = computeExportHash(payload);
+      res.setHeader('X-Export-Hash', hash);
+      res.json({ ...payload, exportHash: hash });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/exchange/trades/:tradeId/export/corsia', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').toLowerCase();
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
+
+      const trade = await storage.getExchangeTradeByTradeId(tradeId) as any;
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const buyerEmail = String(trade.accountEmail || '').toLowerCase();
+      const sellerEmail = String(trade.sellerEmail || '').toLowerCase();
+      if (email !== buyerEmail && (sellerEmail.length === 0 || email !== sellerEmail)) {
+        return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
+      }
+
+      if (trade.corsiaEligible === false || trade.corsiaEligible === null || trade.corsiaEligible === undefined) {
+        return res.status(403).json({ error: 'This trade is not CORSIA-eligible. Credits must have corsia_eligible set to true to generate a CORSIA export.' });
+      }
+
+      const payload: Record<string, any> = {
+        exportType: 'CORSIA',
+        platform: 'UAIU.LIVE/X',
+        tradeId: trade.tradeId,
+        standard: trade.standard,
+        vintageYear: trade.vintageYear || null,
+        volumeTonnes: trade.volumeTonnes,
+        pricePerTonne: trade.pricePerTonne,
+        grossEur: trade.grossEur,
+        feeEur: trade.feeEur,
+        receiptHash: trade.receiptHash || null,
+        corsiaEligible: true,
+        icaoOperatorCode: trade.icaoOperatorCode || null,
+        eligibleProgram: trade.eligibleProgram || null,
+        buyerEmail: buyerEmail,
+        sellerRegistrySerial: trade.sellerRegistrySerial || null,
+        sellerRegistryName: trade.sellerRegistryName || null,
+        retirementStatus: trade.retirementStatus || null,
+        exportTimestamp: new Date().toISOString(),
+      };
+      const hash = computeExportHash(payload);
+      res.setHeader('X-Export-Hash', hash);
+      res.json({ ...payload, exportHash: hash });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/exchange/trades/:tradeId/export/imo-mrv', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').toLowerCase();
+      const tradeId = String(req.params.tradeId || '').trim();
+      if (!tradeId) return res.status(400).json({ error: 'tradeId required.' });
+
+      const trade = await storage.getExchangeTradeByTradeId(tradeId) as any;
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const buyerEmail = String(trade.accountEmail || '').toLowerCase();
+      const sellerEmail = String(trade.sellerEmail || '').toLowerCase();
+      if (email !== buyerEmail && (sellerEmail.length === 0 || email !== sellerEmail)) {
+        return res.status(403).json({ error: 'Access denied. You are not a party to this trade.' });
+      }
+
+      if (!trade.vesselImo) {
+        return res.status(400).json({ error: 'IMO MRV export requires vessel_imo to be populated. Use PATCH /api/exchange/trades/:tradeId/compliance to add it.' });
+      }
+
+      const payload: Record<string, any> = {
+        exportType: 'IMO_MRV',
+        platform: 'UAIU.LIVE/X',
+        tradeId: trade.tradeId,
+        standard: trade.standard,
+        vintageYear: trade.vintageYear || null,
+        volumeTonnes: trade.volumeTonnes,
+        pricePerTonne: trade.pricePerTonne,
+        grossEur: trade.grossEur,
+        feeEur: trade.feeEur,
+        receiptHash: trade.receiptHash || null,
+        vesselImo: trade.vesselImo,
+        voyageReference: trade.voyageReference || null,
+        fuelConsumptionOffset: trade.fuelConsumptionOffset || null,
+        buyerEmail: buyerEmail,
+        sellerRegistrySerial: trade.sellerRegistrySerial || null,
+        sellerRegistryName: trade.sellerRegistryName || null,
+        retirementStatus: trade.retirementStatus || null,
+        exportTimestamp: new Date().toISOString(),
+      };
+      const hash = computeExportHash(payload);
+      res.setHeader('X-Export-Hash', hash);
+      res.json({ ...payload, exportHash: hash });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
   app.get('/api/exchange/verify/:hash', async (req, res) => {
     try {
       const hash = String(req.params.hash || '').trim();
