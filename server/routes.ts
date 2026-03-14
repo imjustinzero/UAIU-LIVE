@@ -2076,10 +2076,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   app.get('/api/exchange/listings/:standard', async (req, res) => {
     try {
       const standard = req.params.standard;
-      const cacheKey = `listings:${standard}`;
+      const cacheKey = `listings-by-standard:${standard}`;
       const cached = getCachedListings(cacheKey);
       if (cached) return res.json(cached);
-      const listings = await storage.getExchangeListings(standard);
+      const listings = await storage.getExchangeListingsByStandard(standard);
       setCachedListings(cacheKey, listings);
       res.json(listings);
     } catch (error) {
