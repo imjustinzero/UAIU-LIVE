@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const demoListings = [
   {
@@ -66,44 +66,53 @@ const ddSections = [
   "Section 8 — Recommendation: PROCEED — Credits meet institutional procurement standards. Recommend RFQ submission at or near ask.",
 ];
 
-const initialBids = [14.4, 14.2, 14.0, 13.8, 13.5];
-const initialAsks = [14.5, 14.7, 14.9, 15.0, 15.2];
+const N_GEO_REFERENCE_LINE = "Voluntary Carbon Reference Price (Xpansiv CBL N-GEO): $0.56 per tonne — Last updated: March 13, 2026";
 
-const randomDelta = () => +(Math.random() * 0.06 - 0.03).toFixed(2);
+function TradingViewMiniSymbolOverview({ isDark = true }: { isDark?: boolean }) {
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!widgetRef.current) return;
+
+    widgetRef.current.innerHTML = "";
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbol: "ICEEUR:EUA1!",
+      width: "100%",
+      height: "220",
+      locale: "en",
+      dateRange: "1D",
+      colorTheme: isDark ? "dark" : "light",
+      isTransparent: false,
+      autosize: true,
+      largeChartUrl: "",
+    });
+
+    widgetRef.current.appendChild(script);
+  }, [isDark]);
+
+  return (
+    <div style={{ width: "100%", maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", color: "#facc15", marginBottom: 10 }}>
+        EU ETS Carbon Price — Live
+      </div>
+      <div className="tradingview-widget-container" style={{ width: "100%", border: "1px solid #3f3f46", background: "#111827" }}>
+        <div className="tradingview-widget-container__widget" ref={widgetRef} />
+      </div>
+      <p style={{ marginTop: 10, fontSize: 12, color: "#cbd5e1" }}>{N_GEO_REFERENCE_LINE}</p>
+    </div>
+  );
+}
 
 export default function DemoMode() {
-  const [bids, setBids] = useState(initialBids);
-  const [asks, setAsks] = useState(initialAsks);
-  const [euaPrice, setEuaPrice] = useState(64.82);
-  const [spread, setSpread] = useState(3.2);
   const [selectedListing, setSelectedListing] = useState(demoListings[0]);
   const [ddLoading, setDdLoading] = useState(false);
   const [ddReady, setDdReady] = useState(false);
   const [rfqSubmitted, setRfqSubmitted] = useState(false);
-
-  const trades = useMemo(() => {
-    const now = Date.now();
-    return [
-      { px: 14.48, qty: 1200, minsAgo: 7 },
-      { px: 14.52, qty: 2600, minsAgo: 14 },
-      { px: 14.41, qty: 3100, minsAgo: 23 },
-      { px: 14.56, qty: 980, minsAgo: 39 },
-      { px: 14.44, qty: 4500, minsAgo: 58 },
-      { px: 14.39, qty: 2000, minsAgo: 71 },
-      { px: 14.51, qty: 1700, minsAgo: 89 },
-      { px: 14.46, qty: 2900, minsAgo: 111 },
-    ].map((t) => ({ ...t, ts: new Date(now - t.minsAgo * 60_000).toLocaleTimeString() }));
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setBids((prev) => prev.map((v, i) => +(v + (i === 0 ? randomDelta() : randomDelta() / 2)).toFixed(2)).sort((a, b) => b - a));
-      setAsks((prev) => prev.map((v, i) => +(v + (i === 0 ? randomDelta() : randomDelta() / 2)).toFixed(2)).sort((a, b) => a - b));
-      setEuaPrice((p) => +(p + (Math.random() * 0.1 - 0.05)).toFixed(2));
-      setSpread((s) => +(s + (Math.random() * 0.1 - 0.05)).toFixed(2));
-    }, 8000);
-    return () => clearInterval(timer);
-  }, []);
 
   const onGenerateDd = (listingId: string) => {
     const listing = demoListings.find((l) => l.id === listingId) || demoListings[0];
@@ -145,6 +154,10 @@ export default function DemoMode() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
         <h1>/x/demo — Institutional Carbon Trading Desk</h1>
 
+        <section id="live-eu-ets" style={{ marginBottom: 16 }}>
+          <TradingViewMiniSymbolOverview isDark />
+        </section>
+
         <section id="market" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
           <div style={{ border: "1px solid #3f3f46", padding: 14 }}>
             <h3>Live Listings</h3>
@@ -161,16 +174,11 @@ export default function DemoMode() {
             ))}
           </div>
           <div style={{ border: "1px solid #3f3f46", padding: 14 }}>
-            <h3>EU ETS Price Feed</h3>
-            <div style={{ fontSize: 28 }}>€{euaPrice.toFixed(2)}</div>
-            <div style={{ color: "#86efac" }}>+0.43 today</div>
-            <div>Caribbean spread: +${spread.toFixed(2)}</div>
-            <p style={{ fontSize: 12, color: "#cbd5e1" }}>Updates every 8 seconds with low-variance market simulation.</p>
-            <h4>Order Book</h4>
-            {bids.map((b, i) => <div key={`b${i}`}>Bid {i + 1}: ${b.toFixed(2)}</div>)}
-            {asks.map((a, i) => <div key={`a${i}`}>Ask {i + 1}: ${a.toFixed(2)}</div>)}
-            <h4>Trade Tape (last 2h)</h4>
-            {trades.map((t, i) => <div key={i}>{t.ts} · ${t.px.toFixed(2)} · {t.qty.toLocaleString()}t</div>)}
+            <h3>Regulatory Calendar</h3>
+            <div>🔴 EU ETS Maritime Q1 Surrender — April 30, 2026 — 52 days away</div>
+            <div>🟡 CORSIA Phase 1 Annual Report — June 30, 2026 — 113 days away</div>
+            <div>🟢 IMO CII Rating Submission — December 31, 2026 — 296 days away</div>
+            <div>🟢 FuelEU Maritime Compliance — January 1, 2027 — 297 days away</div>
           </div>
         </section>
 
@@ -186,14 +194,6 @@ export default function DemoMode() {
             <div style={{ width: "35%", background: "#facc15", height: "100%", borderRadius: 6 }} />
           </div>
           <div style={{ fontSize: 12 }}>Alerts configured at 50% / 75% / 90%</div>
-        </section>
-
-        <section id="calendar" style={{ marginTop: 16, border: "1px solid #3f3f46", padding: 14 }}>
-          <h3>Regulatory Calendar</h3>
-          <div>🔴 EU ETS Maritime Q1 Surrender — April 30, 2026 — 52 days away</div>
-          <div>🟡 CORSIA Phase 1 Annual Report — June 30, 2026 — 113 days away</div>
-          <div>🟢 IMO CII Rating Submission — December 31, 2026 — 296 days away</div>
-          <div>🟢 FuelEU Maritime Compliance — January 1, 2027 — 297 days away</div>
         </section>
 
         <section id="dd" style={{ marginTop: 16, border: "1px solid #3f3f46", padding: 14 }}>
