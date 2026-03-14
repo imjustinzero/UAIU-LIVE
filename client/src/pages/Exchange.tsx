@@ -86,6 +86,84 @@ const F = {
   mono: "'JetBrains Mono', monospace",
 };
 
+const N_GEO_REFERENCE_LINE = 'Voluntary Carbon Reference Price (Xpansiv CBL N-GEO): $0.56 per tonne — Last updated: March 13, 2026';
+
+function TradingViewMiniSymbolOverview({ isDark, borderColor }: { isDark: boolean; borderColor: string }) {
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!widgetRef.current) return;
+
+    widgetRef.current.innerHTML = '';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+    script.type = 'text/javascript';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbol: 'ICEEUR:EUA1!',
+      width: '100%',
+      height: '220',
+      locale: 'en',
+      dateRange: '1D',
+      colorTheme: isDark ? 'dark' : 'light',
+      isTransparent: false,
+      autosize: true,
+      largeChartUrl: '',
+    });
+
+    widgetRef.current.appendChild(script);
+  }, [isDark]);
+
+  return (
+    <div style={{ width: '100%', maxWidth: 960 }}>
+      <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: isDark ? '#f0c96a' : '#7a5c10', marginBottom: 10 }}>
+        EU ETS Carbon Price — Live
+      </div>
+      <div className="tradingview-widget-container" style={{ width: '100%', border: `1px solid ${borderColor}` }}>
+        <div className="tradingview-widget-container__widget" ref={widgetRef} />
+      </div>
+      <p style={{ marginTop: 10, fontFamily: F.mono, fontSize: 11, color: isDark ? 'rgba(242,234,216,0.7)' : 'rgba(13,10,6,0.7)', lineHeight: 1.5 }}>{N_GEO_REFERENCE_LINE}</p>
+    </div>
+  );
+}
+
+function TradingViewTickerTape({ isDark }: { isDark: boolean }) {
+  const tickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!tickerRef.current) return;
+
+    tickerRef.current.innerHTML = '';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
+    script.type = 'text/javascript';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbols: [
+        { proName: 'ICEEUR:EUA1!', title: 'EU Carbon' },
+        { proName: 'ICEEUR:UKA1!', title: 'UK Carbon' },
+        { proName: 'NYMEX:NG1!', title: 'Natural Gas' },
+        { proName: 'NYMEX:CL1!', title: 'Crude Oil' },
+      ],
+      showSymbolLogo: true,
+      colorTheme: isDark ? 'dark' : 'light',
+      isTransparent: false,
+      displayMode: 'adaptive',
+      locale: 'en',
+    });
+
+    tickerRef.current.appendChild(script);
+  }, [isDark]);
+
+  return (
+    <div className="tradingview-widget-container" style={{ width: '100%', borderBottom: `1px solid ${isDark ? 'rgba(212,168,67,0.22)' : 'rgba(184,146,46,0.32)'}` }}>
+      <div className="tradingview-widget-container__widget" ref={tickerRef} />
+    </div>
+  );
+}
+
 const TICKER_DATA = [
   { n: 'EU ETS', p: '€63.40', c: '+2.3%', up: true },
   { n: 'SwissX B100', p: '€71.80', c: '+4.2%', up: true },
@@ -1225,9 +1303,13 @@ export default function Exchange() {
           </div>
         </nav>
 
+        <div style={{ position: 'fixed', top: 'clamp(64px, 8vh, 80px)', left: 0, right: 0, zIndex: 999 }}>
+          <TradingViewTickerTape isDark={isDark} />
+        </div>
+
         <TradeTicker newTrades={tickerTrades} />
 
-        <section id="home" style={{ minHeight: '100vh', paddingTop: 'clamp(80px, 12vh, 120px)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <section id="home" style={{ minHeight: '100vh', paddingTop: 'clamp(140px, 18vh, 190px)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 100% 70% at 70% 30%,rgba(212,168,67,0.06) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 10% 90%,rgba(30,50,120,0.25) 0%,transparent 50%)` }} />
           <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(212,168,67,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(212,168,67,0.035) 1px,transparent 1px)`, backgroundSize: '80px 80px', maskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%,black,transparent)' }} />
           <div style={{ position: 'relative', zIndex: 2, ...CONTAINER_STYLE, paddingBlock: 'clamp(40px, 8vh, 80px)' }}>
@@ -1265,6 +1347,10 @@ export default function Exchange() {
                   <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginTop: 4 }}>{m.sub}</div>
                 </div>
               ))}
+            </div>
+
+            <div style={{ marginTop: 28, display: 'flex', justifyContent: 'center' }}>
+              <TradingViewMiniSymbolOverview isDark={isDark} borderColor={C.goldborder} />
             </div>
           </div>
         </section>
