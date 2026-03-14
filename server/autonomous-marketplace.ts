@@ -569,6 +569,11 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       const matchedVolume = Math.min(Number(rfq.volume_tonnes), 999999999);
       const matchedPrice = Number(viable.price_per_tonne);
       const negotiationSummary = `Auto-match proposed from active listing ${viable.name}.`;
+      const grossEur = matchedVolume * matchedPrice;
+      const feeEur = grossEur * 0.0075;
+      const tradeId = `RFQ-${rfqId.slice(0, 8)}-${Date.now()}`;
+      const receiptData = `${tradeId}:rfq-match:${grossEur}:${new Date().toISOString()}`;
+      const receiptHash = createHash('sha256').update(receiptData).digest('hex');
 
       const atomicResult = await db.execute(sql`
         WITH claimed AS (
@@ -576,34 +581,72 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
           SET status = 'accepted'
           WHERE id = ${rfqId} AND status = 'active'
           RETURNING id
+        ),
+        new_match AS (
+          INSERT INTO exchange_rfq_matches (
+            rfq_id,
+            listing_id,
+            seller_profile_id,
+            buyer_email,
+            seller_email,
+            standard,
+            matched_volume_tonnes,
+            matched_price_per_tonne,
+            status,
+            negotiation_summary,
+            confidence
+          )
+          SELECT
+            claimed.id,
+            ${viable.id},
+            ${viable.seller_profile_id},
+            ${buyerEmail},
+            ${viable.seller_email},
+            ${rfq.standard},
+            ${matchedVolume},
+            ${matchedPrice},
+            'proposed',
+            ${negotiationSummary},
+            ${confidence}
+          FROM claimed
+          RETURNING *
+        ),
+        new_trade AS (
+          INSERT INTO exchange_trades (
+            account_email,
+            trade_id,
+            side,
+            standard,
+            volume_tonnes,
+            price_per_tonne,
+            gross_eur,
+            fee_eur,
+            receipt_hash,
+            seller_email,
+            seller_registry_name,
+            seller_registry_serial,
+            status
+          )
+          SELECT
+            ${buyerEmail},
+            ${tradeId},
+            'BUY',
+            ${rfq.standard},
+            ${matchedVolume},
+            ${matchedPrice},
+            ${grossEur},
+            ${feeEur},
+            ${receiptHash},
+            ${viable.seller_email},
+            ${viable.registry_name || null},
+            ${viable.registry_serial || null},
+            'pending_payment'
+          FROM claimed
+          RETURNING trade_id
         )
-        INSERT INTO exchange_rfq_matches (
-          rfq_id,
-          listing_id,
-          seller_profile_id,
-          buyer_email,
-          seller_email,
-          standard,
-          matched_volume_tonnes,
-          matched_price_per_tonne,
-          status,
-          negotiation_summary,
-          confidence
-        )
-        SELECT
-          claimed.id,
-          ${viable.id},
-          ${viable.seller_profile_id},
-          ${buyerEmail},
-          ${viable.seller_email},
-          ${rfq.standard},
-          ${matchedVolume},
-          ${matchedPrice},
-          'proposed',
-          ${negotiationSummary},
-          ${confidence}
-        FROM claimed
-        RETURNING *
+        SELECT new_match.*, new_trade.trade_id AS created_trade_id
+        FROM new_match
+        CROSS JOIN new_trade
       `);
 
       if (!((atomicResult as any).rows?.length)) {
@@ -613,6 +656,7 @@ export function registerAutonomousMarketplaceRoutes(app: Express) {
       return res.json({
         success: true,
         match: (atomicResult as any).rows?.[0] || null,
+        tradeId: (atomicResult as any).rows?.[0]?.created_trade_id || null,
         listing: viable,
       });
     } catch (e: any) {
