@@ -2590,6 +2590,26 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       if (!sessionEmail || sessionEmail !== normalizedEmail) {
         return res.status(403).json({ error: 'You can only start KYC for your signed-in account.' });
       }
+
+      const existingResult = await db.execute(sql`
+        SELECT id, kyc_status, kyc_provider_reference
+        FROM exchange_accounts
+        WHERE id = ${account_id} AND LOWER(email) = ${normalizedEmail}
+        LIMIT 1
+      `);
+      const existingRows = (existingResult as unknown as { rows?: Record<string, unknown>[] }).rows || [];
+      const existingAccount = existingRows[0] ? {
+        id: String(existingRows[0].id || ''),
+        kyc_status: existingRows[0].kyc_status ? String(existingRows[0].kyc_status) : null,
+        kyc_provider_reference: existingRows[0].kyc_provider_reference ? String(existingRows[0].kyc_provider_reference) : null,
+      } : null;
+      if (!existingAccount) return res.status(404).json({ error: 'Exchange account not found.' });
+
+      const hasProviderReference = !!String(existingAccount.kyc_provider_reference || '').trim();
+      if (existingAccount.kyc_status === 'pending' && hasProviderReference) {
+        return res.status(409).json({ error: 'Verification already in progress.' });
+      }
+
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) return res.status(500).json({ error: 'Stripe not configured' });
 
@@ -2597,16 +2617,20 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
       const session = await stripe.identity.verificationSessions.create({
         type: 'document',
-        metadata: { account_id: String(account_id), email: email.trim().toLowerCase(), platform: 'uaiu_exchange' },
+        metadata: { account_id: String(account_id), email: normalizedEmail, platform: 'uaiu_exchange' },
         options: { document: { allowed_types: ['driving_license', 'passport', 'id_card'], require_matching_selfie: true } },
         return_url: return_url || 'https://uaiu.live/x?kyc=complete',
       });
+
+      if (!session.id) {
+        return res.status(500).json({ error: 'Stripe did not return a verification session id.' });
+      }
 
       await db.execute(sql`
         UPDATE exchange_accounts
         SET kyc_session_id = ${session.id}, kyc_status = 'pending', kyc_provider_reference = ${session.id}
         WHERE id = ${account_id}
-      `).catch((e: any) => console.error('[KYC update]', e.message));
+      `);
 
       res.json({
         success:          true,
@@ -2617,6 +2641,35 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       });
     } catch (err: any) {
       console.error('[KYC Start]', err);
+      res.status(500).json({ error: safeError(err) });
+    }
+  });
+
+  // GET /api/kyc/status — return account KYC status for signed-in exchange user
+  app.get('/api/kyc/status', requireExchangeAuth, async (req, res) => {
+    try {
+      const email = String((req as any).exchangeEmail || '').trim().toLowerCase();
+      if (!email) return res.status(401).json({ error: 'Exchange authentication required.' });
+
+      const accountResult = await db.execute(sql`
+        SELECT kyc_status, kyc_provider_reference
+        FROM exchange_accounts
+        WHERE LOWER(email) = ${email}
+        LIMIT 1
+      `);
+      const accountRows = (accountResult as unknown as { rows?: Record<string, unknown>[] }).rows || [];
+      const account = accountRows[0] ? {
+        kyc_status: accountRows[0].kyc_status ? String(accountRows[0].kyc_status) : null,
+        kyc_provider_reference: accountRows[0].kyc_provider_reference ? String(accountRows[0].kyc_provider_reference) : null,
+      } : null;
+      if (!account) return res.status(404).json({ error: 'Exchange account not found.' });
+
+      res.json({
+        kyc_status: account.kyc_status || 'not_started',
+        kyc_provider_reference: account.kyc_provider_reference || null,
+      });
+    } catch (err: any) {
+      console.error('[KYC Status Current]', err);
       res.status(500).json({ error: safeError(err) });
     }
   });
@@ -2653,6 +2706,39 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (err: any) {
       console.error('[KYC Status]', err);
       res.status(500).json({ error: safeError(err) });
+    }
+  });
+
+  // GET /api/admin/kyc/users (X-Admin-Key header required)
+  app.get('/api/admin/kyc/users', requireAdminHeader, async (_req, res) => {
+    try {
+      const usersResult = await db.execute(sql`
+        SELECT id, email, first_name, last_name, org_name, kyc_status, kyc_provider_reference, created_at
+        FROM exchange_accounts
+        ORDER BY created_at DESC
+        LIMIT 200
+      `);
+      res.json((usersResult as { rows?: unknown[] }).rows || []);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // POST /api/admin/kyc/manual-verify (X-Admin-Key header required)
+  app.post('/api/admin/kyc/manual-verify', requireAdminHeader, async (req, res) => {
+    try {
+      const userId = String(req.body?.userId || '').trim();
+      if (!userId) return res.status(400).json({ error: 'userId required' });
+
+      await db.execute(sql`
+        UPDATE exchange_accounts
+        SET kyc_status = 'verified', kyc_provider_reference = 'manual-admin-override', kyc_completed_at = NOW()
+        WHERE id = ${userId}
+      `);
+
+      res.status(200).json({ success: true, userId, kyc_status: 'verified', kyc_provider_reference: 'manual-admin-override' });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
     }
   });
 

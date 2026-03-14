@@ -88,6 +88,10 @@ const F = {
 
 const N_GEO_REFERENCE_LINE = 'Voluntary Carbon Reference Price (Xpansiv CBL N-GEO): $0.56 per tonne — Last updated: March 13, 2026';
 
+function hasKycProviderReference(value: string | null | undefined): boolean {
+  return Boolean(value && value.trim().length > 0);
+}
+
 function TradingViewMiniSymbolOverview({ isDark, borderColor }: { isDark: boolean; borderColor: string }) {
   const widgetRef = useRef<HTMLDivElement>(null);
 
@@ -381,7 +385,7 @@ function RegistryProofUpload({ exchangeHeaders, sessionAccount, C, F }: {
 
 export default function Exchange() {
   const [location] = useLocation();
-  const { session, profile, sessionExpired, clearSessionExpired } = useAuth();
+  const { session, profile, sessionExpired, clearSessionExpired, refreshSession } = useAuth();
   useSEO({
     title: 'Carbon Credit Exchange',
     description: 'Buy and sell verified carbon credits on UAIU.LIVE/X — the only exchange with standardized audit artifacts, escrow settlement, and AI due diligence on every listing.',
@@ -536,6 +540,7 @@ export default function Exchange() {
         kycStatus: profile.kyc_status || prev.kycStatus || 'not_started',
         kybStatus: profile.kyb_status || prev.kybStatus || 'not_started',
         kycCompletedAt: profile.kyc_completed_at || prev.kycCompletedAt || null,
+        kycProviderReference: prev.kycProviderReference || null,
         company: profile.company_name || prev.company,
         accountType: profile.role || prev.accountType,
       };
@@ -587,12 +592,43 @@ export default function Exchange() {
       }
     }
     if (params.get('kyc') === 'done') {
-      showToast('Identity verification submitted. Confirmation within 24 hours.');
-      window.history.replaceState({}, '', '/x');
-      if (sessionAccount?.email) {
-        fetch('/api/exchange/account/kyc-status', { method: 'PATCH', headers: exchangeHeaders(), body: JSON.stringify({ kycStatus: 'pending' }) }).catch(() => {});
-        setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
-      }
+      void (async () => {
+        const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
+        window.history.replaceState({}, '', cleanUrl || '/x');
+
+        let attempts = 0;
+        const maxAttempts = 10;
+        const intervalMs = 3000;
+
+        while (attempts < maxAttempts) {
+          attempts += 1;
+          try {
+            const statusResponse = await fetch('/api/kyc/status', { method: 'GET', headers: exchangeHeaders() });
+            const statusData = await statusResponse.json().catch(() => ({} as { kyc_status?: string; kyc_provider_reference?: string | null }));
+            const status = statusData.kyc_status || 'pending';
+
+            setSessionAccount((prev: any) => prev ? {
+              ...prev,
+              kycStatus: status,
+              kycProviderReference: statusData.kyc_provider_reference || prev.kycProviderReference || null,
+            } : prev);
+
+            if (status === 'verified') {
+              showToast('Identity verification complete — your account is now verified.');
+              await refreshSession();
+              return;
+            }
+          } catch {
+            // Continue polling until max attempts reached.
+          }
+
+          if (attempts < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          }
+        }
+
+        showToast("Verification is processing — you'll receive an email when complete.");
+      })();
     }
   }, []);
 
@@ -626,6 +662,7 @@ export default function Exchange() {
             acceptedTermsAt: account.acceptedTermsAt,
             kycStatus: account.kycStatus || 'not_started',
             kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+            kycProviderReference: account.kycProviderReference || null,
           });
         } else {
           clearExchangeTokenStorage();
@@ -993,7 +1030,7 @@ export default function Exchange() {
         return;
       }
 
-      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending' } : prev);
+      setSessionAccount((prev: any) => prev ? { ...prev, kycStatus: 'pending', kycProviderReference: data.session_id || prev.kycProviderReference || null } : prev);
 
       const verificationUrl = data.url || data.verification_url || data.verificationUrl;
       if (verificationUrl) {
@@ -1105,7 +1142,8 @@ export default function Exchange() {
           annualCo2: account.annualCo2Exposure ? parseInt(account.annualCo2Exposure) || 10000 : 10000,
           acceptedTermsAt: account.acceptedTermsAt,
           kycStatus: account.kycStatus || 'not_started',
-            kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+          kycCompletedAt: (account as any).kycCompletedAt || (account as any).kycVerifiedAt || null,
+          kycProviderReference: account.kycProviderReference || null,
         };
         const token = account.token;
         if (token) {
@@ -2234,8 +2272,17 @@ export default function Exchange() {
 
                 {sessionAccount.kycStatus !== 'verified' && (
                   <div style={{ background: C.goldfaint, border: `1px solid ${C.goldborder}`, padding: '14px 18px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'Verification in progress — we will notify you when complete' : 'Complete KYC to unlock trading on the platform.'}</div>
-                    {sessionAccount.kycStatus !== 'pending' && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">Verify Identity →</button>}
+                    {sessionAccount.kycStatus === 'pending' && !hasKycProviderReference(sessionAccount.kycProviderReference) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                        <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', width: 'fit-content' }} data-testid="button-kyc-retry-from-signin">Retry Verification →</button>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>Your previous session did not complete. Click to start a new one.</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.gold, lineHeight: 1.5 }}>{sessionAccount.kycStatus === 'pending' ? 'Verification in progress — we will notify you when complete' : 'Complete KYC to unlock trading on the platform.'}</div>
+                        {sessionAccount.kycStatus !== 'pending' && <button className="x-btn-primary" onClick={handleStartKyc} style={{ padding: '8px 16px', fontFamily: F.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }} data-testid="button-kyc-from-signin">Verify Identity →</button>}
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -2317,7 +2364,14 @@ export default function Exchange() {
                           {sessionAccount?.kycStatus === 'verified' ? (
                             <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green }}>Identity verified. You may trade on the platform.</div>
                           ) : sessionAccount?.kycStatus === 'pending' ? (
-                            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Verification submitted. You will receive confirmation by email within 24 hours.</div>
+                            hasKycProviderReference(sessionAccount?.kycProviderReference) ? (
+                              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.cream3 }}>Verification submitted. You will receive confirmation by email within 24 hours.</div>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.6, marginBottom: 16 }}>Your previous session did not complete. Click to start a new one.</div>
+                                <button className="x-btn-primary" onClick={handleStartKyc} data-testid="button-retry-kyc" style={{ width: '100%', padding: '14px 20px', textAlign: 'center' }}>Retry Verification →</button>
+                              </>
+                            )
                           ) : (
                             <>
                               <div style={{ fontSize: 13, color: C.cream3, lineHeight: 1.6, marginBottom: 16 }}>Complete identity verification via Stripe Identity. Takes 2–3 minutes. Required to execute trades.</div>

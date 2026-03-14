@@ -106,10 +106,20 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'users' | 'autonomy' | 'backup'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
+  const [kycUsers, setKycUsers] = useState<Array<{
+    id: string;
+    email: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    org_name?: string | null;
+    kyc_status?: string | null;
+    kyc_provider_reference?: string | null;
+  }>>([]);
+  const [manualVerifyLoadingId, setManualVerifyLoadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [platformStatus, setPlatformStatus] = useState<{ status: 'ok' | 'degraded' | 'incident'; message: string }>({
     status: 'ok',
@@ -153,15 +163,17 @@ export default function Admin() {
   async function loadData() {
     setLoading(true);
     try {
-      const [lRes, wRes, hRes, sRes] = await Promise.all([
+      const [lRes, wRes, hRes, sRes, usersRes] = await Promise.all([
         fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/status/public`),
+        fetch(`/api/admin/kyc/users`, { headers: adminHeaders(adminKey) }),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
       if (hRes.ok) setHealthData(await hRes.json());
+      if (usersRes.ok) setKycUsers(await usersRes.json());
       if (sRes.ok) {
         const sd = await sRes.json();
         const s: 'ok' | 'degraded' | 'incident' =
@@ -219,6 +231,26 @@ export default function Admin() {
       toast(`Retry complete: ${d.action}`);
       setWebhookFailures(prev => prev.filter(f => f.id !== id));
     } catch (e: any) { toast(e.message, 'err'); }
+  }
+
+  async function manualVerifyUser(userId: string) {
+    setManualVerifyLoadingId(userId);
+    try {
+      const r = await fetch('/api/admin/kyc/manual-verify', {
+        method: 'POST',
+        headers: { ...adminHeaders(adminKey), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Manual verify failed');
+      toast('User manually verified successfully.');
+      setKycUsers((prev) => prev.map((user) => user.id === userId ? { ...user, kyc_status: 'verified', kyc_provider_reference: 'manual-admin-override' } : user));
+      await loadData();
+    } catch (e: any) {
+      toast(e.message, 'err');
+    } finally {
+      setManualVerifyLoadingId(null);
+    }
   }
 
   if (!authed) {
@@ -292,6 +324,7 @@ export default function Admin() {
             { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
             { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
             { id: 'health', label: 'System Health', count: null },
+            { id: 'users', label: 'KYC Users', count: kycUsers.length },
             { id: 'autonomy', label: 'Autonomous Marketplace', count: null },
             { id: 'backup', label: 'Backup & DR', count: null }
           ].map(tab => (
@@ -439,7 +472,69 @@ export default function Admin() {
             )}
           </div>
         )}
-        {/* Panel 4: Autonomous Marketplace */}
+        {/* Panel 4: KYC Users */}
+        {activeTab === 'users' && (
+          <div style={{ animation: 'fadeIn .3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: C.text, fontFamily: F.syne }}>KYC User Management</h2>
+                <p style={{ fontSize: '12px', color: C.muted, marginTop: '2px' }}>Review KYC status, Stripe session IDs, and apply manual verification override when needed.</p>
+              </div>
+              <button data-testid="button-refresh-kyc-users" onClick={loadData} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>↻ Refresh</button>
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}><div style={{ width: '20px', height: '20px', border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }}></div></div>
+            ) : kycUsers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: '14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>No users available.</div>
+            ) : (
+              <div style={{ overflowX: 'auto', background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: C.muted, fontFamily: F.mono }}>User</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: C.muted, fontFamily: F.mono }}>Email</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: C.muted, fontFamily: F.mono }}>KYC Status</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: C.muted, fontFamily: F.mono }}>Stripe Session ID</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', color: C.muted, fontFamily: F.mono }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kycUsers.map((user) => (
+                      <tr key={user.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: '12px', fontSize: '12px', color: C.text }}>{user.org_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '—'}</td>
+                        <td style={{ padding: '12px', fontSize: '12px', color: C.text, fontFamily: F.mono }}>{user.email}</td>
+                        <td style={{ padding: '12px' }}>
+                          <Badge
+                            label={(user.kyc_status || 'not_started').toUpperCase()}
+                            variant={user.kyc_status === 'verified' ? 'green' : user.kyc_status === 'failed' ? 'red' : user.kyc_status === 'pending' ? 'yellow' : 'muted'}
+                          />
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '11px', color: C.text, fontFamily: F.mono }}>{user.kyc_provider_reference?.trim() ? user.kyc_provider_reference : 'None'}</td>
+                        <td style={{ padding: '12px' }}>
+                          {user.kyc_status !== 'verified' ? (
+                            <button
+                              data-testid={`button-manual-verify-${user.id}`}
+                              onClick={() => manualVerifyUser(user.id)}
+                              disabled={manualVerifyLoadingId === user.id}
+                              style={{ background: C.gold, color: C.bg, border: 'none', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: manualVerifyLoadingId === user.id ? 0.65 : 1 }}
+                            >
+                              {manualVerifyLoadingId === user.id ? 'Verifying...' : 'Manually Verify'}
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '11px', color: C.green, fontFamily: F.mono }}>Verified</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Panel 5: Autonomous Marketplace */}
         {activeTab === 'autonomy' && (
           <div style={{ animation: 'fadeIn .3s ease', color: C.text, fontFamily: F.syne }}>
             <div style={{ marginBottom: '20px' }}>
@@ -450,7 +545,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Panel 5: Backup & DR */}
+        {/* Panel 6: Backup & DR */}
         {activeTab === 'backup' && (
           <div style={{ animation: 'fadeIn .3s ease', color: C.text, fontFamily: F.syne }}>
             <div style={{ marginBottom: '20px' }}>
