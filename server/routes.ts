@@ -14,7 +14,7 @@ import type { GameState } from "@shared/schema";
 import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
-import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail } from "./email-service";
+import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail, buildPasswordResetHtml } from "./email-service";
 import { insertAlertSubscriberSchema, insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
 import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, exchangeTrades, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
 import multer from "multer";
@@ -2177,6 +2177,73 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       const hash = await bcrypt.hash(password, 12);
       await storage.updateExchangeAccountPassword(normalizedEmail, hash);
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── EXCHANGE: Forgot password ────────────────────────────────────────────
+  app.post('/api/exchange/account/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email is required.' });
+      const normalizedEmail = email.trim().toLowerCase();
+      const account = await storage.getExchangeAccountByEmail(normalizedEmail);
+      if (!account) {
+        return res.json({ success: true });
+      }
+      const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      await db.execute(sql`
+        INSERT INTO password_reset_tokens (email, token_hash, expires_at)
+        VALUES (${normalizedEmail}, ${tokenHash}, ${expiresAt})
+      `);
+      const baseUrl = process.env.APP_BASE_URL || 'https://uaiu.live';
+      const resetLink = `${baseUrl}/x/reset-password?token=${token}`;
+      const resetHtml = buildPasswordResetHtml(resetLink);
+      await sendExchangeEmail('Password Reset', {}, { to: normalizedEmail, customHtml: resetHtml });
+      await logSecurityEvent({ email: normalizedEmail, eventType: 'password_reset_requested', req });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  // ── EXCHANGE: Reset password ───────────────────────────────────────────
+  app.post('/api/exchange/account/reset-password', async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required.' });
+      if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const lookup = await db.execute(sql`
+        SELECT id, email, token_hash, expires_at, used_at
+        FROM password_reset_tokens
+        WHERE token_hash = ${tokenHash}
+        LIMIT 1
+      `);
+      const record = ((lookup as any).rows || [])[0];
+      if (!record) return res.status(400).json({ error: 'Invalid or expired reset link.' });
+      if (record.used_at) return res.status(400).json({ error: 'This reset link has already been used.' });
+      if (new Date(record.expires_at) < new Date()) return res.status(400).json({ error: 'This reset link has expired. Please request a new one.' });
+      if (!secureTokenMatch(token, record.token_hash)) {
+        return res.status(400).json({ error: 'Invalid or expired reset link.' });
+      }
+      const consumed = await db.execute(sql`
+        UPDATE password_reset_tokens
+        SET used_at = NOW()
+        WHERE id = ${record.id} AND used_at IS NULL
+        RETURNING email
+      `);
+      const rows = (consumed as any).rows || [];
+      if (!rows.length) return res.status(400).json({ error: 'This reset link has already been used.' });
+      const email = rows[0].email;
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await storage.updateExchangeAccountPassword(email, passwordHash);
+      const sessionToken = await createExchangeSession(email);
+      await logSecurityEvent({ email, eventType: 'password_reset_completed', req });
+      res.json({ success: true, token: sessionToken });
     } catch (e: any) {
       res.status(500).json({ error: safeError(e) });
     }

@@ -47,39 +47,43 @@ export async function sendFormSubmissionEmail(formType: string, data: Record<str
   }
 }
 
-export async function sendExchangeEmail(formType: string, data: Record<string, any>) {
-  const fields = Object.entries(data)
-    .map(([key, value]) => `
-      <tr style="border-bottom: 1px solid #065f46;">
-        <td style="padding: 10px; color: #6ee7b7; font-weight: bold; white-space:nowrap;">${key}:</td>
-        <td style="padding: 10px; color: #ecfdf5;">${value}</td>
-      </tr>
-    `).join('');
+export async function sendExchangeEmail(formType: string, data: Record<string, any>, options?: { to?: string; customHtml?: string }) {
+  const toAddress = options?.to || 'info@uaiu.live';
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; padding: 20px; background: #022c22; color: #ecfdf5;">
-      <h2 style="color: #34d399; border-bottom: 2px solid #34d399; padding-bottom: 10px; margin: 0 0 20px;">
-        UAIU.LIVE/X — ${formType}
-      </h2>
-      <table style="border-collapse: collapse; width: 100%; background: #064e3b; border-radius: 8px; overflow: hidden;">
-        ${fields}
-      </table>
-      <p style="color: #6ee7b7; font-size: 12px; margin-top: 16px;">
-        Submitted: ${new Date().toISOString()}
-      </p>
-    </div>
-  `;
+  const html = options?.customHtml || (() => {
+    const fields = Object.entries(data)
+      .map(([key, value]) => `
+        <tr style="border-bottom: 1px solid #065f46;">
+          <td style="padding: 10px; color: #6ee7b7; font-weight: bold; white-space:nowrap;">${key}:</td>
+          <td style="padding: 10px; color: #ecfdf5;">${value}</td>
+        </tr>
+      `).join('');
+
+    return `
+      <div style="font-family: Arial, sans-serif; padding: 20px; background: #022c22; color: #ecfdf5;">
+        <h2 style="color: #34d399; border-bottom: 2px solid #34d399; padding-bottom: 10px; margin: 0 0 20px;">
+          UAIU.LIVE/X — ${formType}
+        </h2>
+        <table style="border-collapse: collapse; width: 100%; background: #064e3b; border-radius: 8px; overflow: hidden;">
+          ${fields}
+        </table>
+        <p style="color: #6ee7b7; font-size: 12px; margin-top: 16px;">
+          Submitted: ${new Date().toISOString()}
+        </p>
+      </div>
+    `;
+  })();
 
   if (isZohoConfigured()) {
     try {
-      const sent = await sendZohoEmail('info@uaiu.live', `[UAIU.LIVE/X] ${formType}`, html);
+      const sent = await sendZohoEmail(toAddress, `[UAIU.LIVE/X] ${formType}`, html);
       if (sent) {
-        console.log(`✅ Exchange email sent via Zoho SMTP: ${formType}`);
+        console.log(`Exchange email sent via Zoho SMTP: ${formType} to ${toAddress}`);
         return true;
       }
-      console.warn('⚠️ Zoho send failed, falling back to Resend');
+      console.warn('Zoho send failed, falling back to Resend');
     } catch (error) {
-      console.warn('⚠️ Zoho error, falling back to Resend:', error);
+      console.warn('Zoho error, falling back to Resend:', error);
     }
   }
 
@@ -89,17 +93,38 @@ export async function sendExchangeEmail(formType: string, data: Record<string, a
 
     await client.emails.send({
       from: sender,
-      to: 'info@uaiu.live',
+      to: toAddress,
       subject: `[UAIU.LIVE/X] ${formType}`,
       html,
     });
 
-    console.log(`✅ Exchange email sent via Resend: ${formType}`);
+    console.log(`Exchange email sent via Resend: ${formType} to ${toAddress}`);
     return true;
   } catch (error) {
-    console.error('❌ Failed to send exchange email:', error);
+    console.error('Failed to send exchange email:', error);
     return false;
   }
+}
+
+export function buildPasswordResetHtml(resetLink: string): string {
+  return `
+    <div style="font-family: Arial, sans-serif; padding: 20px; background: #022c22; color: #ecfdf5;">
+      <h2 style="color: #34d399; border-bottom: 2px solid #34d399; padding-bottom: 10px; margin: 0 0 20px;">
+        UAIU.LIVE/X — Password Reset
+      </h2>
+      <p style="color: #ecfdf5; font-size: 14px; line-height: 1.8; margin: 0 0 20px;">
+        You requested a password reset for your UAIU Exchange account. Click the link below to set a new password:
+      </p>
+      <div style="margin: 24px 0;">
+        <a href="${resetLink}" style="display: inline-block; padding: 12px 28px; background: #34d399; color: #022c22; font-weight: bold; text-decoration: none; border-radius: 4px; font-size: 14px;">
+          Reset Password
+        </a>
+      </div>
+      <p style="color: #6ee7b7; font-size: 12px; line-height: 1.6; margin: 20px 0 0;">
+        This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email.
+      </p>
+    </div>
+  `;
 }
 
 export async function sendSignupNotification(email: string, name: string, timestamp: Date) {

@@ -475,6 +475,11 @@ export default function Exchange() {
   const [signinNeedsPassword, setSigninNeedsPassword] = useState(false);
   const [signinNewPassword, setSigninNewPassword] = useState('');
 
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
   const [acctPassword, setAcctPassword] = useState('');
   const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
   const [acctShowKyc, setAcctShowKyc] = useState(false);
@@ -1235,6 +1240,23 @@ export default function Exchange() {
       setSigninNewPassword('');
       handleSignIn();
     } catch { setSigninError('Failed to set password.'); setSigninLoading(false); }
+  }
+
+  async function handleForgotPassword() {
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    try {
+      await fetch('/api/exchange/account/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }),
+      });
+      setForgotSent(true);
+    } catch {
+      setForgotSent(true);
+    } finally {
+      setForgotLoading(false);
+    }
   }
 
   function handleSignOut() {
@@ -2472,7 +2494,22 @@ export default function Exchange() {
                         </div>
                         {signinError && <div style={{ fontFamily: F.mono, fontSize: 11, color: C.red, marginBottom: 16, marginTop: -12 }}>⚠ {signinError}</div>}
                         <button style={{ ...s.formSubmit as React.CSSProperties, opacity: signinLoading || !signinEmail.trim() ? 0.6 : 1 }} onClick={handleSignIn} disabled={signinLoading || !signinEmail.trim()} data-testid="button-signin-submit">{signinLoading ? 'Signing in...' : 'Access Account →'}</button>
-                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 16, textAlign: 'center', letterSpacing: '0.05em' }}>
+                        {forgotPasswordMode ? (
+                          <div style={{ marginTop: 16 }}>
+                            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.05em', marginBottom: 10, lineHeight: 1.6 }}>Enter your email to receive a password reset link.</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <input className="x-fi" style={{ ...s.fi, flex: 1, minWidth: 180 }} type="email" placeholder="your@email.com" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleForgotPassword(); }} data-testid="input-forgot-email" />
+                              <button style={{ padding: '8px 16px', background: C.gold, border: 'none', color: C.ink, fontFamily: F.mono, fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontWeight: 700, opacity: forgotLoading || !forgotEmail.trim() ? 0.6 : 1 }} onClick={handleForgotPassword} disabled={forgotLoading || !forgotEmail.trim()} data-testid="button-forgot-submit">{forgotLoading ? 'Sending...' : 'Send Reset Link'}</button>
+                            </div>
+                            {forgotSent && <div style={{ fontFamily: F.mono, fontSize: 10, color: C.green, marginTop: 10 }}>If an account exists with that email, a reset link has been sent.</div>}
+                            <button onClick={() => { setForgotPasswordMode(false); setForgotSent(false); }} style={{ background: 'none', border: 'none', color: C.cream4, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, padding: 0, marginTop: 10, letterSpacing: '0.05em' }} data-testid="button-back-to-signin">Back to sign in</button>
+                          </div>
+                        ) : (
+                          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 16, textAlign: 'center', letterSpacing: '0.05em' }}>
+                            <button onClick={() => setForgotPasswordMode(true)} style={{ background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, textDecoration: 'underline', padding: 0, letterSpacing: '0.05em' }} data-testid="link-forgot-password">Forgot password?</button>
+                          </div>
+                        )}
+                        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream4, marginTop: 10, textAlign: 'center', letterSpacing: '0.05em' }}>
                           No account?{' '}
                           <button onClick={() => setAcctModalTab('open')} style={{ background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontFamily: F.mono, fontSize: 10, textDecoration: 'underline', padding: 0, letterSpacing: '0.05em' }}>Open one free →</button>
                         </div>

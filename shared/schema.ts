@@ -607,6 +607,16 @@ export const insertBackupLogSchema = createInsertSchema(backupLogs).omit({
 export type BackupLog = typeof backupLogs.$inferSelect;
 export type InsertBackupLog = z.infer<typeof insertBackupLogSchema>;
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 export interface GameState {
   matchId: string;
   player1: { id: string; name: string; y: number; score: number };
