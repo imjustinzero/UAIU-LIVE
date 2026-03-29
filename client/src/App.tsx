@@ -65,6 +65,8 @@ import VerifierMarketplacePage from "@/pages/verifier-marketplace";
 import PartnerDirectoryPage from "@/pages/partner-directory";
 import PartnerProfilePage from "@/pages/partner-profile";
 import PartnerDashboardPage from "@/pages/partner-dashboard";
+import MethodologyLibraryPage from "@/pages/methodology-library";
+import PartnerMethodologyImpactPage from "@/pages/partner-methodology-impact";
 
 function Router() {
   return (
@@ -116,6 +118,9 @@ function Router() {
       <Route path="/x/partners" component={PartnerDirectoryPage} />
       <Route path="/x/partners/:partnerId" component={PartnerProfilePage} />
       <Route path="/x/partner/dashboard" component={PartnerDashboardPage} />
+      <Route path="/x/methodologies" component={MethodologyLibraryPage} />
+      <Route path="/x/methodologies/:code/:version" component={MethodologyLibraryPage} />
+      <Route path="/x/partner/methodology-impact" component={PartnerMethodologyImpactPage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

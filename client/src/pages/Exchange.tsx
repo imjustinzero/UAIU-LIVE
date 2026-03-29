@@ -1541,6 +1541,11 @@ export default function Exchange() {
                     {l.registrySerial && l.registryName && (
                       <div style={{ marginBottom: 10 }}>
                         <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.green, background: C.greenfaint, border: `1px solid ${C.green}`, padding: '4px 10px', display: 'inline-flex', borderRadius: 999 }}>Registry Verified · {l.registryName}</span>
+                        {(l as any).methodologyCode && (l as any).methodologyVersion && (
+                          <div style={{ marginTop: 8, fontFamily: F.mono, fontSize: 10, color: C.cream3, lineHeight: 1.4 }}>
+                            Verified using <a href={`/x/methodologies/${(l as any).methodologyCode}/${(l as any).methodologyVersion}`} onClick={e => e.stopPropagation()} style={{ color: C.gold }}>[{(l as any).methodologyCode}]</a> by {(l as any).partnerFirmName || 'Verified Partner'} — <a href={`/x/methodologies/${(l as any).methodologyCode}/${(l as any).methodologyVersion}`} onClick={e => e.stopPropagation()} style={{ color: C.green }}>View methodology</a>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: C.cream3, letterSpacing: '0.1em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} /> {l.origin}</div>

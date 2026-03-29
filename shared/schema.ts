@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date, jsonb, numeric, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -762,6 +762,49 @@ export const verificationStatements = pgTable("verification_statements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   statementRef: varchar("statement_ref").notNull(),
   signedAt: timestamp("signed_at").notNull().defaultNow(),
+  methodologyCode: varchar("methodology_code"),
+  methodologyVersion: varchar("methodology_version"),
+  methodologyHash: varchar("methodology_hash"),
+});
+
+export const partnerReferrals = pgTable("partner_referrals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  methodologyId: uuid("methodology_id"),
+  methodologyVersion: varchar("methodology_version"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const partnerMethodologies = pgTable("partner_methodologies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  partnerId: uuid("partner_id").notNull(),
+  methodologyCode: varchar("methodology_code").notNull().unique(),
+  version: varchar("version").notNull(),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  scope: text("scope"),
+  applicableStandards: jsonb("applicable_standards").notNull().default(sql`'[]'::jsonb`),
+  applicableCreditTypes: jsonb("applicable_credit_types").notNull().default(sql`'[]'::jsonb`),
+  applicableGeographies: jsonb("applicable_geographies").notNull().default(sql`'[]'::jsonb`),
+  methodology: text("methodology").notNull(),
+  changeLog: text("change_log"),
+  publishedAt: timestamp("published_at"),
+  supersededBy: uuid("superseded_by"),
+  status: varchar("status").notNull().default("draft"),
+  documentHash: varchar("document_hash").notNull(),
+  evidenceVaultId: uuid("evidence_vault_id"),
+  auditBlockId: integer("audit_block_id"),
+  downloadCount: integer("download_count").notNull().default(0),
+  citationCount: integer("citation_count").notNull().default(0),
+});
+
+export const methodologyCitations = pgTable("methodology_citations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  methodologyId: uuid("methodology_id").notNull().references(() => partnerMethodologies.id),
+  creditId: varchar("credit_id").notNull(),
+  projectName: varchar("project_name"),
+  creditsVerified: real("credits_verified").notNull().default(0),
+  buyerOrganization: varchar("buyer_organization"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const uvsCertifications = pgTable("uvs_certifications", {
@@ -1072,6 +1115,8 @@ export type ProductCarbonPassport = typeof productCarbonPassports.$inferSelect;
 export type IsoVerifier = typeof isoVerifiers.$inferSelect;
 export type IsoVerificationEngagement = typeof isoVerificationEngagements.$inferSelect;
 export type SupplyChainCarbonMap = typeof supplyChainCarbonMap.$inferSelect;
+export type PartnerMethodology = typeof partnerMethodologies.$inferSelect;
+export type MethodologyCitation = typeof methodologyCitations.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
