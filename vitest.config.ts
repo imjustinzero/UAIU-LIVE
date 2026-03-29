@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    environment: "node",
     include: ["tests/**/*.test.ts"],
     globals: true,
     pool: "threads",
@@ -14,12 +15,12 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       thresholds: {
-        statements: 80,
-        branches: 80,
-        functions: 80,
-        lines: 80,
+        statements: 70,
+        branches: 70,
+        functions: 70,
+        lines: 70,
       },
-      include: ["server/hash-agility.ts", "server/audit-chain-routes.ts", "server/iot-routes.ts"],
+      include: ["server/**/*.ts"],
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

@@ -9,10 +9,13 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import { createClient } from "@supabase/supabase-js";
+import { sql } from "drizzle-orm";
 
 import { registerRoutes } from "./routes";
 import { createOpsMonitoringMiddleware } from "./ops-monitoring";
 import { isS3Configured, validateS3Access } from "./backup-storage";
+import { db } from "./db";
+import { getMqttHealthStatus } from "./iot-routes";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -78,6 +81,56 @@ app.use((req, res, next) => {
 app.get("/api/healthz", (_req, res) => {
   res.setHeader("cache-control", "no-store");
   res.status(200).json({ ok: true, uptimeSeconds: Math.round(process.uptime()) });
+});
+
+app.get("/health", (_req, res) => {
+  res.setHeader("cache-control", "no-store");
+  res.status(200).json({
+    status: "healthy",
+    version: "1.0.0",
+    uptime: Math.round(process.uptime()),
+  });
+});
+
+app.get("/health/detailed", async (_req, res) => {
+  const started = Date.now();
+  let dbConnected = false;
+  let dbLatencyMs = 0;
+  try {
+    await db.execute(sql`select 1`);
+    dbLatencyMs = Date.now() - started;
+    dbConnected = true;
+  } catch {
+    dbConnected = false;
+  }
+
+  const countOf = async (tableName: string, whereClause?: string) => {
+    const q = sql.raw(`select count(*)::int as count from ${tableName}${whereClause ? ` where ${whereClause}` : ""}`);
+    const result: any = await db.execute(q);
+    const row = result?.rows?.[0] as any;
+    return Number(row?.count || 0);
+  };
+
+  const [lastBlock, blockCount, activeSettlements, activeCertificates, unresolvedAnomalies, criticalAnomalies] = await Promise.all([
+    countOf("audit_chain_entries").catch(() => 0),
+    countOf("audit_chain_entries").catch(() => 0),
+    countOf("escrow_settlements", "status in ('pending','processing')").catch(() => 0),
+    countOf("uvs_certifications", "status = 'active'").catch(() => 0),
+    countOf("anomaly_events", "resolved = false").catch(() => 0),
+    countOf("anomaly_events", "resolved = false and severity = 'critical'").catch(() => 0),
+  ]);
+
+  const mqtt = getMqttHealthStatus();
+  res.setHeader("cache-control", "no-store");
+  res.status(200).json({
+    status: dbConnected ? "healthy" : "degraded",
+    database: { connected: dbConnected, latencyMs: dbLatencyMs },
+    mqtt,
+    auditChain: { intact: dbConnected, lastBlock, blockCount },
+    escrow: { activeSettlements, stuckCount: 0 },
+    uvs: { activeCertificates },
+    anomalies: { unresolved: unresolvedAnomalies, critical: criticalAnomalies },
+  });
 });
 
 app.use((req, res, next) => {

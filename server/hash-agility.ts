@@ -10,10 +10,12 @@ function parseApprovedAlgorithms(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export const APPROVED_ALGORITHMS = parseApprovedAlgorithms(process.env.APPROVED_ALGORITHMS);
+export function getApprovedAlgorithms(): string[] {
+  return parseApprovedAlgorithms(process.env.APPROVED_ALGORITHMS);
+}
 
 export function isAlgorithmApproved(alg: string): boolean {
-  return APPROVED_ALGORITHMS.includes(String(alg || "").trim().toLowerCase());
+  return getApprovedAlgorithms().includes(String(alg || "").trim().toLowerCase());
 }
 
 export function getHashAlgorithm(): string {
@@ -36,12 +38,18 @@ export function validateEscrowFinality(
   algorithmApproved: boolean;
   requiresManualReview: boolean;
   approvedAlgorithms: string[];
+  hoursRemaining: number;
+  percentComplete: number;
 } {
   const requiredHours = finalityHours ?? Number(process.env.ESCROW_FINALITY_HOURS || 24);
   const settledDate = settledAt instanceof Date ? settledAt : new Date(settledAt);
   const hoursElapsed = Math.max(0, (Date.now() - settledDate.getTime()) / (1000 * 60 * 60));
   const settled = hoursElapsed >= requiredHours;
   const algorithmApproved = isAlgorithmApproved(algorithmAtSettlement || "");
+
+  const hoursRemaining = Math.max(0, requiredHours - hoursElapsed);
+  const percentComplete = Math.min(100, Math.max(0, Math.round((hoursElapsed / requiredHours) * 100)));
+  const approvedAlgorithms = getApprovedAlgorithms();
 
   return {
     settled,
@@ -50,6 +58,8 @@ export function validateEscrowFinality(
     algorithmAtSettlement: algorithmAtSettlement || "unknown",
     algorithmApproved,
     requiresManualReview: settled && !algorithmApproved,
-    approvedAlgorithms: APPROVED_ALGORITHMS,
+    approvedAlgorithms,
+    hoursRemaining,
+    percentComplete,
   };
 }
