@@ -60,3 +60,30 @@ Mitigations:
 - run staged interoperability tests before hard cutover,
 - keep an explicit manual-review lane for legacy-settled records,
 - maintain auditable policy snapshots (what was approved and when).
+
+## Test coverage reference
+The production test harness is configured with Vitest and targets **80% coverage** on critical paths. Core unit tests currently validate hash algorithm selection, hash determinism, chain-linking properties, and escrow finality edge cases.
+
+Recommended coverage focus:
+- `server/hash-agility.ts` for algorithm policy and finality logic,
+- audit-chain hash linkage and rotation routes,
+- settlement status progression and manual-review behavior.
+
+## Monitoring metrics reference
+Operational monitoring should include:
+- trade counters and value histograms,
+- escrow finality duration histogram,
+- IoT ingestion totals and anomaly counters,
+- audit chain block counts and integrity gauge,
+- API request/error counters and latency histograms.
+
+Prometheus should scrape `/metrics`, and health probes should include both `/health` (public) and `/health/detailed` (admin).
+
+## Rate-limit documentation (operational)
+Baseline policy:
+- public endpoints: strict per-IP limits,
+- authenticated endpoints: per-key/per-plan limits,
+- IoT ingestion: per-device high-throughput limits,
+- admin and bulk operations: tighter per-user windows.
+
+Rate-limit responses should be structured and include `X-RateLimit-*` headers plus `Retry-After` when throttled.
