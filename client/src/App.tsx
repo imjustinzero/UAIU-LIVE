@@ -70,6 +70,10 @@ import PartnerDirectoryPage from "@/pages/partner-directory";
 import PartnerProfilePage from "@/pages/partner-profile";
 import PartnerMethodologyImpact from "@/pages/partner-methodology-impact";
 import MethodologyLibraryPage from "@/pages/methodology-library";
+import FormalPropertiesPage from "@/pages/formal-properties";
+import AcademicPortalPage from "@/pages/academic-portal";
+import ChallengePage from "@/pages/challenge";
+import StandardsCrosswalkPage from "@/pages/standards-crosswalk";
 
 function Router() {
   return (
@@ -128,6 +132,10 @@ function Router() {
       <Route path="/x/partners/:partnerId/dashboard" component={PartnerDashboardPage} />
       <Route path="/x/partners/:partnerId/impact" component={PartnerMethodologyImpact} />
       <Route path="/x/methodologies" component={MethodologyLibraryPage} />
+      <Route path="/x/properties" component={FormalPropertiesPage} />
+      <Route path="/x/academic" component={AcademicPortalPage} />
+      <Route path="/x/challenge" component={ChallengePage} />
+      <Route path="/x/standards-crosswalk" component={StandardsCrosswalkPage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

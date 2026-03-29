@@ -15,6 +15,7 @@ import {
   validateS3Access,
   classifyS3Error,
 } from "./backup-storage";
+import { runAllFormalPropertyVerifications } from "./formal-properties-routes";
 
 const BACKUP_DIR = "/tmp/uaiu_backups";
 const BACKUP_KEEP = 7;
@@ -466,4 +467,24 @@ export function startCronJobs(_app: Express): void {
 
   setTimeout(checkStuckEscrows, 60_000);
   setInterval(checkStuckEscrows, 30 * 60 * 1000);
+
+  async function runFormalPropertyCron(): Promise<void> {
+    try {
+      const result = await runAllFormalPropertyVerifications();
+      console.log(`[Cron] Formal properties verification complete: pass=${result.passed} fail=${result.failed} error=${result.errors}`);
+      if (result.failed > 0 || result.errors > 0) {
+        await sendExchangeEmail("[ALERT] Formal property verification failure", {
+          Passed: result.passed,
+          Failed: result.failed,
+          Errors: result.errors,
+          Timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+    } catch (error: any) {
+      console.error("[Cron] Formal property verification crashed:", error?.message || error);
+    }
+  }
+
+  setTimeout(runFormalPropertyCron, 2 * 60 * 1000);
+  setInterval(runFormalPropertyCron, 6 * 60 * 60 * 1000);
 }

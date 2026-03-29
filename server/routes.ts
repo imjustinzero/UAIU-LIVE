@@ -39,6 +39,10 @@ import { registerIotRoutes, setIotLiveNamespace } from "./iot-routes";
 import { registerUvsRoutes } from "./uvs-routes";
 import { registerIndustrialRoutes } from "./industrial-routes";
 import { registerMethodologyRoutes, startMethodologyCron } from "./methodology-routes";
+import { registerFormalPropertiesRoutes } from "./formal-properties-routes";
+import { registerAcademicRoutes } from "./academic-routes";
+import { registerChallengesRoutes } from "./challenges-routes";
+import { registerCrosswalkRoutes } from "./crosswalk-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -236,6 +240,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   registerUvsRoutes(app);
   registerIndustrialRoutes(app);
   registerMethodologyRoutes(app);
+  registerFormalPropertiesRoutes(app);
+  registerAcademicRoutes(app);
+  registerChallengesRoutes(app);
+  registerCrosswalkRoutes(app);
   startMethodologyCron();
 
   const authLoginLimiter = rateLimit({

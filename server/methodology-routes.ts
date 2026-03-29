@@ -6,6 +6,7 @@ import {
   exchangeCreditListings,
   exchangeTrades,
   isoVerifiers,
+  partnerMethodologies,
   methodologyComments,
   methodologyDrafts,
   methodologyPeerReviews,
@@ -152,6 +153,62 @@ function requestRole(req: Request): string {
   return String(req.headers["x-user-role"] || "public").toLowerCase();
 }
 
+async function runMethodologyConsistencyCheck(methodologyId: string) {
+  const methodology = await db.query.partnerMethodologies.findFirst({
+    where: eq(partnerMethodologies.id, methodologyId as any),
+  });
+  if (!methodology) throw new Error("Methodology not found");
+
+  const content = methodology.methodology || "";
+  const referencesFound = [...new Set((content.match(/ISO\s*\d{4,5}(?:-\d)?:\d{4}/g) || []).map((s) => s.trim()))];
+  const referencesNotFound = ["ISO 14064-3:2019", "GHG Protocol Project Standard"].filter((ref) => !content.includes(ref));
+  const incorrectCitations = referencesFound.filter((ref) => !/^ISO\s\d{4,5}(?:-\d)?:\d{4}$/.test(ref));
+
+  const dimensionalIssues: string[] = [];
+  if (/kg\s*CO2e/i.test(content) && /tonnes\s*CO2e/i.test(content) && !/convert|conversion factor|1\s*tonne\s*=\s*1000\s*kg/i.test(content)) {
+    dimensionalIssues.push("Both kg CO2e and tonnes CO2e are used without explicit conversion formula.");
+  }
+
+  const issues: Array<{ severity: "critical" | "major" | "minor"; location: string; description: string; recommendation: string }> = [];
+  if (/additionality/i.test(content) && !/(investment analysis|barrier analysis|common practice)/i.test(content)) {
+    issues.push({
+      severity: "major",
+      location: "additionality section",
+      description: "Additionality criteria missing recognized tests.",
+      recommendation: "Reference investment analysis, barrier analysis, or common practice test.",
+    });
+  }
+  if (!/uncertainty/i.test(content)) {
+    issues.push({
+      severity: "major",
+      location: "uncertainty section",
+      description: "Uncertainty quantification method not explicitly stated.",
+      recommendation: "State uncertainty methodology and confidence treatment.",
+    });
+  }
+  for (const issue of dimensionalIssues) {
+    issues.push({
+      severity: "critical",
+      location: "calculation formulas",
+      description: issue,
+      recommendation: "Normalize formula units to tonnes CO2e with explicit conversion steps.",
+    });
+  }
+
+  const result = {
+    consistent: issues.filter((i) => i.severity !== "minor").length === 0,
+    issues,
+    standardsReferenceCheck: { referencesFound, referencesNotFound, incorrectCitations },
+    dimensionalAnalysis: { balanced: dimensionalIssues.length === 0, issues: dimensionalIssues },
+  };
+
+  await db.update(partnerMethodologies)
+    .set({ consistencyCheckResults: result })
+    .where(eq(partnerMethodologies.id, methodology.id));
+
+  return result;
+}
+
 export async function calculateAndStoreMqi(methodologyId: string) {
   const methodologyCode = await methodologyCodeFromId(methodologyId);
   const { score, grade, components } = await computeMqi(methodologyId, methodologyCode);
@@ -179,6 +236,15 @@ export async function calculateAndStoreMqi(methodologyId: string) {
 }
 
 export function registerMethodologyRoutes(app: Express): void {
+  app.post("/api/methodologies/consistency-check/:id", async (req, res) => {
+    try {
+      const result = await runMethodologyConsistencyCheck(String(req.params.id || ""));
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "Failed to run consistency check" });
+    }
+  });
+
   app.post("/api/mqi/calculate/:methodologyId", async (req, res) => {
     try {
       const snapshot = await calculateAndStoreMqi(req.params.methodologyId);
@@ -361,6 +427,12 @@ export function registerMethodologyRoutes(app: Express): void {
 
   app.post("/api/peer-review/request/:methodologyId", async (req, res) => {
     const methodologyId = String(req.params.methodologyId);
+    const consistency = await runMethodologyConsistencyCheck(methodologyId).catch((e: any) => ({
+      consistent: false,
+      issues: [{ severity: "major", location: "preflight", description: e?.message || "Consistency check failed", recommendation: "Resolve consistency issues before peer review." }],
+      standardsReferenceCheck: { referencesFound: [], referencesNotFound: [], incorrectCitations: [] },
+      dimensionalAnalysis: { balanced: false, issues: ["Consistency check did not execute"] },
+    }));
     const profilePool = await db.query.professionalProfiles.findMany({ orderBy: (t, { desc }) => [desc(t.reputationScore)] });
     const selected = profilePool
       .filter((p) => Number(p.reputationScore || 0) >= 75 && Number(p.mqlContributions || 0) <= 2)
@@ -377,7 +449,7 @@ export function registerMethodologyRoutes(app: Express): void {
       return review;
     }));
 
-    res.json({ methodologyId, reviewerCount: created.length, reviews: created, reviewPeriodDays: 21 });
+    res.json({ methodologyId, reviewerCount: created.length, reviews: created, reviewPeriodDays: 21, consistency });
   });
 
   app.post("/api/peer-review/:reviewId/submit", async (req, res) => {

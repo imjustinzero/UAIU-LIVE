@@ -788,6 +788,7 @@ export const partnerMethodologies = pgTable("partner_methodologies", {
   auditBlockId: integer("audit_block_id"),
   downloadCount: integer("download_count").notNull().default(0),
   citationCount: integer("citation_count").notNull().default(0),
+  consistencyCheckResults: jsonb("consistency_check_results").notNull().default(sql`'{}'::jsonb`),
 });
 
 export const methodologyCitations = pgTable("methodology_citations", {
@@ -1083,6 +1084,70 @@ export const supplyChainCarbonMap = pgTable("supply_chain_carbon_map", {
   lastUpdated: timestamp("last_updated").notNull().defaultNow(),
 });
 
+export const formalProperties = pgTable("formal_properties", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  propertyId: varchar("property_id").notNull().unique(),
+  category: varchar("category").notNull(),
+  title: varchar("title").notNull(),
+  formalStatement: text("formal_statement").notNull(),
+  informalExplanation: text("informal_explanation").notNull(),
+  testImplementation: text("test_implementation").notNull(),
+  lastVerifiedAt: timestamp("last_verified_at"),
+  lastVerificationResult: varchar("last_verification_result"),
+  verificationLog: jsonb("verification_log").notNull().default(sql`'{}'::jsonb`),
+  standardsAlignment: jsonb("standards_alignment").notNull().default(sql`'{}'::jsonb`),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const academicAccessRequests = pgTable("academic_access_requests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  institutionName: varchar("institution_name").notNull(),
+  researcherName: varchar("researcher_name").notNull(),
+  researcherEmail: varchar("researcher_email").notNull(),
+  orcidId: varchar("orcid_id"),
+  researchPurpose: text("research_purpose").notNull(),
+  dataRequested: jsonb("data_requested").notNull().default(sql`'{}'::jsonb`),
+  approvedAt: timestamp("approved_at"),
+  apiKey: varchar("api_key"),
+  dataAccessLevel: varchar("data_access_level").notNull().default("aggregate_only"),
+  citationFormat: text("citation_format"),
+  status: varchar("status").notNull().default("submitted"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const securityChallenges = pgTable("security_challenges", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  challengeNumber: varchar("challenge_number").notNull().unique(),
+  submittedBy: varchar("submitted_by").notNull(),
+  submitterEmail: varchar("submitter_email").notNull(),
+  claimChallenged: text("claim_challenged").notNull(),
+  challengeDescription: text("challenge_description").notNull(),
+  evidenceRequested: text("evidence_requested").notNull(),
+  status: varchar("status").notNull().default("open"),
+  platformResponse: text("platform_response"),
+  evidenceLinks: jsonb("evidence_links").notNull().default(sql`'[]'::jsonb`),
+  resolvedAt: timestamp("resolved_at"),
+  resolverNotes: text("resolver_notes"),
+  auditBlockId: integer("audit_block_id"),
+  public: boolean("public").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const standardsCrosswalk = pgTable("standards_crosswalk", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sourceStandard: varchar("source_standard").notNull(),
+  sourceClause: varchar("source_clause").notNull(),
+  sourceRequirement: text("source_requirement").notNull(),
+  targetStandard: varchar("target_standard").notNull(),
+  targetClause: varchar("target_clause").notNull(),
+  targetRequirement: text("target_requirement").notNull(),
+  alignmentType: varchar("alignment_type").notNull(),
+  alignmentNotes: text("alignment_notes"),
+  uaiuImplementation: text("uaiu_implementation"),
+  uaiuFeatureReference: varchar("uaiu_feature_reference"),
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -1224,6 +1289,10 @@ export type IsoVerificationEngagement = typeof isoVerificationEngagements.$infer
 export type SupplyChainCarbonMap = typeof supplyChainCarbonMap.$inferSelect;
 export type PartnerMethodology = typeof partnerMethodologies.$inferSelect;
 export type MethodologyCitation = typeof methodologyCitations.$inferSelect;
+export type FormalProperty = typeof formalProperties.$inferSelect;
+export type AcademicAccessRequest = typeof academicAccessRequests.$inferSelect;
+export type SecurityChallenge = typeof securityChallenges.$inferSelect;
+export type StandardsCrosswalk = typeof standardsCrosswalk.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
