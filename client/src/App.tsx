@@ -82,6 +82,7 @@ function Router() {
       <Route path="/api" component={ApiDocs} />
       <Route path="/x/reset-password" component={ResetPassword} />
       <Route path="/x/demo" component={DemoMode} />
+      <Route path="/x/market" component={Exchange} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />
       <Route path="/x/admin" component={Admin} />
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/status" component={Status} />
       <Route path="/legal" component={Legal} />
       <Route path="/x/zstop" component={ZStop} />
+      <Route path="/x/onboard" component={SellerConnect} />
       <Route path="/x/seller" component={SellerConnect} />
       <Route path="/x/chain" component={ChainExplorer} />
       <Route path="/x/supplier" component={SupplierDashboard} />
