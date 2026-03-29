@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Copy, Download, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Copy, Cpu, Download, FileText, Satellite, XCircle } from "lucide-react";
 
 type ChainBlock = { id: number; blockNumber: number; timestamp: string; algorithm: string; transactionData: Record<string, any>; prevHash: string; hash: string; verified: boolean };
 type ChainResponse = { chainIntact: boolean; blocks: ChainBlock[] };
@@ -7,6 +7,15 @@ type ChainResponse = { chainIntact: boolean; blocks: ChainBlock[] };
 const theme = { bg: "#0a0f1e", accent: "#00ff88", text: "#ffffff" };
 
 function shortHash(hash: string): string { return !hash ? "N/A" : `${hash.slice(0, 12)}...${hash.slice(-8)}`; }
+
+function txIcon(type: string) {
+  if (type === "iot_reading") return <Activity size={14} />;
+  if (type === "mrv_report") return <FileText size={14} />;
+  if (type === "anomaly_detected") return <AlertTriangle size={14} />;
+  if (["device_registered", "device_calibrated", "device_decommissioned", "firmware_updated"].includes(type)) return <Cpu size={14} />;
+  if (type === "satellite_reading") return <Satellite size={14} />;
+  return <FileText size={14} />;
+}
 
 export default function ChainExplorer() {
   const [activeTab, setActiveTab] = useState<"chain" | "audit">("chain");
@@ -62,7 +71,7 @@ export default function ChainExplorer() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{blocks.map((block) => {
             const txSummary = JSON.stringify(block.transactionData || {}).slice(0, 120);
             const txType = (block.transactionData as any)?.type || "unknown";
-            return <div key={block.id} className="rounded-lg border border-white/20 bg-[#11182d] p-4 shadow-lg"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-sm font-semibold">Block #{block.blockNumber}</p><span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold" style={{ color: block.verified ? "#00ff88" : "#ff4d4f", backgroundColor: block.verified ? "rgba(0,255,136,0.12)" : "rgba(255,77,79,0.16)" }}>{block.verified ? <CheckCircle2 size={14} /> : <XCircle size={14} />}{block.verified ? "Verified" : "Failed"}</span></div><div className="space-y-1 text-xs sm:text-sm text-white/90"><p><span className="text-white/60">Timestamp:</span> {new Date(block.timestamp).toLocaleString()}</p><p><span className="text-white/60">Algorithm:</span> {block.algorithm}</p><p><span className="text-white/60">Transaction Type:</span> {txType}</p><p><span className="text-white/60">Data Summary:</span> {txSummary}</p></div><div className="mt-3 space-y-2 text-xs sm:text-sm"><div className="flex items-center justify-between gap-2"><p className="truncate"><span className="text-white/60">Hash:</span> {shortHash(block.hash)}</p><button onClick={() => copyToClipboard(block.hash)} className="rounded border border-white/20 p-1 hover:border-[#00ff88]"><Copy size={14} /></button></div><div className="flex items-center justify-between gap-2"><p className="truncate"><span className="text-white/60">PrevHash:</span> {shortHash(block.prevHash)}</p><button onClick={() => copyToClipboard(block.prevHash)} className="rounded border border-white/20 p-1 hover:border-[#00ff88]"><Copy size={14} /></button></div></div></div>;
+            return <div key={block.id} className="rounded-lg border border-white/20 bg-[#11182d] p-4 shadow-lg"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-sm font-semibold">Block #{block.blockNumber}</p><span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold" style={{ color: block.verified ? "#00ff88" : "#ff4d4f", backgroundColor: block.verified ? "rgba(0,255,136,0.12)" : "rgba(255,77,79,0.16)" }}>{block.verified ? <CheckCircle2 size={14} /> : <XCircle size={14} />}{block.verified ? "Verified" : "Failed"}</span></div><div className="space-y-1 text-xs sm:text-sm text-white/90"><p><span className="text-white/60">Timestamp:</span> {new Date(block.timestamp).toLocaleString()}</p><p><span className="text-white/60">Algorithm:</span> {block.algorithm}</p><p className="inline-flex items-center gap-2"><span className="text-white/60">Transaction Type:</span> {txIcon(txType)} {txType}</p><p><span className="text-white/60">Data Summary:</span> {txSummary}</p></div><div className="mt-3 space-y-2 text-xs sm:text-sm"><div className="flex items-center justify-between gap-2"><p className="truncate"><span className="text-white/60">Hash:</span> {shortHash(block.hash)}</p><button onClick={() => copyToClipboard(block.hash)} className="rounded border border-white/20 p-1 hover:border-[#00ff88]"><Copy size={14} /></button></div><div className="flex items-center justify-between gap-2"><p className="truncate"><span className="text-white/60">PrevHash:</span> {shortHash(block.prevHash)}</p><button onClick={() => copyToClipboard(block.prevHash)} className="rounded border border-white/20 p-1 hover:border-[#00ff88]"><Copy size={14} /></button></div></div></div>;
           })}</div>
         </>}
 

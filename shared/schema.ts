@@ -576,6 +576,106 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at").notNull(),
 });
 
+
+
+export const iotDevices = pgTable("iot_devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().unique(),
+  deviceType: varchar("device_type").notNull(),
+  projectId: varchar("project_id").notNull(),
+  supplierId: varchar("supplier_id"),
+  publicKey: text("public_key").notNull(),
+  firmwareVersion: varchar("firmware_version"),
+  location: jsonb("location").notNull().default(sql`'{}'::jsonb`),
+  calibrationData: jsonb("calibration_data").notNull().default(sql`'{}'::jsonb`),
+  status: varchar("status").notNull().default("offline"),
+  lastSeenAt: timestamp("last_seen_at"),
+  registeredAt: timestamp("registered_at").notNull().defaultNow(),
+  approvedBy: varchar("approved_by"),
+  apiSecretHash: text("api_secret_hash"),
+});
+
+export const iotReadings = pgTable("iot_readings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => iotDevices.id),
+  projectId: varchar("project_id").notNull(),
+  timestamp: timestamp("timestamp").notNull(),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  readingType: varchar("reading_type").notNull(),
+  value: real("value").notNull(),
+  unit: varchar("unit").notNull(),
+  rawPayload: jsonb("raw_payload").notNull().default(sql`'{}'::jsonb`),
+  deviceSignature: varchar("device_signature"),
+  signatureValid: boolean("signature_valid").notNull().default(false),
+  auditBlockId: integer("audit_block_id").references(() => auditChainEntries.id),
+  anomalyFlag: boolean("anomaly_flag").notNull().default(false),
+  anomalyReason: varchar("anomaly_reason"),
+});
+
+export const mrvReports = pgTable("mrv_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  supplierId: varchar("supplier_id"),
+  reportingPeriod: jsonb("reporting_period").notNull(),
+  readingsCount: integer("readings_count").notNull().default(0),
+  totalCO2Sequestered: real("total_co2_sequestered").notNull().default(0),
+  totalMethaneFlowed: real("total_methane_flowed").notNull().default(0),
+  totalEnergyGenerated: real("total_energy_generated").notNull().default(0),
+  creditsCalculated: real("credits_calculated").notNull().default(0),
+  calculationMethodology: varchar("calculation_methodology").notNull(),
+  dataQualityScore: real("data_quality_score").notNull().default(0),
+  anomaliesDetected: integer("anomalies_detected").notNull().default(0),
+  auditBlockIds: jsonb("audit_block_ids").notNull().default(sql`'[]'::jsonb`),
+  status: varchar("status").notNull().default("draft"),
+  verifiedBy: varchar("verified_by"),
+  verifiedAt: timestamp("verified_at"),
+  creditsIssued: real("credits_issued").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const anomalyEvents = pgTable("anomaly_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => iotDevices.id),
+  readingId: varchar("reading_id").references(() => iotReadings.id),
+  detectedAt: timestamp("detected_at").notNull().defaultNow(),
+  anomalyType: varchar("anomaly_type").notNull(),
+  severity: varchar("severity").notNull(),
+  description: text("description").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by"),
+  resolution: text("resolution"),
+});
+
+export const firmwareVersions = pgTable("firmware_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  version: varchar("version").notNull().unique(),
+  releaseNotes: text("release_notes"),
+  checksum: varchar("checksum").notNull(),
+  releasedAt: timestamp("released_at").notNull().defaultNow(),
+  mandatory: boolean("mandatory").notNull().default(false),
+});
+
+export const satelliteReadings = pgTable("satellite_readings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  source: varchar("source").notNull(),
+  projectId: varchar("project_id").notNull(),
+  timestamp: timestamp("timestamp").notNull(),
+  dataType: varchar("data_type").notNull(),
+  payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+  auditBlockId: integer("audit_block_id").references(() => auditChainEntries.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const iotTrustScores = pgTable("iot_trust_scores", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  trustScore: real("trust_score").notNull(),
+  grade: varchar("grade").notNull(),
+  components: jsonb("components").notNull().default(sql`'{}'::jsonb`),
+  calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -665,6 +765,14 @@ export type Webhook = typeof webhooks.$inferSelect;
 export type WebhookDeliveryLog = typeof webhookDeliveryLog.$inferSelect;
 export type ComplianceDocument = typeof complianceDocuments.$inferSelect;
 export type CreditReservation = typeof creditReservations.$inferSelect;
+
+export type IotDevice = typeof iotDevices.$inferSelect;
+export type IotReading = typeof iotReadings.$inferSelect;
+export type MrvReport = typeof mrvReports.$inferSelect;
+export type AnomalyEvent = typeof anomalyEvents.$inferSelect;
+export type FirmwareVersion = typeof firmwareVersions.$inferSelect;
+export type SatelliteReading = typeof satelliteReadings.$inferSelect;
+export type IotTrustScore = typeof iotTrustScores.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {

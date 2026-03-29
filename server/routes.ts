@@ -35,6 +35,7 @@ import { getLivePrices, getPriceHistory } from "./exchange-prices";
 import { registerNavigatorRoutes } from "./navigator-routes";
 import { registerAuditChainRoutes } from "./audit-chain-routes";
 import { registerEsgInstitutionalRoutes } from "./esg-institutional-routes";
+import { registerIotRoutes, setIotLiveNamespace } from "./iot-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -203,6 +204,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
   registerAuditChainRoutes(app);
   registerEsgInstitutionalRoutes(app);
+  registerIotRoutes(app);
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -4105,6 +4107,19 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
   
   console.log('Socket.IO server initialized on shared HTTP server');
+  const iotLiveNamespace = io.of('/api/iot/live');
+  iotLiveNamespace.on('connection', (socket: Socket) => {
+    const projectId = String(socket.handshake.query?.projectId || 'all');
+    if (projectId && projectId !== 'all') socket.join(`project:${projectId}`);
+    socket.on('subscribe', (pid: string) => {
+      if (pid && pid !== 'all') socket.join(`project:${pid}`);
+    });
+  });
+  setIotLiveNamespace({ emit: (event: string, payload: any) => {
+    iotLiveNamespace.emit(event, payload);
+    const projectId = payload?.projectId;
+    if (projectId) iotLiveNamespace.to(`project:${projectId}`).emit(event, payload);
+  }});
 
   // GameManager handles all matchmaking including bot fallback
 
