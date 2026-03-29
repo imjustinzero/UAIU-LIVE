@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date, jsonb, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -785,6 +785,117 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const cbamDeclarations = pgTable("cbam_declarations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: varchar("org_id").notNull(),
+  declarationPeriod: varchar("declaration_period").notNull(),
+  goodsCategory: varchar("goods_category").notNull(),
+  importedTonnes: numeric("imported_tonnes"),
+  embeddedCarbonTonnesPerTonne: numeric("embedded_carbon_tonnes_per_tonne"),
+  totalEmbeddedCarbonTonnes: numeric("total_embedded_carbon_tonnes"),
+  cbamCertificatesRequired: numeric("cbam_certificates_required"),
+  offsetCreditsLinked: jsonb("offset_credits_linked").notNull().default(sql`'[]'::jsonb`),
+  declarationStatus: varchar("declaration_status").notNull().default("draft"),
+  cbamRegistryReference: varchar("cbam_registry_reference"),
+  submittedAt: timestamp("submitted_at"),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const epdRecords = pgTable("epd_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: varchar("org_id").notNull(),
+  productName: varchar("product_name").notNull(),
+  productCategory: varchar("product_category").notNull(),
+  epdReference: varchar("epd_reference").notNull(),
+  epdSource: varchar("epd_source").notNull(),
+  iso14025Compliant: boolean("iso14025_compliant").notNull().default(false),
+  functionalUnit: varchar("functional_unit").notNull(),
+  embeddedCarbonA1A3: numeric("embedded_carbon_a1_a3"),
+  embeddedCarbonA4: numeric("embedded_carbon_a4"),
+  embeddedCarbonA5: numeric("embedded_carbon_a5"),
+  embeddedCarbonB1B7: numeric("embedded_carbon_b1_b7"),
+  embeddedCarbonC1C4: numeric("embedded_carbon_c1_c4"),
+  totalEmbeddedCarbon: numeric("total_embedded_carbon"),
+  verifierOrg: varchar("verifier_org"),
+  verifiedAt: timestamp("verified_at"),
+  expiresAt: timestamp("expires_at"),
+  documentHash: varchar("document_hash"),
+  evidenceVaultId: varchar("evidence_vault_id"),
+  linkedRetirementIds: jsonb("linked_retirement_ids").notNull().default(sql`'[]'::jsonb`),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const productCarbonPassports = pgTable("product_carbon_passports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: varchar("org_id").notNull(),
+  productName: varchar("product_name").notNull(),
+  productSku: varchar("product_sku").notNull(),
+  batchReference: varchar("batch_reference"),
+  batchSize: numeric("batch_size"),
+  batchUnit: varchar("batch_unit"),
+  epdId: varchar("epd_id"),
+  embeddedCarbonPerUnit: numeric("embedded_carbon_per_unit"),
+  totalBatchCarbon: numeric("total_batch_carbon"),
+  retirementIds: jsonb("retirement_ids").notNull().default(sql`'[]'::jsonb`),
+  uvsCreditsUsed: jsonb("uvs_credits_used").notNull().default(sql`'[]'::jsonb`),
+  certificateNumber: varchar("certificate_number").notNull().unique(),
+  qrCodePath: varchar("qr_code_path"),
+  publicUrl: varchar("public_url"),
+  status: varchar("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const isoVerifiers = pgTable("iso_verifiers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgName: varchar("org_name").notNull(),
+  accreditationBody: varchar("accreditation_body").notNull(),
+  accreditationNumber: varchar("accreditation_number").notNull(),
+  isoStandards: jsonb("iso_standards").notNull().default(sql`'[]'::jsonb`),
+  validUntil: timestamp("valid_until"),
+  verificationCount: integer("verification_count").notNull().default(0),
+  reputationScore: numeric("reputation_score"),
+  status: varchar("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const isoVerificationEngagements = pgTable("iso_verification_engagements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  verifierId: varchar("verifier_id").notNull(),
+  clientOrgId: varchar("client_org_id").notNull(),
+  engagementType: varchar("engagement_type").notNull(),
+  scope: text("scope"),
+  standardVersion: varchar("standard_version"),
+  status: varchar("status").notNull().default("proposed"),
+  startDate: timestamp("start_date"),
+  completionDate: timestamp("completion_date"),
+  statementOfVerification: text("statement_of_verification"),
+  statementHash: varchar("statement_hash"),
+  materialityThreshold: numeric("materiality_threshold"),
+  confidenceLevel: varchar("confidence_level"),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const supplyChainCarbonMap = pgTable("supply_chain_carbon_map", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  enterpriseOrgId: varchar("enterprise_org_id").notNull(),
+  supplierOrgId: varchar("supplier_org_id"),
+  supplierName: varchar("supplier_name").notNull(),
+  componentName: varchar("component_name").notNull(),
+  componentCategory: varchar("component_category").notNull(),
+  annualVolumeUnits: numeric("annual_volume_units"),
+  unitType: varchar("unit_type"),
+  embeddedCarbonPerUnit: numeric("embedded_carbon_per_unit"),
+  totalAnnualEmbeddedCarbon: numeric("total_annual_embedded_carbon"),
+  epdReference: varchar("epd_reference"),
+  epdId: varchar("epd_id"),
+  dataSource: varchar("data_source").notNull().default("estimate"),
+  dataQuality: varchar("data_quality").notNull().default("estimated"),
+  offsetStatus: varchar("offset_status").notNull().default("none"),
+  retiredTonnes: numeric("retired_tonnes"),
+  lastUpdated: timestamp("last_updated").notNull().defaultNow(),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -890,6 +1001,12 @@ export type UvsCertification = typeof uvsCertifications.$inferSelect;
 export type CommitteeMember = typeof committeeMembers.$inferSelect;
 export type MethodologyAmendment = typeof methodologyAmendments.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type CbamDeclaration = typeof cbamDeclarations.$inferSelect;
+export type EpdRecord = typeof epdRecords.$inferSelect;
+export type ProductCarbonPassport = typeof productCarbonPassports.$inferSelect;
+export type IsoVerifier = typeof isoVerifiers.$inferSelect;
+export type IsoVerificationEngagement = typeof isoVerificationEngagements.$inferSelect;
+export type SupplyChainCarbonMap = typeof supplyChainCarbonMap.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {

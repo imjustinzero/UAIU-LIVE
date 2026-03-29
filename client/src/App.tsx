@@ -52,6 +52,16 @@ import UvsWidget from "@/pages/widget";
 import DeviceCompatibilityPage from "@/pages/device-compatibility";
 import DeviceSetupGuidePage from "@/pages/device-setup-guide";
 import DeviceCertificationPage from "@/pages/device-certification";
+import CbamPage from "@/pages/cbam";
+import EpdBridgePage from "@/pages/epd-bridge";
+import ProductPassportPage from "@/pages/product-passport";
+import IsoVerifierPortalPage from "@/pages/iso-verifier-portal";
+import SupplyChainMapPage from "@/pages/supply-chain-map";
+import EnterpriseIndustrialPage from "@/pages/enterprise-industrial";
+import GovContractsPage from "@/pages/gov-contracts";
+import FederalBuyerPage from "@/pages/federal-buyer";
+import GovSecurityPage from "@/pages/gov-security";
+import VerifierMarketplacePage from "@/pages/verifier-marketplace";
 
 function Router() {
   return (
@@ -90,6 +100,16 @@ function Router() {
       <Route path="/x/developers/devices" component={DeviceCompatibilityPage} />
       <Route path="/x/developers/devices/:deviceSlug/setup" component={DeviceSetupGuidePage} />
       <Route path="/x/developers/certification" component={DeviceCertificationPage} />
+      <Route path="/x/cbam" component={CbamPage} />
+      <Route path="/x/epd" component={EpdBridgePage} />
+      <Route path="/x/product/:certificateNumber" component={ProductPassportPage} />
+      <Route path="/x/iso-verifier" component={IsoVerifierPortalPage} />
+      <Route path="/x/supply-chain" component={SupplyChainMapPage} />
+      <Route path="/x/enterprise/industrial" component={EnterpriseIndustrialPage} />
+      <Route path="/x/gov/contract-vehicles" component={GovContractsPage} />
+      <Route path="/x/gov/federal-buyer" component={FederalBuyerPage} />
+      <Route path="/x/gov/security" component={GovSecurityPage} />
+      <Route path="/x/verifiers/marketplace" component={VerifierMarketplacePage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />
