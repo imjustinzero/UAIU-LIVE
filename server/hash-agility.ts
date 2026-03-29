@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const DEFAULT_HASH_ALGORITHM = "sha256";
 const DEFAULT_APPROVED_ALGORITHMS = "sha256,sha3-256,blake2b512";
 
@@ -16,6 +18,10 @@ export function isAlgorithmApproved(alg: string): boolean {
 
 export function getHashAlgorithm(): string {
   return process.env.HASH_ALGORITHM || DEFAULT_HASH_ALGORITHM;
+}
+
+export function hashRecord(input: Record<string, unknown>, algorithm = getHashAlgorithm()): string {
+  return createHash(algorithm).update(JSON.stringify(input)).digest("hex");
 }
 
 export function validateEscrowFinality(

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 import { createHash, createHmac, randomBytes } from "crypto";
-// import mqtt from "mqtt"; // TODO: Install mqtt package via npm ci
+import mqtt from "mqtt";
 import PDFDocument from "pdfkit";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import {
@@ -185,8 +185,13 @@ function ensureMqttBridge() {
   });
 
   client.on("connect", () => {
+    console.info(`[MQTT] Connected to broker ${brokerUrl}`);
     client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/readings`);
     client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/status`);
+  });
+
+  client.on("error", (error) => {
+    console.error(`[MQTT] Connection error: ${error.message}`);
   });
 
   client.on("message", async (topic, payloadBuffer) => {
