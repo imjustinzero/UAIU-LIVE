@@ -36,6 +36,7 @@ import { registerNavigatorRoutes } from "./navigator-routes";
 import { registerAuditChainRoutes } from "./audit-chain-routes";
 import { registerEsgInstitutionalRoutes } from "./esg-institutional-routes";
 import { registerIotRoutes, setIotLiveNamespace } from "./iot-routes";
+import { registerUvsRoutes } from "./uvs-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -181,6 +182,17 @@ async function ensureExchangeIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_exchange_rfqs_email ON exchange_rfqs (email)`,
     `CREATE INDEX IF NOT EXISTS idx_exchange_rfqs_status ON exchange_rfqs (status)`,
     `CREATE INDEX IF NOT EXISTS idx_exchange_rfq_matches_rfq_id ON exchange_rfq_matches (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_credit_registry_status ON credit_registry (status)`,
+    `CREATE INDEX IF NOT EXISTS idx_credit_registry_registry ON credit_registry (registry)`,
+    `CREATE INDEX IF NOT EXISTS idx_credit_registry_project_type ON credit_registry (project_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_credit_registry_uvs_eligible ON credit_registry (uvs_eligible)`,
+    `CREATE INDEX IF NOT EXISTS idx_iot_readings_device_time ON iot_readings (device_id, timestamp DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_iot_readings_project_time ON iot_readings (project_id, timestamp DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_iot_readings_type_flag ON iot_readings (reading_type, anomaly_flag)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_chain_block_time ON audit_chain_entries (block_number, timestamp DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_escrow_settlement_status_trade ON escrow_settlements_log (status, trade_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_uvs_certifications_status_expiry ON uvs_certifications (status, expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_uvs_certifications_credit_certified ON uvs_certifications (credit_id, certified_at DESC)`,
   ];
   for (const stmt of indexes) {
     await db.execute(sql.raw(stmt)).catch((e: any) => console.error('[Index]', e.message));
@@ -205,6 +217,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   registerAuditChainRoutes(app);
   registerEsgInstitutionalRoutes(app);
   registerIotRoutes(app);
+  registerUvsRoutes(app);
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
