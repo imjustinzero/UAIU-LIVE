@@ -553,6 +553,47 @@ export const algorithmRotationLog = pgTable("algorithm_rotation_log", {
   notes: text("notes"),
 });
 
+export const cryptoBillOfMaterials = pgTable("crypto_bill_of_materials", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  componentName: varchar("component_name").notNull(),
+  componentType: varchar("component_type").notNull(),
+  algorithmInUse: varchar("algorithm_in_use").notNull(),
+  algorithmFamily: varchar("algorithm_family").notNull(),
+  pqcVulnerable: boolean("pqc_vulnerable").notNull().default(false),
+  nistDeprecationYear: integer("nist_deprecation_year"),
+  bsiDeprecationYear: integer("bsi_deprecation_year"),
+  ncscDeprecationYear: integer("ncsc_deprecation_year"),
+  earliestDeprecation: integer("earliest_deprecation"),
+  migrationTarget: varchar("migration_target").notNull(),
+  migrationStatus: varchar("migration_status").notNull().default("not_started"),
+  migrationNotes: text("migration_notes"),
+  lastVerifiedAt: timestamp("last_verified_at").notNull().defaultNow(),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const pqcJurisdictionRequirements = pgTable("pqc_jurisdiction_requirements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  jurisdiction: varchar("jurisdiction").notNull(),
+  standardReference: varchar("standard_reference").notNull(),
+  algorithmType: varchar("algorithm_type").notNull(),
+  requirementType: varchar("requirement_type").notNull(),
+  effectiveYear: integer("effective_year").notNull(),
+  details: text("details").notNull(),
+  sourceUrl: varchar("source_url"),
+});
+
+export const algorithmUsageLog = pgTable("algorithm_usage_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  componentName: varchar("component_name").notNull(),
+  algorithmUsed: varchar("algorithm_used").notNull(),
+  operationType: varchar("operation_type").notNull(),
+  entityId: varchar("entity_id"),
+  entityType: varchar("entity_type"),
+  deprecated: boolean("deprecated").notNull().default(false),
+  jurisdictionFlags: jsonb("jurisdiction_flags").notNull().default(sql`'{}'::jsonb`),
+});
+
 
 
 export const auditReports = pgTable("audit_reports", {
@@ -629,6 +670,10 @@ export const iotDevices = pgTable("iot_devices", {
   projectId: varchar("project_id").notNull(),
   supplierId: varchar("supplier_id"),
   publicKey: text("public_key").notNull(),
+  classicalPublicKey: text("classical_public_key"),
+  pqcPublicKey: text("pqc_public_key"),
+  hybridMode: boolean("hybrid_mode").notNull().default(false),
+  pqcAlgorithm: varchar("pqc_algorithm"),
   firmwareVersion: varchar("firmware_version"),
   location: jsonb("location").notNull().default(sql`'{}'::jsonb`),
   calibrationData: jsonb("calibration_data").notNull().default(sql`'{}'::jsonb`),
@@ -650,6 +695,9 @@ export const iotReadings = pgTable("iot_readings", {
   unit: varchar("unit").notNull(),
   rawPayload: jsonb("raw_payload").notNull().default(sql`'{}'::jsonb`),
   deviceSignature: varchar("device_signature"),
+  classicalSignature: varchar("classical_signature"),
+  pqcSignature: varchar("pqc_signature"),
+  hybridVerified: boolean("hybrid_verified").notNull().default(false),
   signatureValid: boolean("signature_valid").notNull().default(false),
   auditBlockId: integer("audit_block_id").references(() => auditChainEntries.id),
   anomalyFlag: boolean("anomaly_flag").notNull().default(false),
@@ -765,6 +813,9 @@ export const verificationStatements = pgTable("verification_statements", {
   methodologyCode: varchar("methodology_code"),
   methodologyVersion: varchar("methodology_version"),
   methodologyHash: varchar("methodology_hash"),
+  classicalSignature: varchar("classical_signature"),
+  pqcSignature: varchar("pqc_signature"),
+  hybridAttested: boolean("hybrid_attested").notNull().default(false),
 });
 
 export const partnerMethodologies = pgTable("partner_methodologies", {
@@ -1187,6 +1238,9 @@ export type InsertTradeSignature = z.infer<typeof insertTradeSignatureSchema>;
 export type AuditChainEntry = typeof auditChainEntries.$inferSelect;
 export type EscrowSettlementLog = typeof escrowSettlementsLog.$inferSelect;
 export type AlgorithmRotationLog = typeof algorithmRotationLog.$inferSelect;
+export type CryptoBillOfMaterial = typeof cryptoBillOfMaterials.$inferSelect;
+export type PqcJurisdictionRequirement = typeof pqcJurisdictionRequirements.$inferSelect;
+export type AlgorithmUsageEntry = typeof algorithmUsageLog.$inferSelect;
 export type AuditReport = typeof auditReports.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Webhook = typeof webhooks.$inferSelect;

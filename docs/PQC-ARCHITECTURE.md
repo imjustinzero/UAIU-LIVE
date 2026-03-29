@@ -87,3 +87,62 @@ Baseline policy:
 - admin and bulk operations: tighter per-user windows.
 
 Rate-limit responses should be structured and include `X-RateLimit-*` headers plus `Retry-After` when throttled.
+
+## Cryptographic Bill of Materials (CBOM)
+
+UAIU exposes a live cryptographic inventory at `/api/crypto/cbom` and a metrics snapshot at `/api/crypto/cbom/summary`.
+
+Each entry includes component mapping, algorithm family, PQC vulnerability flag, NIST/BSI/NCSC deprecation years, migration target, migration status, audit linkage, and verification timestamp.
+
+Migration status categories:
+- `complete`
+- `in_progress`
+- `not_started`
+- `not_required`
+
+## Multi-Jurisdictional Compliance
+
+UAIU governance now tracks requirements across:
+- **NIST IR 8547 (USA)**: 2030 deprecation horizon for classical asymmetric systems, 2035 disallow endpoint.
+- **BSI TR-02102 (Germany)**: hybrid cryptography requirement by 2032 and disallow endpoint by 2035.
+- **NCSC PQC Guidance (UK)**: priority migration horizon by 2031 with 2035 endpoint alignment.
+
+Live endpoints:
+- `/api/crypto/jurisdictions`
+- `/api/crypto/compliance-matrix`
+- `/x/crypto/governance`
+
+## Hybrid Cryptography
+
+Hybrid mode combines classical and PQC verification in parallel, with both checks required for full hybrid verification.
+
+IoT hybrid enablement:
+1. Register ML-DSA key via `POST /api/crypto/hybrid/register-pqc-key`.
+2. Device switches to `hybridMode=true` and stores `pqcPublicKey` + `pqcAlgorithm`.
+3. Readings can include `classicalSignature` and `pqcSignature`.
+4. `hybridVerified=true` only when both signatures verify.
+
+## Asymmetric vs Hash Agility
+
+- **Hash agility** (`SHA-256 -> SHA3-256/BLAKE3`) is deployed and configurable via `HASH_ALGORITHM`.
+- **Asymmetric migration** (`RSA/ECDSA/ECDH -> ML-DSA/ML-KEM`) is in progress and tracked per component in CBOM.
+
+Both are required for complete PQC readiness:
+- Hash agility addresses Grover-related security margin degradation.
+- Asymmetric migration addresses Shor-vulnerable public-key primitives.
+
+## Real-Time Monitoring
+
+Cryptographic operations are recorded in `algorithm_usage_log` and exposed via:
+- `/api/crypto/usage/realtime`
+- `/api/crypto/usage/deprecated`
+- `/api/crypto/usage/summary/:period`
+
+Detailed health now includes:
+- `currentAlgorithm`
+- `approvedAlgorithms`
+- `deprecatedUsageIn24h`
+- `pqcPostureScore`
+- `nextDeprecationYear`
+
+See `/health/detailed` or `/api/health/detailed` and `/x/trust` for posture visibility.

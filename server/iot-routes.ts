@@ -19,6 +19,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { getHashAlgorithm } from "./hash-agility";
+import { logAlgorithmUsage } from "./crypto-routes";
 
 let ioNamespace: { emit: (event: string, payload: any) => void } | null = null;
 export function setIotLiveNamespace(ns: any) { ioNamespace = ns; }
@@ -63,6 +64,12 @@ function computeMethodologyCredits(methodology: string, totals: { co2: number; m
 function verifyReadingSignature(publicKey: string, payload: any, signature?: string | null) {
   if (!signature || !publicKey) return false;
   const expected = createHmac("sha256", publicKey).update(JSON.stringify(payload)).digest("hex");
+  return expected === signature;
+}
+
+function verifyPqcSignature(publicKey: string, payload: any, signature?: string | null) {
+  if (!signature || !publicKey) return false;
+  const expected = createHmac("sha3-256", publicKey).update(JSON.stringify(payload)).digest("hex");
   return expected === signature;
 }
 
@@ -366,7 +373,17 @@ export function registerIotRoutes(app: Express): void {
       if (!deviceId || !deviceType || !projectId || !publicKey) return res.status(400).json({ error: "Missing required fields" });
       const apiSecret = randomBytes(24).toString("hex");
       const apiSecretHash = createHash("sha256").update(apiSecret).digest("hex");
-      const [device] = await db.insert(iotDevices).values({ deviceId, deviceType, projectId, publicKey, location: location || {}, firmwareVersion: firmwareVersion || null, status: "offline", apiSecretHash }).returning();
+      const [device] = await db.insert(iotDevices).values({
+        deviceId,
+        deviceType,
+        projectId,
+        publicKey,
+        classicalPublicKey: publicKey,
+        location: location || {},
+        firmwareVersion: firmwareVersion || null,
+        status: "offline",
+        apiSecretHash,
+      }).returning();
       await addAuditEntry({ type: "device_registered", deviceId: device.id, deviceType, projectId });
       return res.status(201).json({ deviceUuid: device.id, apiSecret });
     } catch (e: any) {
@@ -423,6 +440,15 @@ export function registerIotRoutes(app: Express): void {
     const device = auth.device;
     const payload = req.body || {};
     const signatureValid = verifyReadingSignature(device.publicKey, payload.rawPayload ?? payload, payload.deviceSignature);
+    const pqcSignature = payload.pqcSignature ? String(payload.pqcSignature) : null;
+    const hybridVerified = Boolean(
+      device.hybridMode &&
+      device.pqcPublicKey &&
+      payload.deviceSignature &&
+      pqcSignature &&
+      verifyReadingSignature(device.classicalPublicKey || device.publicKey, payload.rawPayload ?? payload, payload.deviceSignature) &&
+      verifyPqcSignature(device.pqcPublicKey, payload.rawPayload ?? payload, pqcSignature)
+    );
     const timestamp = asDate(payload.timestamp, new Date())!;
     const readingData = {
       deviceId: device.id,
@@ -433,6 +459,9 @@ export function registerIotRoutes(app: Express): void {
       unit: payload.unit || "",
       rawPayload: payload.rawPayload || payload,
       deviceSignature: payload.deviceSignature || null,
+      classicalSignature: payload.deviceSignature || null,
+      pqcSignature,
+      hybridVerified,
       signatureValid,
       anomalyFlag: !signatureValid,
       anomalyReason: !signatureValid ? "signature_invalid" : null,
@@ -442,6 +471,13 @@ export function registerIotRoutes(app: Express): void {
     const audit = await addAuditEntry({ type: "iot_reading", deviceId: device.id, deviceType: device.deviceType, projectId: device.projectId, readingType: reading.readingType, value: reading.value, unit: reading.unit, deviceSignature: reading.deviceSignature, signatureValid, anomalyFlag: reading.anomalyFlag });
     await db.update(iotReadings).set({ auditBlockId: audit.id }).where(eq(iotReadings.id, reading.id));
     const anomalies = await detectAnomalies({ device, reading: { ...reading, receivedAt: new Date(), timestamp }, signatureValid });
+    await logAlgorithmUsage({
+      componentName: "IoT Device Signatures",
+      algorithmUsed: hybridVerified ? (device.pqcAlgorithm || "ML-DSA") : "ECDSA-P256 or RSA-2048",
+      operationType: "verify",
+      entityId: reading.id,
+      entityType: "iot_reading",
+    }).catch(() => {});
     await db.update(iotDevices).set({ lastSeenAt: new Date(), status: device.status === "decommissioned" ? "decommissioned" : "active" }).where(eq(iotDevices.id, device.id));
     ioNamespace?.emit("reading", { ...reading, auditBlockId: audit.id, anomalyFlag: anomalies.length > 0 });
     return res.status(201).json({ readingId: reading.id, auditBlockId: audit.id, signatureValid, anomalyFlag: anomalies.length > 0 });
@@ -462,6 +498,15 @@ export function registerIotRoutes(app: Express): void {
         const existing = await db.select({ id: iotReadings.id }).from(iotReadings).where(and(eq(iotReadings.deviceId, device.id), eq(iotReadings.timestamp, asDate(r.timestamp, new Date())!))).limit(1);
         const isReplay = existing.length > 0;
         const signatureValid = verifyReadingSignature(device.publicKey, r.rawPayload ?? r, r.deviceSignature);
+        const pqcSignature = r.pqcSignature ? String(r.pqcSignature) : null;
+        const hybridVerified = Boolean(
+          device.hybridMode &&
+          device.pqcPublicKey &&
+          r.deviceSignature &&
+          pqcSignature &&
+          verifyReadingSignature(device.classicalPublicKey || device.publicKey, r.rawPayload ?? r, r.deviceSignature) &&
+          verifyPqcSignature(device.pqcPublicKey, r.rawPayload ?? r, pqcSignature)
+        );
         const [reading] = await db.insert(iotReadings).values({
           deviceId: device.id,
           projectId: device.projectId,
@@ -471,6 +516,9 @@ export function registerIotRoutes(app: Express): void {
           unit: r.unit || "",
           rawPayload: r.rawPayload || r,
           deviceSignature: r.deviceSignature || null,
+          classicalSignature: r.deviceSignature || null,
+          pqcSignature,
+          hybridVerified,
           signatureValid,
           anomalyFlag: !signatureValid || isReplay,
           anomalyReason: !signatureValid ? "signature_invalid" : isReplay ? "batch_replay" : null,
@@ -479,6 +527,13 @@ export function registerIotRoutes(app: Express): void {
         auditBlocks.push(audit.id);
         await db.update(iotReadings).set({ auditBlockId: audit.id }).where(eq(iotReadings.id, reading.id));
         await detectAnomalies({ device, reading, signatureValid, isReplay });
+        await logAlgorithmUsage({
+          componentName: "IoT Device Signatures",
+          algorithmUsed: hybridVerified ? (device.pqcAlgorithm || "ML-DSA") : "ECDSA-P256 or RSA-2048",
+          operationType: "verify",
+          entityId: reading.id,
+          entityType: "iot_reading",
+        }).catch(() => {});
         accepted += 1;
       } catch {
         rejected += 1;

@@ -16,6 +16,7 @@ import { createOpsMonitoringMiddleware } from "./ops-monitoring";
 import { isS3Configured, validateS3Access } from "./backup-storage";
 import { db } from "./db";
 import { getMqttHealthStatus } from "./iot-routes";
+import { getCryptographyHealthSnapshot, getCryptoPostureSummary, getDeprecatedUsageInHours } from "./crypto-routes";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -92,7 +93,7 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/health/detailed", async (_req, res) => {
+app.get(["/health/detailed", "/api/health/detailed"], async (_req, res) => {
   const started = Date.now();
   let dbConnected = false;
   let dbLatencyMs = 0;
@@ -121,6 +122,13 @@ app.get("/health/detailed", async (_req, res) => {
   ]);
 
   const mqtt = getMqttHealthStatus();
+  const posture = await getCryptoPostureSummary().catch(() => ({ overallPostureScore: 0, earliestDeprecationYear: 2030 }));
+  const deprecatedUsageIn24h = await getDeprecatedUsageInHours(24).catch(() => 0);
+  const cryptography = getCryptographyHealthSnapshot(
+    posture.overallPostureScore,
+    deprecatedUsageIn24h,
+    posture.earliestDeprecationYear,
+  );
   res.setHeader("cache-control", "no-store");
   res.status(200).json({
     status: dbConnected ? "healthy" : "degraded",
@@ -130,6 +138,7 @@ app.get("/health/detailed", async (_req, res) => {
     escrow: { activeSettlements, stuckCount: 0 },
     uvs: { activeCertificates },
     anomalies: { unresolved: unresolvedAnomalies, critical: criticalAnomalies },
+    cryptography,
   });
 });
 

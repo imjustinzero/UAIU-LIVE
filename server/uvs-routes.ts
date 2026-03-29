@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { randomUUID, createHash } from "crypto";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
+import { logAlgorithmUsage } from "./crypto-routes";
 
 type UvsStatus = "pending" | "certified" | "suspended" | "revoked";
 
@@ -125,7 +126,16 @@ function createSeedCertificate(): Certificate {
 }
 
 function hashObj(input: unknown): string {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const raw = JSON.stringify(input);
+  const componentName = raw.includes("\"certificate\"") ? "UVS Certificate Hash" : "Evidence Vault Document Hashes";
+  logAlgorithmUsage({
+    componentName,
+    algorithmUsed: "SHA-256",
+    operationType: "hash",
+    entityType: "uvs",
+  }).catch(() => {});
+  return hash;
 }
 
 function sendError(res: Response, status: number, error: string, code: string, details?: Record<string, unknown>) {
