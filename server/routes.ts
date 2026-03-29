@@ -3581,10 +3581,10 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   });
 
   // ── PARTNER API — Swiss X REDD UK Limited live inventory push ─────────────
-  // POST /api/partner/listings
+  // POST /api/partner/listings (legacy) and /api/partners/listings (plural alias)
   // Authenticated by PARTNER_API_KEY secret. Alki's team calls this to push
   // live credit inventory directly into the marketplace in real time.
-  app.post('/api/partner/listings', partnerApiLimiter, async (req, res) => {
+  const handlePartnerListingsPush = async (req: express.Request, res: express.Response) => {
     try {
       const { listings } = req.body;
       const providedKey = String(req.headers['x-api-key'] || '');
@@ -3658,7 +3658,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
       console.error('[Partner API]', err);
       res.status(500).json({ error: 'Partner listing push failed' });
     }
-  });
+  };
+  app.post('/api/partner/listings', partnerApiLimiter, handlePartnerListingsPush);
+  app.post('/api/partners/listings', partnerApiLimiter, handlePartnerListingsPush);
 
   app.post('/api/partners/register', partnerApiLimiter, async (req, res) => {
     try {
