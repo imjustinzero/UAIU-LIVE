@@ -34,6 +34,7 @@ import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
 import { registerNavigatorRoutes } from "./navigator-routes";
 import { registerAuditChainRoutes } from "./audit-chain-routes";
+import { registerEsgInstitutionalRoutes } from "./esg-institutional-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -199,6 +200,9 @@ async function fixKycDefaults(): Promise<void> {
 export async function registerRoutes(app: Express, httpServer: Server): Promise<void> {
   ensureExchangeIndexes().catch((e: any) => console.error('[Indexes] Failed to ensure indexes:', e.message));
   fixKycDefaults().catch((e: any) => console.error('[KYC Fix] Failed:', e.message));
+
+  registerAuditChainRoutes(app);
+  registerEsgInstitutionalRoutes(app);
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -5375,8 +5379,6 @@ ${pages.map(p => `  <url>
   // ── Autonomous marketplace routes ─────────────────────────────────────────
   registerAutonomousMarketplaceRoutes(app);
 
-  // ── Audit chain routes ────────────────────────────────────────────────────
-  registerAuditChainRoutes(app);
 
   // ── FIX 3: Start cron watchdog for stuck escrow trades ──────────────────────
   startCronJobs(app);

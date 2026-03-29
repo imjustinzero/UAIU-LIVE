@@ -509,6 +509,65 @@ export const algorithmRotationLog = pgTable("algorithm_rotation_log", {
   notes: text("notes"),
 });
 
+
+
+export const auditReports = pgTable("audit_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  overallStatus: varchar("overall_status").notNull(),
+  reportData: jsonb("report_data").notNull(),
+  triggeredBy: varchar("triggered_by").notNull().default("system"),
+});
+
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  key: varchar("key").notNull(),
+  organizationName: varchar("organization_name").notNull(),
+  permissions: jsonb("permissions").notNull().default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+  active: boolean("active").notNull().default(true),
+});
+
+export const webhooks = pgTable("webhooks", {
+  id: serial("id").primaryKey(),
+  orgId: varchar("org_id").notNull(),
+  url: text("url").notNull(),
+  events: jsonb("events").notNull().default(sql`'[]'::jsonb`),
+  secret: varchar("secret").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const webhookDeliveryLog = pgTable("webhook_delivery_log", {
+  id: serial("id").primaryKey(),
+  webhookId: integer("webhook_id").notNull(),
+  event: varchar("event").notNull(),
+  payload: jsonb("payload").notNull(),
+  responseStatus: integer("response_status"),
+  deliveredAt: timestamp("delivered_at").notNull().defaultNow(),
+  success: boolean("success").notNull().default(false),
+});
+
+export const complianceDocuments = pgTable("compliance_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentType: varchar("document_type").notNull(),
+  organizationName: varchar("organization_name").notNull(),
+  dateRange: jsonb("date_range").notNull(),
+  filePath: text("file_path").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const creditReservations = pgTable("credit_reservations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  creditId: varchar("credit_id").notNull(),
+  tonnes: real("tonnes").notNull(),
+  buyerOrg: varchar("buyer_org").notNull(),
+  reservedAt: timestamp("reserved_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  status: varchar("status").notNull().default("reserved"),
+});
+
 export const sessions = pgTable("sessions", {
   id: varchar("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -600,6 +659,12 @@ export type InsertTradeSignature = z.infer<typeof insertTradeSignatureSchema>;
 export type AuditChainEntry = typeof auditChainEntries.$inferSelect;
 export type EscrowSettlementLog = typeof escrowSettlementsLog.$inferSelect;
 export type AlgorithmRotationLog = typeof algorithmRotationLog.$inferSelect;
+export type AuditReport = typeof auditReports.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type Webhook = typeof webhooks.$inferSelect;
+export type WebhookDeliveryLog = typeof webhookDeliveryLog.$inferSelect;
+export type ComplianceDocument = typeof complianceDocuments.$inferSelect;
+export type CreditReservation = typeof creditReservations.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {

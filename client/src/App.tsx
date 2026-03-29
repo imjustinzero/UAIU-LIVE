@@ -42,6 +42,7 @@ import MaritimeCarbonOffsetting from "@/pages/maritime/CarbonOffsetting";
 import ChainExplorer from "@/pages/ChainExplorer";
 import SupplierDashboard from "@/pages/SupplierDashboard";
 import Trust from "@/pages/Trust";
+import EsgDashboard from "@/pages/esg-dashboard";
 
 function Router() {
   return (
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/x/demo" component={DemoMode} />
       <Route path="/x" component={Exchange} />
       <Route path="/admin" component={Admin} />
+      <Route path="/x/admin" component={Admin} />
       <Route path="/security" component={Security} />
       <Route path="/status" component={Status} />
       <Route path="/legal" component={Legal} />
@@ -70,6 +72,7 @@ function Router() {
       <Route path="/x/chain" component={ChainExplorer} />
       <Route path="/x/supplier" component={SupplierDashboard} />
       <Route path="/x/trust" component={Trust} />
+      <Route path="/x/esg" component={EsgDashboard} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />
