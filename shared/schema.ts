@@ -776,6 +776,113 @@ export const methodologyAmendments = pgTable("methodology_amendments", {
   auditBlockId: integer("audit_block_id"),
 });
 
+export const mqiSnapshots = pgTable("mqi_snapshots", {
+  id: varchar("id").primaryKey(),
+  methodologyId: varchar("methodology_id").notNull(),
+  methodologyCode: varchar("methodology_code").notNull(),
+  score: numeric("score", { precision: 5, scale: 2 }).notNull(),
+  grade: varchar("grade").notNull(),
+  components: jsonb("components").notNull().default(sql`'{}'::jsonb`),
+  trend: varchar("trend").notNull().default("stable"),
+  calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
+  indexSignature: varchar("index_signature").notNull(),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const methodologyWorkingGroups = pgTable("methodology_working_groups", {
+  id: varchar("id").primaryKey(),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  leadOrganization: varchar("lead_organization").notNull(),
+  leadContactId: varchar("lead_contact_id"),
+  memberIds: jsonb("member_ids").notNull().default(sql`'[]'::jsonb`),
+  status: varchar("status").notNull().default("forming"),
+  targetStandard: varchar("target_standard"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  publishedAt: timestamp("published_at"),
+});
+
+export const methodologyDrafts = pgTable("methodology_drafts", {
+  id: varchar("id").primaryKey(),
+  workingGroupId: varchar("working_group_id").notNull(),
+  methodologyId: varchar("methodology_id"),
+  draftNumber: varchar("draft_number").notNull(),
+  title: varchar("title").notNull(),
+  content: text("content").notNull(),
+  contentHash: varchar("content_hash").notNull(),
+  status: varchar("status").notNull().default("working_draft"),
+  publishedAt: timestamp("published_at"),
+  commentDeadline: timestamp("comment_deadline"),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const methodologyComments = pgTable("methodology_comments", {
+  id: varchar("id").primaryKey(),
+  draftId: varchar("draft_id").notNull(),
+  commenterId: varchar("commenter_id"),
+  commenterType: varchar("commenter_type").notNull(),
+  paragraph: varchar("paragraph"),
+  commentType: varchar("comment_type").notNull().default("general"),
+  comment: text("comment").notNull(),
+  proposedChange: text("proposed_change"),
+  status: varchar("status").notNull().default("open"),
+  responseText: text("response_text"),
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const methodologyVotes = pgTable("methodology_votes", {
+  id: varchar("id").primaryKey(),
+  draftId: varchar("draft_id").notNull(),
+  voterId: varchar("voter_id").notNull(),
+  voterOrg: varchar("voter_org"),
+  vote: varchar("vote").notNull(),
+  comments: text("comments"),
+  votedAt: timestamp("voted_at").notNull().defaultNow(),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const methodologyPeerReviews = pgTable("methodology_peer_reviews", {
+  id: varchar("id").primaryKey(),
+  methodologyId: varchar("methodology_id").notNull(),
+  reviewerId: varchar("reviewer_id").notNull(),
+  reviewerCredentials: jsonb("reviewer_credentials").notNull().default(sql`'{}'::jsonb`),
+  assignedAt: timestamp("assigned_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+  recommendation: varchar("recommendation"),
+  summary: text("summary"),
+  technicalComments: text("technical_comments"),
+  strengthsNoted: text("strengths_noted"),
+  weaknessesNoted: text("weaknesses_noted"),
+  requiredRevisions: text("required_revisions"),
+  reviewHash: varchar("review_hash"),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const professionalProfiles = pgTable("professional_profiles", {
+  id: varchar("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  displayName: varchar("display_name").notNull(),
+  title: varchar("title"),
+  organization: varchar("organization"),
+  credentials: jsonb("credentials").notNull().default(sql`'[]'::jsonb`),
+  specializations: jsonb("specializations").notNull().default(sql`'[]'::jsonb`),
+  orcidId: varchar("orcid_id"),
+  linkedinUrl: varchar("linkedin_url"),
+  publicationsLinked: jsonb("publications_linked").notNull().default(sql`'[]'::jsonb`),
+  methodologiesAuthored: jsonb("methodologies_authored").notNull().default(sql`'[]'::jsonb`),
+  verificationsCompleted: integer("verifications_completed").notNull().default(0),
+  tonnesVerified: numeric("tonnes_verified", { precision: 14, scale: 2 }).notNull().default("0"),
+  countriesWorkedIn: jsonb("countries_worked_in").notNull().default(sql`'[]'::jsonb`),
+  standardsContributedTo: jsonb("standards_contributed_to").notNull().default(sql`'[]'::jsonb`),
+  workingGroupMemberships: jsonb("working_group_memberships").notNull().default(sql`'[]'::jsonb`),
+  reputationScore: numeric("reputation_score", { precision: 5, scale: 2 }).notNull().default("0"),
+  mqlContributions: integer("mql_contributions").notNull().default(0),
+  profileUrl: varchar("profile_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
@@ -1000,6 +1107,13 @@ export type CreditRegistry = typeof creditRegistry.$inferSelect;
 export type UvsCertification = typeof uvsCertifications.$inferSelect;
 export type CommitteeMember = typeof committeeMembers.$inferSelect;
 export type MethodologyAmendment = typeof methodologyAmendments.$inferSelect;
+export type MqiSnapshot = typeof mqiSnapshots.$inferSelect;
+export type MethodologyWorkingGroup = typeof methodologyWorkingGroups.$inferSelect;
+export type MethodologyDraft = typeof methodologyDrafts.$inferSelect;
+export type MethodologyComment = typeof methodologyComments.$inferSelect;
+export type MethodologyVote = typeof methodologyVotes.$inferSelect;
+export type MethodologyPeerReview = typeof methodologyPeerReviews.$inferSelect;
+export type ProfessionalProfile = typeof professionalProfiles.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type CbamDeclaration = typeof cbamDeclarations.$inferSelect;
 export type EpdRecord = typeof epdRecords.$inferSelect;
