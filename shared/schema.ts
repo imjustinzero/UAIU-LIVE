@@ -676,6 +676,66 @@ export const iotTrustScores = pgTable("iot_trust_scores", {
   calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
 });
 
+export const verifierReputation = pgTable("verifier_reputation", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  verifierId: varchar("verifier_id").notNull(),
+  reputationScore: real("reputation_score").notNull().default(0),
+  grade: varchar("grade").notNull().default("BBB"),
+  totalVerifications: integer("total_verifications").notNull().default(0),
+  averageDataQualityScore: real("average_data_quality_score").notNull().default(0),
+  averageResponseDays: real("average_response_days").notNull().default(0),
+  fieldVisitFrequency: real("field_visit_frequency").notNull().default(0),
+  disputeRate: real("dispute_rate").notNull().default(0),
+  accuracyRate: real("accuracy_rate").notNull().default(0),
+  specializations: jsonb("specializations").notNull().default(sql`'[]'::jsonb`),
+  calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
+});
+
+export const enterpriseAccounts = pgTable("enterprise_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgName: varchar("org_name").notNull(),
+  industry: varchar("industry"),
+  ticker: varchar("ticker"),
+  annualRevenue: varchar("annual_revenue"),
+  estimatedEmissions: real("estimated_emissions").default(0),
+  netZeroTarget: integer("net_zero_target"),
+  currentSpend: real("current_spend").default(0),
+  frameworks: jsonb("frameworks").notNull().default(sql`'[]'::jsonb`),
+  accountManagerId: varchar("account_manager_id"),
+  onboardingStatus: varchar("onboarding_status").notNull().default("applied"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const verifiedClaims = pgTable("verified_claims", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: varchar("org_id").notNull(),
+  claimText: text("claim_text").notNull(),
+  claimType: varchar("claim_type").notNull(),
+  publicationUrl: varchar("publication_url").notNull(),
+  publicationDate: timestamp("publication_date").notNull(),
+  supportingCreditIds: jsonb("supporting_credit_ids").notNull().default(sql`'[]'::jsonb`),
+  totalTonnesSupporting: real("total_tonnes_supporting").notNull().default(0),
+  verificationStatus: varchar("verification_status").notNull().default("pending"),
+  verifiedAt: timestamp("verified_at"),
+  certificateNumber: varchar("certificate_number").notNull().unique(),
+  auditBlockId: integer("audit_block_id"),
+  legalOpinionHash: varchar("legal_opinion_hash"),
+});
+
+export const supplyChainMembers = pgTable("supply_chain_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  enterpriseOrgId: varchar("enterprise_org_id").notNull(),
+  supplierOrgId: varchar("supplier_org_id"),
+  supplierName: varchar("supplier_name").notNull(),
+  category: varchar("category"),
+  annualEmissions: real("annual_emissions").default(0),
+  reportingYear: integer("reporting_year"),
+  offsetPurchased: real("offset_purchased").default(0),
+  status: varchar("status").notNull().default("invited"),
+  invitedAt: timestamp("invited_at").notNull().defaultNow(),
+  joinedAt: timestamp("joined_at"),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -739,6 +799,23 @@ export const insertAlertSubscriberSchema = createInsertSchema(alertSubscribers).
   subscribedAt: true,
 });
 
+export const insertVerifierReputationSchema = createInsertSchema(verifierReputation).omit({
+  id: true,
+  calculatedAt: true,
+});
+export const insertEnterpriseAccountSchema = createInsertSchema(enterpriseAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertVerifiedClaimSchema = createInsertSchema(verifiedClaims).omit({
+  id: true,
+  verifiedAt: true,
+});
+export const insertSupplyChainMemberSchema = createInsertSchema(supplyChainMembers).omit({
+  id: true,
+  invitedAt: true,
+});
+
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
 export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
@@ -773,6 +850,14 @@ export type AnomalyEvent = typeof anomalyEvents.$inferSelect;
 export type FirmwareVersion = typeof firmwareVersions.$inferSelect;
 export type SatelliteReading = typeof satelliteReadings.$inferSelect;
 export type IotTrustScore = typeof iotTrustScores.$inferSelect;
+export type VerifierReputation = typeof verifierReputation.$inferSelect;
+export type InsertVerifierReputation = z.infer<typeof insertVerifierReputationSchema>;
+export type EnterpriseAccount = typeof enterpriseAccounts.$inferSelect;
+export type InsertEnterpriseAccount = z.infer<typeof insertEnterpriseAccountSchema>;
+export type VerifiedClaim = typeof verifiedClaims.$inferSelect;
+export type InsertVerifiedClaim = z.infer<typeof insertVerifiedClaimSchema>;
+export type SupplyChainMember = typeof supplyChainMembers.$inferSelect;
+export type InsertSupplyChainMember = z.infer<typeof insertSupplyChainMemberSchema>;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {

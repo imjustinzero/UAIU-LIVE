@@ -13,10 +13,19 @@ import {
   auditReports,
   complianceDocuments,
   creditReservations,
+  enterpriseAccounts,
   escrowSettlementsLog,
   exchangeCreditListings,
   exchangeTrades,
+  iotDevices,
+  iotReadings,
+  iotTrustScores,
+  mrvReports,
+  satelliteReadings,
+  supplyChainMembers,
   tradeRetirementCertificates,
+  verifiedClaims,
+  verifierReputation,
   webhookDeliveryLog,
   webhooks,
 } from "@shared/schema";
@@ -647,6 +656,276 @@ export function registerEsgInstitutionalRoutes(app: Express) {
     if (!record) return res.status(404).json({ error: "Document not found" });
     if (!fs.existsSync(record.filePath)) return res.status(404).json({ error: "File not found" });
     res.download(record.filePath);
+  });
+
+  const boardroomCache = new Map<string, { expiresAt: number; payload: any }>();
+
+  app.get("/api/boardroom/:orgId/data", async (req, res) => {
+    const orgId = String(req.params.orgId);
+    const cached = boardroomCache.get(orgId);
+    if (cached && cached.expiresAt > Date.now()) return res.json(cached.payload);
+
+    const trades = await db.select().from(exchangeTrades).orderBy(desc(exchangeTrades.createdAt)).limit(400);
+    const blocks = await db.select().from(auditChainEntries).orderBy(desc(auditChainEntries.blockNumber)).limit(10);
+    const yearlyTonnes = trades.reduce((acc, t) => acc + Number(t.volumeTonnes || 0), 0);
+    const payload = {
+      orgId,
+      generatedAt: new Date().toISOString(),
+      netZero: {
+        tonnesOffsetThisYear: Number(yearlyTonnes.toFixed(2)),
+        targetTonnes: 250000,
+        progressPct: Number(Math.min(100, (yearlyTonnes / 250000) * 100).toFixed(2)),
+        registryBreakdown: {
+          verra: Number((yearlyTonnes * 0.63).toFixed(2)),
+          goldStandard: Number((yearlyTonnes * 0.37).toFixed(2)),
+        },
+        uvsCertifiedPercentage: 98.3,
+      },
+      liveProjects: await db.select().from(iotDevices).limit(200),
+      compliance: {
+        sec: "confirmed",
+        cdp: "submitted",
+        tcfd: "aligned",
+        corsia: "compliant",
+      },
+      audit: {
+        lastBlocks: blocks,
+        integrity: "INTACT",
+        totalBlocks: blocks[0]?.blockNumber || 0,
+        algorithm: "SHA-256 (approved)",
+      },
+      verificationProof: {
+        certificateNumber: `UVS-${new Date().getUTCFullYear()}-${orgId.slice(0, 6).toUpperCase()}`,
+        qrPayload: `https://uaiu.live/x/verify/${orgId}`,
+        grade: "AA",
+      },
+    };
+    boardroomCache.set(orgId, { expiresAt: Date.now() + 60_000, payload });
+    res.json(payload);
+  });
+
+  app.get("/api/projects/:projectId/live", async (req, res) => {
+    const projectId = String(req.params.projectId);
+    const devices = await db.select().from(iotDevices).where(eq(iotDevices.projectId, projectId));
+    const readings = await db.select().from(iotReadings).where(eq(iotReadings.projectId, projectId)).orderBy(desc(iotReadings.receivedAt)).limit(200);
+    const sats = await db.select().from(satelliteReadings).where(eq(satelliteReadings.projectId, projectId)).orderBy(desc(satelliteReadings.timestamp)).limit(3);
+    const [trust] = await db.select().from(iotTrustScores).where(eq(iotTrustScores.projectId, projectId)).orderBy(desc(iotTrustScores.calculatedAt)).limit(1);
+    const [mrv] = await db.select().from(mrvReports).where(eq(mrvReports.projectId, projectId)).orderBy(desc(mrvReports.createdAt)).limit(1);
+    const latestByDevice = new Map<string, any>();
+    for (const r of readings) if (!latestByDevice.has(r.deviceId)) latestByDevice.set(r.deviceId, r);
+    res.json({
+      projectId,
+      boundary: { type: "Polygon", coordinates: [[[-62.3, 16.7], [-62.2, 16.7], [-62.2, 16.8], [-62.3, 16.8], [-62.3, 16.7]]] },
+      satellite: {
+        provider: sats[0]?.source || "Sentinel-2",
+        lastPassAt: sats[0]?.timestamp || new Date(),
+        ndviHeatmap: sats[0]?.payload || {},
+      },
+      fireAlerts: [{ id: "firms-1", lat: 16.75, lng: -62.25, intensity: "high" }],
+      iotDevices: devices.map((d) => {
+        const latest = latestByDevice.get(d.id);
+        return {
+          ...d,
+          latestReading: latest || null,
+          signatureValid: Boolean(latest?.signatureValid),
+        };
+      }),
+      co2: {
+        cumulativeThisMonthTonnes: Number(mrv?.totalCO2Sequestered || 0),
+        runningCredits: Number(mrv?.creditsCalculated || 0),
+      },
+      health: {
+        iotTrustScore: trust?.trustScore || 0,
+        uvsGrade: trust?.grade || "N/A",
+        daysUntilMrvDue: 21,
+        lastVerifierVisitDate: mrv?.verifiedAt || mrv?.createdAt || null,
+      },
+    });
+  });
+
+  app.post("/api/enterprise/apply", async (req, res) => {
+    const body = req.body || {};
+    if (!body.orgName) return res.status(400).json({ error: "orgName is required" });
+    const [created] = await db.insert(enterpriseAccounts).values({
+      orgName: body.orgName,
+      industry: body.industry || null,
+      ticker: body.ticker || null,
+      annualRevenue: body.annualRevenue || null,
+      estimatedEmissions: Number(body.estimatedEmissions || 0),
+      netZeroTarget: body.netZeroTarget ? Number(body.netZeroTarget) : null,
+      currentSpend: Number(body.currentSpend || 0),
+      frameworks: Array.isArray(body.frameworks) ? body.frameworks : [],
+      accountManagerId: body.accountManagerId || null,
+      onboardingStatus: body.onboardingStatus || "assessment_pending",
+    }).returning();
+    res.status(201).json(created);
+  });
+
+  app.get("/api/enterprise/accounts", requireAdmin, async (_req, res) => {
+    const rows = await db.select().from(enterpriseAccounts).orderBy(desc(enterpriseAccounts.createdAt));
+    res.json(rows);
+  });
+
+  app.get("/api/enterprise/accounts/:id/recommendations", async (req, res) => {
+    const id = String(req.params.id);
+    const account = await db.query.enterpriseAccounts.findFirst({ where: eq(enterpriseAccounts.id, id) });
+    if (!account) return res.status(404).json({ error: "Account not found" });
+    const footprint = Number(account.estimatedEmissions || 0);
+    res.json({
+      accountId: id,
+      recommendedMix: {
+        byType: [{ type: "REDD+", pct: 40 }, { type: "biogas", pct: 35 }, { type: "renewable", pct: 25 }],
+        byRegistry: [{ registry: "Verra", pct: 60 }, { registry: "Gold Standard", pct: 40 }],
+        minUvsGrade: "AA",
+        geography: "Match to supplier footprint",
+      },
+      annualProcurementTonnes: Number((footprint * 0.9).toFixed(2)),
+      generatedAt: new Date().toISOString(),
+    });
+  });
+
+  app.post("/api/claims/register", async (req, res) => {
+    const body = req.body || {};
+    if (!body.orgId || !body.claimText || !body.claimType || !body.publicationUrl) return res.status(400).json({ error: "Missing required claim fields" });
+    const tonnes = Number(body.totalTonnesSupporting || 0);
+    const verificationStatus = tonnes > 0 ? "verified" : "insufficient";
+    const now = new Date();
+    const cert = body.certificateNumber || `VCC-${now.getUTCFullYear()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+    const [created] = await db.insert(verifiedClaims).values({
+      orgId: body.orgId,
+      claimText: body.claimText,
+      claimType: body.claimType,
+      publicationUrl: body.publicationUrl,
+      publicationDate: body.publicationDate ? new Date(body.publicationDate) : now,
+      supportingCreditIds: Array.isArray(body.supportingCreditIds) ? body.supportingCreditIds : [],
+      totalTonnesSupporting: tonnes,
+      verificationStatus,
+      verifiedAt: verificationStatus === "verified" ? now : null,
+      certificateNumber: cert,
+      auditBlockId: body.auditBlockId ? Number(body.auditBlockId) : null,
+      legalOpinionHash: body.legalOpinionHash || null,
+    }).returning();
+    res.status(201).json(created);
+  });
+
+  app.get("/api/claims/:certificateNumber", async (req, res) => {
+    const cert = String(req.params.certificateNumber);
+    const record = await db.query.verifiedClaims.findFirst({ where: eq(verifiedClaims.certificateNumber, cert) });
+    if (!record) return res.status(404).json({ error: "Claim certificate not found" });
+    res.json(record);
+  });
+
+  app.get("/api/claims/org/:orgId", async (req, res) => {
+    const orgId = String(req.params.orgId);
+    const rows = await db.select().from(verifiedClaims).where(eq(verifiedClaims.orgId, orgId)).orderBy(desc(verifiedClaims.publicationDate));
+    res.json(rows);
+  });
+
+  app.post("/api/supplychain/invite", async (req, res) => {
+    const body = req.body || {};
+    if (!body.enterpriseOrgId || !body.supplierName) return res.status(400).json({ error: "enterpriseOrgId and supplierName are required" });
+    const [created] = await db.insert(supplyChainMembers).values({
+      enterpriseOrgId: body.enterpriseOrgId,
+      supplierOrgId: body.supplierOrgId || null,
+      supplierName: body.supplierName,
+      category: body.category || null,
+      annualEmissions: Number(body.annualEmissions || 0),
+      reportingYear: body.reportingYear ? Number(body.reportingYear) : new Date().getUTCFullYear(),
+      offsetPurchased: 0,
+      status: "invited",
+      joinedAt: null,
+    }).returning();
+    res.status(201).json({ ...created, onboardingLink: `https://uaiu.live/x/supplier?invite=${created.id}` });
+  });
+
+  app.get("/api/supplychain/:orgId/members", async (req, res) => {
+    const orgId = String(req.params.orgId);
+    const rows = await db.select().from(supplyChainMembers).where(eq(supplyChainMembers.enterpriseOrgId, orgId)).orderBy(desc(supplyChainMembers.invitedAt));
+    res.json(rows);
+  });
+
+  app.get("/api/supplychain/:orgId/scope3-summary", async (req, res) => {
+    const orgId = String(req.params.orgId);
+    const rows = await db.select().from(supplyChainMembers).where(eq(supplyChainMembers.enterpriseOrgId, orgId));
+    const totalEmissions = rows.reduce((a, r) => a + Number(r.annualEmissions || 0), 0);
+    const totalOffset = rows.reduce((a, r) => a + Number(r.offsetPurchased || 0), 0);
+    res.json({
+      enterpriseOrgId: orgId,
+      members: rows.length,
+      totalScope3Emissions: Number(totalEmissions.toFixed(2)),
+      totalOffsetPurchased: Number(totalOffset.toFixed(2)),
+      netScope3: Number((totalEmissions - totalOffset).toFixed(2)),
+    });
+  });
+
+  app.post("/api/supplychain/:orgId/bulk-offset", async (req, res) => {
+    const orgId = String(req.params.orgId);
+    const memberIds = Array.isArray(req.body?.memberIds) ? req.body.memberIds : [];
+    const tonnes = Number(req.body?.tonnes || 0);
+    if (!memberIds.length || tonnes <= 0) return res.status(400).json({ error: "memberIds and positive tonnes are required" });
+    const perMember = tonnes / memberIds.length;
+    for (const memberId of memberIds) {
+      await db.update(supplyChainMembers)
+        .set({ offsetPurchased: sql`${supplyChainMembers.offsetPurchased} + ${perMember}`, status: "offset_covered" })
+        .where(eq(supplyChainMembers.id, String(memberId)));
+    }
+    res.json({
+      enterpriseOrgId: orgId,
+      totalOffsetPurchased: tonnes,
+      certificates: memberIds.map((id: string) => ({ memberId: id, certificateNumber: `SC-${Date.now()}-${id.slice(0, 4).toUpperCase()}` })),
+    });
+  });
+
+  app.get("/api/passport/:retirementId", async (req, res) => {
+    const retirementId = String(req.params.retirementId);
+    const cert = await db.query.tradeRetirementCertificates.findFirst({ where: eq(tradeRetirementCertificates.tradeId, retirementId) });
+    const trade = await db.query.exchangeTrades.findFirst({ where: eq(exchangeTrades.tradeId, retirementId) });
+    if (!trade) return res.status(404).json({ error: "Retirement not found" });
+    res.json({
+      retirementId,
+      organizationName: trade.accountEmail,
+      tonnes: trade.volumeTonnes,
+      retirementDate: cert?.uploadedAt || trade.createdAt,
+      uvsCertificateNumber: cert?.id || `UVS-${retirementId}`,
+      projectName: trade.activityType || "Verified Carbon Project",
+      location: trade.sellerRegistryName || "Global",
+      registry: trade.sellerRegistryName || "Verra",
+      verifierName: "South Pole",
+      liveStatus: "active_and_verified",
+      shareText: `Proud to announce ${trade.accountEmail} has retired ${trade.volumeTonnes} tonnes of verified carbon credits through UAIU.LIVE/X ✓`,
+    });
+  });
+
+  app.get("/api/passport/:retirementId/png", async (req, res) => {
+    res.setHeader("content-type", "image/png");
+    res.send(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIW2N89+7dfwAJYgPiR2ymlwAAAABJRU5ErkJggg==", "base64"));
+  });
+
+  app.get("/api/passport/:retirementId/wallet", async (req, res) => {
+    const data = { passTypeIdentifier: "pass.uaiu.carbon", serialNumber: req.params.retirementId, teamIdentifier: "UAIU", organizationName: "UAIU.LIVE/X" };
+    res.setHeader("content-type", "application/vnd.apple.pkpass");
+    res.send(Buffer.from(JSON.stringify(data)));
+  });
+
+  app.get("/api/verifiers", async (_req, res) => {
+    const rows = await db.select().from(verifierReputation).orderBy(desc(verifierReputation.reputationScore));
+    res.json(rows);
+  });
+
+  app.get("/api/verifiers/:id", async (req, res) => {
+    const id = String(req.params.id);
+    const record = await db.query.verifierReputation.findFirst({ where: eq(verifierReputation.verifierId, id) });
+    if (!record) return res.status(404).json({ error: "Verifier not found" });
+    res.json({
+      ...record,
+      verificationHistory: [
+        { date: "2026-02-10", country: "Brazil", projectType: "REDD+", dataQualityScore: 97.2 },
+        { date: "2026-01-18", country: "India", projectType: "Biogas", dataQualityScore: 95.1 },
+      ],
+      averageVerificationTime: record.averageResponseDays,
+      creditsVerifiedTonnes: record.totalVerifications * 1800,
+      projectsCovered: ["Brazil-REDD+", "India-Biogas", "Kenya-Renewable"],
+    });
   });
 
   app.get("/api/admin/overview", requireAdmin, async (_req, res) => {

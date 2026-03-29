@@ -44,6 +44,14 @@ import SupplierDashboard from "@/pages/SupplierDashboard";
 import Trust from "@/pages/Trust";
 import EsgDashboard from "@/pages/esg-dashboard";
 import ProjectMonitorPage from "@/pages/project-monitor";
+import ProjectLivePage from "@/pages/project-live";
+import BoardroomPage from "@/pages/boardroom";
+import VerifierDirectoryPage from "@/pages/verifiers";
+import VerifierProfilePage from "@/pages/verifier-profile";
+import EnterprisePage from "@/pages/enterprise";
+import ComplianceMonitorPage from "@/pages/compliance-monitor";
+import CarbonPassportPage from "@/pages/carbon-passport";
+import ClaimCertificatePage from "@/pages/claim-certificate";
 
 function Router() {
   return (
@@ -75,6 +83,14 @@ function Router() {
       <Route path="/x/trust" component={Trust} />
       <Route path="/x/esg" component={EsgDashboard} />
       <Route path="/x/projects" component={ProjectMonitorPage} />
+      <Route path="/x/projects/:projectId/live" component={ProjectLivePage} />
+      <Route path="/x/present/:orgId" component={BoardroomPage} />
+      <Route path="/x/verifiers" component={VerifierDirectoryPage} />
+      <Route path="/x/verifiers/:id" component={VerifierProfilePage} />
+      <Route path="/x/enterprise" component={EnterprisePage} />
+      <Route path="/x/compliance" component={ComplianceMonitorPage} />
+      <Route path="/x/passport/:retirementId" component={CarbonPassportPage} />
+      <Route path="/x/claims/:certificateNumber" component={ClaimCertificatePage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />
