@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 import { createHash, createHmac, randomBytes } from "crypto";
-// import mqtt from "mqtt"; // TODO: Install mqtt package via npm ci
+import mqtt from "mqtt";
 import PDFDocument from "pdfkit";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import {
