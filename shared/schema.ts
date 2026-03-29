@@ -405,8 +405,52 @@ export const exchangeCreditListings = pgTable("exchange_credit_listings", {
   registrySerial: varchar("registry_serial"),
   registryName: varchar("registry_name"),
   vintageYear: integer("vintage_year"),
+  verificationTier: integer("verification_tier").notNull().default(4),
+  humanVerificationPartnerId: varchar("human_verification_partner_id"),
+  humanVerificationCompletedAt: timestamp("human_verification_completed_at"),
   status: varchar("status").notNull().default('pending'),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const verifiedPartners = pgTable("verified_partners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  firmName: varchar("firm_name").notNull(),
+  partnerType: varchar("partner_type").notNull(),
+  contactName: varchar("contact_name"),
+  contactEmail: varchar("contact_email"),
+  website: varchar("website"),
+  country: varchar("country"),
+  credentials: jsonb("credentials").notNull().default(sql`'{}'::jsonb`),
+  specializations: jsonb("specializations").notNull().default(sql`'{}'::jsonb`),
+  methodologyDescription: text("methodology_description"),
+  partnerBadgeLevel: varchar("partner_badge_level").notNull().default("verified"),
+  revenueSharePercent: numeric("revenue_share_percent"),
+  referralFeePerEngagement: numeric("referral_fee_per_engagement"),
+  compensationModel: varchar("compensation_model").notNull().default("revenue_share"),
+  totalReferrals: integer("total_referrals").notNull().default(0),
+  totalEngagementsCompleted: integer("total_engagements_completed").notNull().default(0),
+  totalRevenueGenerated: numeric("total_revenue_generated").notNull().default("0"),
+  publicProfileUrl: varchar("public_profile_url"),
+  status: varchar("status").notNull().default("pending"),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: varchar("approved_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const partnerReferrals = pgTable("partner_referrals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partnerId: varchar("partner_id").notNull().references(() => verifiedPartners.id),
+  creditId: varchar("credit_id").references(() => exchangeCreditListings.id),
+  buyerOrgId: varchar("buyer_org_id"),
+  sellerOrgId: varchar("seller_org_id"),
+  referralType: varchar("referral_type").notNull(),
+  status: varchar("status").notNull().default("referred"),
+  referredAt: timestamp("referred_at").notNull().defaultNow(),
+  engagementStartedAt: timestamp("engagement_started_at"),
+  engagementCompletedAt: timestamp("engagement_completed_at"),
+  engagementValue: numeric("engagement_value"),
+  platformFeeEarned: numeric("platform_fee_earned"),
+  auditBlockId: integer("audit_block_id"),
 });
 
 export const tradeRetirementCertificates = pgTable("trade_retirement_certificates", {
@@ -911,7 +955,24 @@ export const insertExchangeRfqSchema = createInsertSchema(exchangeRfqs).omit({
 export const insertExchangeCreditListingSchema = createInsertSchema(exchangeCreditListings).omit({
   id: true,
   status: true,
+  verificationTier: true,
+  humanVerificationPartnerId: true,
+  humanVerificationCompletedAt: true,
   createdAt: true,
+});
+export const insertVerifiedPartnerSchema = createInsertSchema(verifiedPartners).omit({
+  id: true,
+  totalReferrals: true,
+  totalEngagementsCompleted: true,
+  totalRevenueGenerated: true,
+  approvedAt: true,
+  approvedBy: true,
+  createdAt: true,
+});
+export const insertPartnerReferralSchema = createInsertSchema(partnerReferrals).omit({
+  id: true,
+  status: true,
+  referredAt: true,
 });
 
 export const insertWebhookFailureSchema = createInsertSchema(webhookFailures).omit({
@@ -967,6 +1028,10 @@ export type ExchangeRfq = typeof exchangeRfqs.$inferSelect;
 export type InsertExchangeRfq = z.infer<typeof insertExchangeRfqSchema>;
 export type ExchangeCreditListing = typeof exchangeCreditListings.$inferSelect;
 export type InsertExchangeCreditListing = z.infer<typeof insertExchangeCreditListingSchema>;
+export type VerifiedPartner = typeof verifiedPartners.$inferSelect;
+export type InsertVerifiedPartner = z.infer<typeof insertVerifiedPartnerSchema>;
+export type PartnerReferral = typeof partnerReferrals.$inferSelect;
+export type InsertPartnerReferral = z.infer<typeof insertPartnerReferralSchema>;
 export type WebhookFailure = typeof webhookFailures.$inferSelect;
 export type InsertWebhookFailure = z.infer<typeof insertWebhookFailureSchema>;
 export type ExchangeTrade = typeof exchangeTrades.$inferSelect;

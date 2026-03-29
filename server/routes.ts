@@ -15,8 +15,8 @@ import { liveMatchSessions } from "@shared/schema";
 import { db } from "./db";
 import { sendPayoutNotification } from "./email-config";
 import { sendSignupNotification, sendFormSubmissionEmail, sendExchangeEmail, buildPasswordResetHtml } from "./email-service";
-import { insertAlertSubscriberSchema, insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema } from "@shared/schema";
-import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, exchangeTrades, retirementUploadTokens, tradeRetirementCertificates } from "@shared/schema";
+import { insertAlertSubscriberSchema, insertExchangeAccountSchema, insertExchangeCreditListingSchema, insertExchangeRfqSchema, insertPartnerReferralSchema, insertVerifiedPartnerSchema } from "@shared/schema";
+import { alertSubscribers, exchangeCreditListings, exchangeListings, exchangeRfqs, exchangeTrades, partnerReferrals, retirementUploadTokens, tradeRetirementCertificates, verifiedPartners } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import { registerOpsRoutes } from "./ops-routes";
@@ -166,6 +166,20 @@ function getCachedListings(key: string): any | null {
 
 function setCachedListings(key: string, data: any): void {
   listingCache.set(key, { data, expiresAt: Date.now() + LISTING_CACHE_TTL_MS });
+}
+
+function calculateVerificationTier(input: {
+  uvsCertified?: boolean;
+  hasIotData?: boolean;
+  hasSatelliteValidation?: boolean;
+  hasHumanVerification?: boolean;
+  registryConfirmed?: boolean;
+}): 1 | 2 | 3 | 4 {
+  const { uvsCertified, hasIotData, hasSatelliteValidation, hasHumanVerification, registryConfirmed } = input;
+  if (uvsCertified && hasHumanVerification) return 1;
+  if (uvsCertified && hasIotData && hasSatelliteValidation && !hasHumanVerification) return 2;
+  if (registryConfirmed && !hasIotData && !hasSatelliteValidation && !hasHumanVerification) return 3;
+  return 4;
 }
 
 export function invalidateListingCache(): void {
@@ -3523,6 +3537,17 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
 
       // Save as 'pending' — admin must approve before appearing on marketplace
       const listing = await storage.createExchangeCreditListing(dataWithBoundEmail);
+      const initialTier = calculateVerificationTier({
+        uvsCertified: false,
+        hasIotData: false,
+        hasSatelliteValidation: false,
+        hasHumanVerification: false,
+        registryConfirmed: Boolean(parsed.data.registrySerial && parsed.data.registryName),
+      });
+      await db.update(exchangeCreditListings)
+        .set({ verificationTier: initialTier })
+        .where(eq(exchangeCreditListings.id, listing.id))
+        .catch(() => {});
       const volumeNum = parseFloat(String(parsed.data.volumeTonnes)) || 0;
       const priceNum  = parseFloat(String(parsed.data.askingPricePerTonne)) || 0;
 
@@ -3629,6 +3654,148 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
     } catch (err: any) {
       console.error('[Partner API]', err);
       res.status(500).json({ error: 'Partner listing push failed' });
+    }
+  });
+
+  app.post('/api/partners/register', partnerApiLimiter, async (req, res) => {
+    try {
+      const parsed = insertVerifiedPartnerSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: 'Invalid partner payload', details: parsed.error.flatten() });
+      const payload = { ...parsed.data, status: 'pending' };
+      const [partner] = await db.insert(verifiedPartners).values(payload as any).returning();
+      res.status(201).json({ success: true, partner, message: 'Partner application submitted for admin review.' });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/partners/directory', async (req, res) => {
+    try {
+      const { partnerType, country, specialization, standard } = req.query as Record<string, string>;
+      const rows = await db.select().from(verifiedPartners)
+        .where(sql`${verifiedPartners.status} = 'active' OR ${verifiedPartners.status} = 'pending_approval'`)
+        .orderBy(desc(verifiedPartners.createdAt));
+      const filtered = rows.filter((p: any) => {
+        if (partnerType && p.partnerType !== partnerType) return false;
+        if (country && String(p.country || '').toLowerCase() !== country.toLowerCase()) return false;
+        const specs = p.specializations || {};
+        if (specialization) {
+          const serialized = JSON.stringify(specs).toLowerCase();
+          if (!serialized.includes(specialization.toLowerCase())) return false;
+        }
+        if (standard) {
+          const serialized = JSON.stringify(specs).toLowerCase();
+          if (!serialized.includes(standard.toLowerCase())) return false;
+        }
+        return true;
+      });
+      res.json({ partners: filtered });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/partners/:id/profile', async (req, res) => {
+    try {
+      const [partner] = await db.select().from(verifiedPartners).where(eq(verifiedPartners.id, req.params.id)).limit(1);
+      if (!partner) return res.status(404).json({ error: 'Partner not found' });
+      const referrals = await db.select().from(partnerReferrals).where(eq(partnerReferrals.partnerId, partner.id));
+      const completed = referrals.filter((r: any) => r.status === 'completed');
+      const profile = {
+        ...partner,
+        stats: {
+          totalReferrals: referrals.length,
+          completedEngagements: completed.length,
+          conversionRate: referrals.length ? Number(((completed.length / referrals.length) * 100).toFixed(1)) : 0,
+          totalEngagementValue: completed.reduce((sum: number, r: any) => sum + Number(r.engagementValue || 0), 0),
+        },
+      };
+      res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/partners/:id/refer', requireExchangeAuth, async (req, res) => {
+    try {
+      const parsed = insertPartnerReferralSchema.safeParse({ ...req.body, partnerId: req.params.id });
+      if (!parsed.success) return res.status(400).json({ error: 'Invalid referral payload', details: parsed.error.flatten() });
+      const [referral] = await db.insert(partnerReferrals).values(parsed.data as any).returning();
+      await db.execute(sql`UPDATE verified_partners SET total_referrals = total_referrals + 1 WHERE id = ${req.params.id}`);
+      res.status(201).json({
+        success: true,
+        referral,
+        confirmation: 'Referral sent to partner. They will contact you directly to initiate engagement.',
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/partners/:id/dashboard', requireExchangeAuth, async (req, res) => {
+    try {
+      const [partner] = await db.select().from(verifiedPartners).where(eq(verifiedPartners.id, req.params.id)).limit(1);
+      if (!partner) return res.status(404).json({ error: 'Partner not found' });
+      const referrals = await db.select().from(partnerReferrals).where(eq(partnerReferrals.partnerId, req.params.id));
+      const byStatus = {
+        pending: referrals.filter((r: any) => ['referred', 'contacted'].includes(r.status)).length,
+        active: referrals.filter((r: any) => r.status === 'engaged').length,
+        completed: referrals.filter((r: any) => r.status === 'completed').length,
+        declined: referrals.filter((r: any) => r.status === 'declined').length,
+      };
+      const earned = referrals.reduce((sum: number, r: any) => sum + Number(r.platformFeeEarned || 0), 0);
+      const verifiedCredits = await db.select().from(exchangeCreditListings)
+        .where(eq(exchangeCreditListings.humanVerificationPartnerId, req.params.id))
+        .orderBy(desc(exchangeCreditListings.humanVerificationCompletedAt));
+      res.json({
+        partner,
+        pipeline: byStatus,
+        revenue: { totalEarned: earned },
+        referrals,
+        verifiedCredits,
+        performance: {
+          profileViewsThisMonth: 0,
+          referralConversionRate: referrals.length ? Number(((byStatus.active + byStatus.completed) / referrals.length * 100).toFixed(1)) : 0,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.get('/api/admin/partners/overview', requireAdminHeader, async (_req, res) => {
+    try {
+      const partners = await db.select().from(verifiedPartners).orderBy(desc(verifiedPartners.totalRevenueGenerated));
+      const referrals = await db.select().from(partnerReferrals);
+      const totals = {
+        totalReferrals: referrals.length,
+        completed: referrals.filter((r: any) => r.status === 'completed').length,
+        platformRevenue: referrals.reduce((sum: number, r: any) => sum + Number(r.platformFeeEarned || 0), 0),
+      };
+      res.json({ partners, referrals, totals });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
+    }
+  });
+
+  app.post('/api/admin/partners/:id/approve', requireAdminHeader, async (req, res) => {
+    try {
+      const { badgeLevel, compensationModel, notes } = req.body || {};
+      const [updated] = await db.update(verifiedPartners)
+        .set({
+          status: 'active',
+          partnerBadgeLevel: badgeLevel || 'verified',
+          compensationModel: compensationModel || 'revenue_share',
+          approvedAt: new Date(),
+          approvedBy: 'admin',
+        })
+        .where(eq(verifiedPartners.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Partner not found' });
+      await logAdminAction(req, 'partner_approved', `Approved partner ${updated.firmName}`, { metadata: { notes } });
+      res.json({ success: true, partner: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: safeError(e) });
     }
   });
 
