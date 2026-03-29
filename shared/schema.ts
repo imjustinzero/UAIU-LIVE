@@ -583,7 +583,7 @@ export const pqcJurisdictionRequirements = pgTable("pqc_jurisdiction_requirement
 });
 
 export const algorithmUsageLog = pgTable("algorithm_usage_log", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: serial("id").primaryKey(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
   componentName: varchar("component_name").notNull(),
   algorithmUsed: varchar("algorithm_used").notNull(),
@@ -597,7 +597,7 @@ export const algorithmUsageLog = pgTable("algorithm_usage_log", {
 
 
 export const auditReports = pgTable("audit_reports", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
   overallStatus: varchar("overall_status").notNull(),
   reportData: jsonb("report_data").notNull(),
@@ -635,7 +635,7 @@ export const webhookDeliveryLog = pgTable("webhook_delivery_log", {
 });
 
 export const complianceDocuments = pgTable("compliance_documents", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   documentType: varchar("document_type").notNull(),
   organizationName: varchar("organization_name").notNull(),
   dateRange: jsonb("date_range").notNull(),
@@ -644,7 +644,7 @@ export const complianceDocuments = pgTable("compliance_documents", {
 });
 
 export const creditReservations = pgTable("credit_reservations", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   creditId: varchar("credit_id").notNull(),
   tonnes: real("tonnes").notNull(),
   buyerOrg: varchar("buyer_org").notNull(),
@@ -685,7 +685,7 @@ export const iotDevices = pgTable("iot_devices", {
 });
 
 export const iotReadings = pgTable("iot_readings", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   deviceId: varchar("device_id").notNull().references(() => iotDevices.id),
   projectId: varchar("project_id").notNull(),
   timestamp: timestamp("timestamp").notNull(),
@@ -726,7 +726,7 @@ export const mrvReports = pgTable("mrv_reports", {
 });
 
 export const anomalyEvents = pgTable("anomaly_events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   deviceId: varchar("device_id").notNull().references(() => iotDevices.id),
   readingId: varchar("reading_id").references(() => iotReadings.id),
   detectedAt: timestamp("detected_at").notNull().defaultNow(),
@@ -740,7 +740,7 @@ export const anomalyEvents = pgTable("anomaly_events", {
 });
 
 export const firmwareVersions = pgTable("firmware_versions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   version: varchar("version").notNull().unique(),
   releaseNotes: text("release_notes"),
   checksum: varchar("checksum").notNull(),
@@ -779,7 +779,7 @@ export const iotRawPayloads = pgTable("iot_raw_payloads", {
 });
 
 export const deviceCertifications = pgTable("device_certifications", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   manufacturer: varchar("manufacturer").notNull(),
   deviceModel: varchar("device_model").notNull(),
   firmwareVersion: varchar("firmware_version"),
@@ -793,7 +793,7 @@ export const deviceCertifications = pgTable("device_certifications", {
 
 
 export const creditRegistry = pgTable("credit_registry", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   status: varchar("status").notNull().default("active"),
   registry: varchar("registry"),
   projectType: varchar("project_type"),
@@ -852,7 +852,7 @@ export const methodologyCitations = pgTable("methodology_citations", {
 });
 
 export const uvsCertifications = pgTable("uvs_certifications", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   creditId: varchar("credit_id").notNull().references(() => creditRegistry.id),
   certificateNumber: varchar("certificate_number").notNull().unique(),
   status: varchar("status").notNull().default("pending"),
@@ -883,7 +883,7 @@ export const uvsCertifications = pgTable("uvs_certifications", {
 }));
 
 export const committeeMembers = pgTable("committee_members", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   name: varchar("name").notNull(),
   organization: varchar("organization").notNull(),
   role: varchar("role").notNull(),
@@ -908,7 +908,7 @@ export const methodologyAmendments = pgTable("methodology_amendments", {
 });
 
 export const mqiSnapshots = pgTable("mqi_snapshots", {
-  id: varchar("id").primaryKey(),
+  id: serial("id").primaryKey(),
   methodologyId: varchar("methodology_id").notNull(),
   methodologyCode: varchar("methodology_code").notNull(),
   score: numeric("score", { precision: 5, scale: 2 }).notNull(),
@@ -992,7 +992,7 @@ export const methodologyPeerReviews = pgTable("methodology_peer_reviews", {
 });
 
 export const professionalProfiles = pgTable("professional_profiles", {
-  id: varchar("id").primaryKey(),
+  id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
   displayName: varchar("display_name").notNull(),
   title: varchar("title"),
@@ -1024,7 +1024,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 });
 
 export const cbamDeclarations = pgTable("cbam_declarations", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   orgId: varchar("org_id").notNull(),
   declarationPeriod: varchar("declaration_period").notNull(),
   goodsCategory: varchar("goods_category").notNull(),
@@ -1040,7 +1040,7 @@ export const cbamDeclarations = pgTable("cbam_declarations", {
 });
 
 export const epdRecords = pgTable("epd_records", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   orgId: varchar("org_id").notNull(),
   productName: varchar("product_name").notNull(),
   productCategory: varchar("product_category").notNull(),
