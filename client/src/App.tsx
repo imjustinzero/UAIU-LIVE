@@ -62,6 +62,9 @@ import GovContractsPage from "@/pages/gov-contracts";
 import FederalBuyerPage from "@/pages/federal-buyer";
 import GovSecurityPage from "@/pages/gov-security";
 import VerifierMarketplacePage from "@/pages/verifier-marketplace";
+import PartnerDirectoryPage from "@/pages/partner-directory";
+import PartnerProfilePage from "@/pages/partner-profile";
+import PartnerDashboardPage from "@/pages/partner-dashboard";
 
 function Router() {
   return (
@@ -110,6 +113,9 @@ function Router() {
       <Route path="/x/gov/federal-buyer" component={FederalBuyerPage} />
       <Route path="/x/gov/security" component={GovSecurityPage} />
       <Route path="/x/verifiers/marketplace" component={VerifierMarketplacePage} />
+      <Route path="/x/partners" component={PartnerDirectoryPage} />
+      <Route path="/x/partners/:partnerId" component={PartnerProfilePage} />
+      <Route path="/x/partner/dashboard" component={PartnerDashboardPage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

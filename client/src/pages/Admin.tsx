@@ -106,12 +106,13 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup' | 'accounts'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'webhooks' | 'health' | 'autonomy' | 'backup' | 'accounts' | 'partners'>('listings');
   const [pendingListings, setPendingListings] = useState<any[]>([]);
   const [webhookFailures, setWebhookFailures] = useState<any[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
   const [kycQueue, setKycQueue] = useState<any[]>([]);
   const [exchangeAccountsList, setExchangeAccountsList] = useState<any[]>([]);
+  const [partnerOverview, setPartnerOverview] = useState<any>({ partners: [], referrals: [], totals: {} });
   const [loading, setLoading] = useState(false);
   const [platformStatus, setPlatformStatus] = useState<{ status: 'ok' | 'degraded' | 'incident'; message: string }>({
     status: 'ok',
@@ -155,19 +156,21 @@ export default function Admin() {
   async function loadData() {
     setLoading(true);
     try {
-      const [lRes, wRes, hRes, sRes, kRes, aRes] = await Promise.all([
+      const [lRes, wRes, hRes, sRes, kRes, aRes, pRes] = await Promise.all([
         fetch(`/api/admin/listings/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/webhooks/failures`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/health-check`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/status/public`),
         fetch(`/api/admin/kyc/pending`, { headers: adminHeaders(adminKey) }),
         fetch(`/api/admin/exchange/accounts`, { headers: adminHeaders(adminKey) }),
+        fetch(`/api/admin/partners/overview`, { headers: adminHeaders(adminKey) }),
       ]);
       if (lRes.ok) setPendingListings(await lRes.json());
       if (wRes.ok) setWebhookFailures(await wRes.json());
       if (hRes.ok) setHealthData(await hRes.json());
       if (kRes.ok) setKycQueue(await kRes.json());
       if (aRes.ok) setExchangeAccountsList(await aRes.json());
+      if (pRes.ok) setPartnerOverview(await pRes.json());
       if (sRes.ok) {
         const sd = await sRes.json();
         const s: 'ok' | 'degraded' | 'incident' =
@@ -328,6 +331,7 @@ export default function Admin() {
           {[
             { id: 'listings', label: 'Pending Listings', count: pendingListings.length },
             { id: 'accounts', label: 'Exchange Accounts', count: exchangeAccountsList.length },
+            { id: 'partners', label: 'Partners', count: (partnerOverview.partners || []).length },
             { id: 'webhooks', label: 'Webhook Failures', count: webhookFailures.length },
             { id: 'health', label: 'System Health', count: null },
             { id: 'autonomy', label: 'Autonomous Marketplace', count: null },
@@ -471,6 +475,36 @@ export default function Admin() {
           </div>
         )}
 
+        {activeTab === 'partners' && (
+          <section style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', color: C.gold, marginBottom: '6px' }}>Partner Program Management</h2>
+            <p style={{ fontSize: '12px', color: C.muted, marginBottom: '14px' }}>Applications queue, performance, and referral analytics.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: 14 }}>
+              <div style={{ padding: 10, border: `1px solid ${C.border}`, borderRadius: 8 }}>Total referrals: {(partnerOverview.totals?.totalReferrals || 0)}</div>
+              <div style={{ padding: 10, border: `1px solid ${C.border}`, borderRadius: 8 }}>Completed: {(partnerOverview.totals?.completed || 0)}</div>
+              <div style={{ padding: 10, border: `1px solid ${C.border}`, borderRadius: 8 }}>Revenue: €{Number(partnerOverview.totals?.platformRevenue || 0).toLocaleString()}</div>
+            </div>
+            {(partnerOverview.partners || []).map((p: any) => (
+              <div key={p.id} style={{ borderTop: `1px solid ${C.border}`, padding: '10px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ color: C.text, fontWeight: 600 }}>{p.firmName}</div>
+                    <div style={{ color: C.muted, fontSize: 12 }}>{p.partnerType} · {p.status}</div>
+                  </div>
+                  {p.status !== 'active' && (
+                    <button onClick={async () => {
+                      await fetch(`/api/admin/partners/${p.id}/approve`, { method: 'POST', headers: { ...adminHeaders(adminKey), 'Content-Type': 'application/json' }, body: JSON.stringify({ badgeLevel: 'verified', compensationModel: 'both' }) });
+                      loadData();
+                    }} style={{ background: C.green, color: '#04110b', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}>
+                      Approve
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* Panel 2: Webhooks */}
         {activeTab === 'webhooks' && (
           <div style={{ animation: 'fadeIn .3s ease' }}>
@@ -584,5 +618,4 @@ export default function Admin() {
     </div>
   );
 }
-
 

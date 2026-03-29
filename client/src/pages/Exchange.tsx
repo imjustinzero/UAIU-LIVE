@@ -249,6 +249,22 @@ interface Listing {
   registrySerial?: string;
   registryName?: string;
   vintageYear?: number;
+  verificationTier?: number;
+  humanVerificationPartnerId?: string;
+  humanVerificationCompletedAt?: string;
+}
+
+function getVerificationTierMeta(tier?: number) {
+  switch (tier) {
+    case 1:
+      return { label: 'Tier 1 — Fully Verified', color: '#22c55e', line: 'Verified ✓ — Human field verification completed by verified partner.' };
+    case 2:
+      return { label: 'Tier 2 — Platform Verified', color: '#3b82f6', line: 'Platform Verified — IoT and satellite verified. Human field verification pending.' };
+    case 3:
+      return { label: 'Tier 3 — Registry Only', color: '#f59e0b', line: 'Registry Confirmed ⚠ — Higher risk profile. No platform/human verification.' };
+    default:
+      return { label: 'Tier 4 — Unverified', color: '#ef4444', line: '⚠ Unverified — Proceed with caution or request verification before purchase.' };
+  }
 }
 
 function getBadgeStyle(standard: string, C: typeof C_DARK) {
@@ -856,6 +872,10 @@ export default function Exchange() {
     if (botDetected()) { showToast('Submission blocked.'); return; }
     if (!rateOk('trade', 5)) return;
     if (tradeQty < 1) { showToast('Please enter a valid quantity.'); return; }
+    if (mode === 'buy' && currentListing?.verificationTier === 4) {
+      const acknowledged = window.confirm('This credit is Tier 4 (Unverified). Click OK to explicitly acknowledge risk and continue.');
+      if (!acknowledged) return;
+    }
 
     if (!hasVerifiedKyc) {
       showToast('Complete identity verification to unlock trading features.');
@@ -1506,6 +1526,7 @@ export default function Exchange() {
               {filteredListings.map(l => {
                 const bs = getBadgeStyle(l.standard, C);
                 const hasSellerPrice = !!(l.sellerProfileId && l.pricePerTonne > 0);
+                const tier = getVerificationTierMeta(l.verificationTier);
                 return (
                   <div key={l.id} className="x-listing-card" onClick={() => openTrade(l, 'buy')} data-testid={`card-listing-${l.id}`}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
@@ -1515,6 +1536,8 @@ export default function Exchange() {
                       )}
                     </div>
                     <div style={{ fontFamily: F.playfair, fontSize: 22, fontWeight: 700, marginBottom: 6, lineHeight: 1.1 }}>{l.name}</div>
+                    <div style={{ marginBottom: 10, border: `1px solid ${tier.color}`, color: tier.color, padding: '6px 10px', fontFamily: F.mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{tier.label}</div>
+                    <div style={{ marginBottom: 10, fontFamily: F.mono, fontSize: 10, color: C.cream3, lineHeight: 1.5 }}>{tier.line}</div>
                     {l.registrySerial && l.registryName && (
                       <div style={{ marginBottom: 10 }}>
                         <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.green, background: C.greenfaint, border: `1px solid ${C.green}`, padding: '4px 10px', display: 'inline-flex', borderRadius: 999 }}>Registry Verified · {l.registryName}</span>
@@ -1547,6 +1570,11 @@ export default function Exchange() {
                       <button className="x-btn-buy-now" onClick={e => { e.stopPropagation(); openTrade(l, 'buy'); }} data-testid={`button-buy-${l.id}`}>Enquire / Buy</button>
                       <button className="x-btn-list" onClick={e => { e.stopPropagation(); scrollTo('list'); }} data-testid={`button-sell-${l.id}`}>Sell Similar</button>
                     </div>
+                    {l.verificationTier !== 1 && (
+                      <button className="x-btn-list" onClick={e => { e.stopPropagation(); window.location.href = '/x/partners'; }} style={{ marginTop: 8, width: '100%' }}>
+                        Get verified by a partner
+                      </button>
+                    )}
                     <div onClick={e => e.stopPropagation()} style={{ marginTop: 12 }}>
                       <VideoTradeRoom listingId={l.id} listingName={l.name} standard={l.standard} price={hasSellerPrice ? l.pricePerTonne : 0} isDark={isDark} />
                     </div>
