@@ -767,13 +767,6 @@ export const verificationStatements = pgTable("verification_statements", {
   methodologyHash: varchar("methodology_hash"),
 });
 
-export const partnerReferrals = pgTable("partner_referrals", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  methodologyId: uuid("methodology_id"),
-  methodologyVersion: varchar("methodology_version"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
 export const partnerMethodologies = pgTable("partner_methodologies", {
   id: uuid("id").defaultRandom().primaryKey(),
   partnerId: uuid("partner_id").notNull(),
