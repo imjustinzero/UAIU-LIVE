@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 import { createHash, createHmac, randomBytes } from "crypto";
+import mqtt from "mqtt";
 import PDFDocument from "pdfkit";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import {
@@ -10,9 +11,11 @@ import {
   firmwareVersions,
   iotDevices,
   iotReadings,
+  iotRawPayloads,
   iotTrustScores,
   mrvReports,
   satelliteReadings,
+  deviceCertifications,
 } from "@shared/schema";
 import { db } from "./db";
 import { getHashAlgorithm } from "./hash-agility";
@@ -63,6 +66,163 @@ function verifyReadingSignature(publicKey: string, payload: any, signature?: str
   return expected === signature;
 }
 
+
+
+type StandardReading = {
+  deviceId: string;
+  timestamp: string;
+  readingType: string;
+  value: number;
+  unit: string;
+  signature?: string;
+  rawPayload?: unknown;
+};
+
+const MQTT_TOPIC_PREFIX = "uaiu";
+let mqttStarted = false;
+
+function normalizeReading(input: any): StandardReading | null {
+  if (!input || !input.deviceId || !input.readingType) return null;
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) return null;
+  const timestamp = asDate(String(input.timestamp || ""), new Date())!;
+  return {
+    deviceId: String(input.deviceId),
+    timestamp: timestamp.toISOString(),
+    readingType: String(input.readingType),
+    value,
+    unit: String(input.unit || ""),
+    signature: input.signature ? String(input.signature) : undefined,
+    rawPayload: input.rawPayload ?? input,
+  };
+}
+
+async function ingestStandardReading(readingInput: StandardReading, source: string) {
+  const [device] = await db.select().from(iotDevices).where(eq(iotDevices.deviceId, readingInput.deviceId));
+  if (!device) return { error: "invalid_payload", reason: `Unknown deviceId ${readingInput.deviceId}` };
+
+  const signaturePayload = {
+    deviceId: readingInput.deviceId,
+    timestamp: readingInput.timestamp,
+    readingType: readingInput.readingType,
+    value: readingInput.value,
+    unit: readingInput.unit,
+  };
+  const signatureValid = readingInput.signature
+    ? verifyReadingSignature(device.publicKey, signaturePayload, readingInput.signature)
+    : true;
+
+  const [reading] = await db.insert(iotReadings).values({
+    deviceId: device.id,
+    projectId: device.projectId,
+    timestamp: asDate(readingInput.timestamp, new Date())!,
+    receivedAt: new Date(),
+    readingType: readingInput.readingType,
+    value: readingInput.value,
+    unit: readingInput.unit,
+    rawPayload: readingInput.rawPayload || readingInput,
+    deviceSignature: readingInput.signature || null,
+    signatureValid,
+    anomalyFlag: !signatureValid,
+    anomalyReason: !signatureValid ? "signature_invalid" : null,
+  } as any).returning();
+
+  const audit = await addAuditEntry({
+    type: "iot_reading",
+    source,
+    deviceId: device.id,
+    projectId: device.projectId,
+    readingType: reading.readingType,
+    value: reading.value,
+    unit: reading.unit,
+    signatureValid,
+  });
+  await db.update(iotReadings).set({ auditBlockId: audit.id }).where(eq(iotReadings.id, reading.id));
+  await detectAnomalies({ device, reading, signatureValid });
+  await db.update(iotDevices).set({ lastSeenAt: new Date(), status: "active" }).where(eq(iotDevices.id, device.id));
+
+  return { readingId: reading.id, auditBlockId: audit.id, projectId: device.projectId };
+}
+
+async function logRawPayload(source: string, rawPayload: any, deviceId?: string) {
+  const [row] = await db.insert(iotRawPayloads).values({
+    source,
+    deviceId: deviceId || null,
+    rawPayload: rawPayload || {},
+    processed: false,
+    readingIds: [],
+  } as any).returning();
+  return row;
+}
+
+async function markPayloadProcessed(payloadId: string, readingIds: string[]) {
+  await db.update(iotRawPayloads).set({ processed: true, readingIds }).where(eq(iotRawPayloads.id, payloadId));
+}
+
+function decodeLorawanPayload(payloadB64: string) {
+  const raw = Buffer.from(payloadB64, "base64");
+  if (raw.length >= 4) {
+    const temp = raw.readInt16BE(0) / 10;
+    const humidity = raw.readUInt16BE(2) / 10;
+    return [
+      { readingType: "temperature_c", value: temp, unit: "°C" },
+      { readingType: "humidity_pct", value: humidity, unit: "%" },
+    ];
+  }
+  return [];
+}
+
+function ensureMqttBridge() {
+  if (mqttStarted) return;
+  mqttStarted = true;
+  const brokerUrl = process.env.MQTT_BROKER_URL;
+  if (!brokerUrl) return;
+
+  const client = mqtt.connect(brokerUrl, {
+    username: process.env.MQTT_USERNAME || undefined,
+    password: process.env.MQTT_PASSWORD || undefined,
+    port: Number(process.env.MQTT_PORT || 1883),
+  });
+
+  client.on("connect", () => {
+    client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/readings`);
+    client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/status`);
+  });
+
+  client.on("message", async (topic, payloadBuffer) => {
+    try {
+      const payload = JSON.parse(payloadBuffer.toString("utf8"));
+      const topicParts = topic.split("/");
+      const deviceId = topicParts[2];
+      if (!deviceId) return;
+      const raw = await logRawPayload("mqtt", payload, deviceId);
+
+      if (topic.endsWith("/status")) {
+        const [device] = await db.select().from(iotDevices).where(eq(iotDevices.deviceId, deviceId));
+        if (device) await db.update(iotDevices).set({ status: String(payload.status || "active"), lastSeenAt: new Date() }).where(eq(iotDevices.id, device.id));
+        await markPayloadProcessed(raw.id, []);
+        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, type: "status", at: new Date().toISOString() }));
+        return;
+      }
+
+      const reading = normalizeReading({ ...payload, deviceId });
+      if (!reading) {
+        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: "invalid_payload" }));
+        return;
+      }
+      const result: any = await ingestStandardReading(reading, "mqtt");
+      if (result.error) {
+        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: result.reason }));
+        return;
+      }
+      await markPayloadProcessed(raw.id, [result.readingId]);
+      client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, readingId: result.readingId, auditBlockId: result.auditBlockId }));
+      client.publish(`${MQTT_TOPIC_PREFIX}/projects/${result.projectId}/summary`, JSON.stringify({ deviceId, readingType: reading.readingType, value: reading.value, at: reading.timestamp }));
+    } catch (e) {
+      // keep MQTT loop resilient
+    }
+  });
+}
 async function createAnomaly(deviceId: string, readingId: string | null, anomalyType: string, severity: string, description: string) {
   const [event] = await db.insert(anomalyEvents).values({ deviceId, readingId, anomalyType, severity, description }).returning();
   await addAuditEntry({ type: "anomaly_detected", deviceId, anomalyType, severity, description });
@@ -145,6 +305,7 @@ async function computeTrustScore(projectId: string) {
 }
 
 export function registerIotRoutes(app: Express): void {
+  ensureMqttBridge();
   const router = Router();
 
   router.post("/devices/register", async (req, res) => {
@@ -511,5 +672,178 @@ export function registerIotRoutes(app: Express): void {
     });
   });
 
-  app.use("/api/iot", router);
+
+
+  router.get("/mqtt/connection-info", async (req, res) => {
+    const auth = await authDevice(req);
+    if (auth.error) return res.status(401).json({ error: auth.error });
+    const device = auth.device;
+    return res.json({
+      brokerUrl: process.env.MQTT_BROKER_URL || "",
+      port: Number(process.env.MQTT_PORT || 1883),
+      tlsPort: Number(process.env.MQTT_TLS_PORT || 8883),
+      topicPrefix: MQTT_TOPIC_PREFIX,
+      username: process.env.MQTT_USERNAME || device.deviceId,
+      password: "device-managed",
+      topics: {
+        readings: `${MQTT_TOPIC_PREFIX}/devices/${device.deviceId}/readings`,
+        status: `${MQTT_TOPIC_PREFIX}/devices/${device.deviceId}/status`,
+        commands: `${MQTT_TOPIC_PREFIX}/devices/${device.deviceId}/commands`,
+        ack: `${MQTT_TOPIC_PREFIX}/devices/${device.deviceId}/ack`,
+      },
+    });
+  });
+
+  async function handleAdapterIngest(source: string, payload: any, parser: (payload: any) => StandardReading[]) {
+    const raw = await logRawPayload(source, payload, payload?.deviceId || payload?.serial || payload?.devEUI || payload?.device);
+    const parsed = parser(payload);
+    if (!parsed.length) return { error: "invalid_payload", reason: `No ${source} readings parsed` };
+    const readingIds: string[] = [];
+    const auditBlockIds: number[] = [];
+    for (const reading of parsed) {
+      const result: any = await ingestStandardReading(reading, source);
+      if (result.error) return result;
+      readingIds.push(result.readingId);
+      auditBlockIds.push(result.auditBlockId);
+    }
+    await markPayloadProcessed(raw.id, readingIds);
+    return { accepted: readingIds.length, readingIds, auditBlockIds };
+  }
+
+  function parseCampbell(payload: any): StandardReading[] {
+    if (Array.isArray(payload?.readings)) return payload.readings.map((r: any) => normalizeReading(r)).filter(Boolean) as StandardReading[];
+    if (typeof payload?.toa5 === "string") {
+      const lines = payload.toa5.split("\\n").map((l: string) => l.trim()).filter(Boolean);
+      const dataLine = lines[lines.length - 1]?.split(",") || [];
+      const deviceId = String(payload.deviceId || dataLine[0] || "");
+      const timestamp = String(payload.timestamp || dataLine[1] || new Date().toISOString());
+      return [normalizeReading({ deviceId, timestamp, readingType: "temperature_c", value: Number(dataLine[2] || 0), unit: "°C", rawPayload: payload })!].filter(Boolean);
+    }
+    return [];
+  }
+
+  function parseHobolink(payload: any): StandardReading[] {
+    const serial = String(payload?.logger_sn || payload?.serial || payload?.deviceId || "");
+    const ts = String(payload?.timestamp || new Date().toISOString());
+    const sensors = Array.isArray(payload?.measurements) ? payload.measurements : [];
+    return sensors.map((m: any) => normalizeReading({ deviceId: serial, timestamp: ts, readingType: String(m.type || "sensor"), value: Number(m.value), unit: String(m.unit || ""), rawPayload: payload })).filter(Boolean) as StandardReading[];
+  }
+
+  function parseParticle(payload: any): StandardReading[] {
+    const data = payload?.data ? JSON.parse(Buffer.from(String(payload.data), "base64").toString("utf8")) : payload?.eventData || {};
+    const mapped = normalizeReading({
+      deviceId: payload?.coreid || payload?.deviceId,
+      timestamp: payload?.published_at || new Date().toISOString(),
+      readingType: data.readingType || payload?.event || "particle_event",
+      value: Number(data.value ?? payload?.value ?? 0),
+      unit: data.unit || "",
+      rawPayload: payload,
+    });
+    return mapped ? [mapped] : [];
+  }
+
+  function parseLorawan(payload: any): StandardReading[] {
+    const deviceId = String(payload?.deviceInfo?.devEui || payload?.end_device_ids?.device_id || payload?.devEUI || "");
+    const b64 = String(payload?.data || payload?.frm_payload || payload?.uplink_message?.frm_payload || "");
+    const ts = String(payload?.time || payload?.received_at || new Date().toISOString());
+    return decodeLorawanPayload(b64).map((d) => normalizeReading({ deviceId, timestamp: ts, readingType: d.readingType, value: d.value, unit: d.unit, rawPayload: payload })).filter(Boolean) as StandardReading[];
+  }
+
+  function parseSensecap(payload: any): StandardReading[] {
+    const deviceId = String(payload?.deviceEui || payload?.deviceId || "");
+    const ts = String(payload?.timestamp || new Date().toISOString());
+    const records = Array.isArray(payload?.measurements) ? payload.measurements : [];
+    return records.map((r: any) => normalizeReading({ deviceId, timestamp: ts, readingType: String(r.type || r.name || "sensecap_measurement"), value: Number(r.value), unit: String(r.unit || ""), rawPayload: payload })).filter(Boolean) as StandardReading[];
+  }
+
+  function parseBlues(payload: any): StandardReading[] {
+    const body = payload?.body || payload || {};
+    const mapped = normalizeReading({
+      deviceId: body.device || body.deviceId || payload?.device,
+      timestamp: body.when ? new Date(Number(body.when) * 1000).toISOString() : new Date().toISOString(),
+      readingType: body.readingType || body.type || "blues_event",
+      value: Number(body.value || 0),
+      unit: body.unit || "",
+      rawPayload: payload,
+    });
+    return mapped ? [mapped] : [];
+  }
+
+  router.post("/ingest/campbell", async (req, res) => {
+    const result: any = await handleAdapterIngest("campbell", req.body || {}, parseCampbell);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  router.post("/ingest/hobolink", async (req, res) => {
+    const result: any = await handleAdapterIngest("hobolink", req.body || {}, parseHobolink);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  router.post("/ingest/particle", async (req, res) => {
+    const sharedSecret = process.env.PARTICLE_WEBHOOK_SECRET || "";
+    const headerSig = String(req.headers["x-particle-signature"] || "");
+    if (sharedSecret) {
+      const expected = createHmac("sha256", sharedSecret).update(JSON.stringify(req.body || {})).digest("hex");
+      if (expected !== headerSig) return res.status(401).json({ error: "invalid_signature", reason: "Particle signature check failed" });
+    }
+    const result: any = await handleAdapterIngest("particle", req.body || {}, parseParticle);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  router.post("/ingest/lorawan", async (req, res) => {
+    const result: any = await handleAdapterIngest("lorawan", req.body || {}, parseLorawan);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  router.post("/ingest/sensecap", async (req, res) => {
+    const result: any = await handleAdapterIngest("sensecap", req.body || {}, parseSensecap);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  router.post("/ingest/blues", async (req, res) => {
+    const result: any = await handleAdapterIngest("blues", req.body || {}, parseBlues);
+    if (result.error) return res.status(400).json(result);
+    return res.status(201).json(result);
+  });
+
+  app.post("/api/devices/certification/apply", async (req, res) => {
+    const payload = req.body || {};
+    if (!payload.manufacturer || !payload.deviceModel) return res.status(400).json({ error: "manufacturer and deviceModel required" });
+    const initial = {
+      connectionAuthentication: "pending",
+      readingSubmissionAccuracy: "pending",
+      signatureVerification: "pending",
+      offlineBufferingAndSync: "pending",
+      timestampAccuracy: "pending",
+      batchUploadPerformance: "pending",
+      errorRecovery: "pending",
+    };
+    const [created] = await db.insert(deviceCertifications).values({
+      manufacturer: String(payload.manufacturer),
+      deviceModel: String(payload.deviceModel),
+      firmwareVersion: payload.firmwareVersion ? String(payload.firmwareVersion) : null,
+      testResults: initial,
+      certificationLevel: "compatible",
+      badgeUrl: null,
+    } as any).returning();
+    return res.status(201).json(created);
+  });
+
+  app.get("/api/devices/certification/status/:id", async (req, res) => {
+    const [row] = await db.select().from(deviceCertifications).where(eq(deviceCertifications.id, String(req.params.id)));
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json(row);
+  });
+
+  app.get("/api/devices/certifications", async (_req, res) => {
+    const rows = await db.select().from(deviceCertifications).orderBy(desc(deviceCertifications.createdAt));
+    return res.json(rows);
+  });
+
+    app.use("/api/iot", router);
 }

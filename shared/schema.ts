@@ -676,6 +676,28 @@ export const iotTrustScores = pgTable("iot_trust_scores", {
   calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
 });
 
+export const iotRawPayloads = pgTable("iot_raw_payloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id"),
+  source: varchar("source").notNull(),
+  rawPayload: jsonb("raw_payload").notNull().default(sql`'{}'::jsonb`),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processed: boolean("processed").notNull().default(false),
+  readingIds: jsonb("reading_ids").notNull().default(sql`'[]'::jsonb`),
+});
+
+export const deviceCertifications = pgTable("device_certifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  manufacturer: varchar("manufacturer").notNull(),
+  deviceModel: varchar("device_model").notNull(),
+  firmwareVersion: varchar("firmware_version"),
+  testResults: jsonb("test_results").notNull().default(sql`'{}'::jsonb`),
+  certifiedAt: timestamp("certified_at"),
+  certificationLevel: varchar("certification_level").notNull().default("compatible"),
+  badgeUrl: varchar("badge_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 
 
 export const creditRegistry = pgTable("credit_registry", {
@@ -855,6 +877,8 @@ export type CreditReservation = typeof creditReservations.$inferSelect;
 
 export type IotDevice = typeof iotDevices.$inferSelect;
 export type IotReading = typeof iotReadings.$inferSelect;
+export type IotRawPayload = typeof iotRawPayloads.$inferSelect;
+export type DeviceCertification = typeof deviceCertifications.$inferSelect;
 export type MrvReport = typeof mrvReports.$inferSelect;
 export type AnomalyEvent = typeof anomalyEvents.$inferSelect;
 export type FirmwareVersion = typeof firmwareVersions.$inferSelect;
