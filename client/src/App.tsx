@@ -49,6 +49,9 @@ import StandardPage from "@/pages/standard";
 import CommitteePage from "@/pages/committee";
 import UvsRegistryPage from "@/pages/uvs-registry";
 import UvsWidget from "@/pages/widget";
+import DeviceCompatibilityPage from "@/pages/device-compatibility";
+import DeviceSetupGuidePage from "@/pages/device-setup-guide";
+import DeviceCertificationPage from "@/pages/device-certification";
 
 function Router() {
   return (
@@ -84,6 +87,9 @@ function Router() {
       <Route path="/x/committee" component={CommitteePage} />
       <Route path="/x/registry" component={UvsRegistryPage} />
       <Route path="/x/widget/:certificateNumber" component={UvsWidget} />
+      <Route path="/x/developers/devices" component={DeviceCompatibilityPage} />
+      <Route path="/x/developers/devices/:deviceSlug/setup" component={DeviceSetupGuidePage} />
+      <Route path="/x/developers/certification" component={DeviceCertificationPage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />
