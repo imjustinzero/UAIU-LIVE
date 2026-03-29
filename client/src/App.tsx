@@ -39,6 +39,9 @@ import NavigatorTracker from "@/pages/navigator/Tracker";
 import NavigatorProjects from "@/pages/navigator/Projects";
 import Maritime from "@/pages/Maritime";
 import MaritimeCarbonOffsetting from "@/pages/maritime/CarbonOffsetting";
+import ChainExplorer from "@/pages/ChainExplorer";
+import SupplierDashboard from "@/pages/SupplierDashboard";
+import Trust from "@/pages/Trust";
 
 function Router() {
   return (
@@ -64,6 +67,9 @@ function Router() {
       <Route path="/legal" component={Legal} />
       <Route path="/x/zstop" component={ZStop} />
       <Route path="/x/seller" component={SellerConnect} />
+      <Route path="/x/chain" component={ChainExplorer} />
+      <Route path="/x/supplier" component={SupplierDashboard} />
+      <Route path="/x/trust" component={Trust} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

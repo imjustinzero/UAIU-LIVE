@@ -499,6 +499,16 @@ export const escrowSettlementsLog = pgTable("escrow_settlements_log", {
   hashAlgorithm: varchar("hash_algorithm"),
 });
 
+export const algorithmRotationLog = pgTable("algorithm_rotation_log", {
+  id: serial("id").primaryKey(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  previousAlgorithm: varchar("previous_algorithm").notNull(),
+  newAlgorithm: varchar("new_algorithm").notNull(),
+  triggeredBy: varchar("triggered_by").notNull(),
+  signatureHash: varchar("signature_hash").notNull(),
+  notes: text("notes"),
+});
+
 export const sessions = pgTable("sessions", {
   id: varchar("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -589,6 +599,7 @@ export type TradeSignature = typeof tradeSignatures.$inferSelect;
 export type InsertTradeSignature = z.infer<typeof insertTradeSignatureSchema>;
 export type AuditChainEntry = typeof auditChainEntries.$inferSelect;
 export type EscrowSettlementLog = typeof escrowSettlementsLog.$inferSelect;
+export type AlgorithmRotationLog = typeof algorithmRotationLog.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
