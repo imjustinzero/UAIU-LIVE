@@ -12,7 +12,7 @@ import {
   exchangeTrades,
   tradeRetirementCertificates,
 } from "@shared/schema";
-import { APPROVED_ALGORITHMS, getHashAlgorithm, validateEscrowFinality } from "./hash-agility";
+import { getApprovedAlgorithms, getHashAlgorithm, validateEscrowFinality } from "./hash-agility";
 
 function hashEntry(entry: Record<string, unknown>, algorithm: string): string {
   return createHash(algorithm).update(JSON.stringify(entry)).digest("hex");
@@ -157,9 +157,9 @@ export function registerAuditChainRoutes(app: Express): void {
       if (!normalizedNewAlgorithm || !actor) {
         return res.status(400).json({ error: "newAlgorithm and triggeredBy are required" });
       }
-      if (!APPROVED_ALGORITHMS.includes(normalizedNewAlgorithm)) {
+      if (!getApprovedAlgorithms().includes(normalizedNewAlgorithm)) {
         return res.status(400).json({
-          error: `newAlgorithm must be one of: ${APPROVED_ALGORITHMS.join(", ")}`,
+          error: `newAlgorithm must be one of: ${getApprovedAlgorithms().join(", ")}`,
         });
       }
 
@@ -248,7 +248,7 @@ export function registerAuditChainRoutes(app: Express): void {
       return res.json({
         chainIntact,
         currentAlgorithm: getHashAlgorithm(),
-        approvedAlgorithms: APPROVED_ALGORITHMS,
+        approvedAlgorithms: getApprovedAlgorithms(),
         lastSettlementAt: lastSettlement?.settledAt || null,
         totalSettlements: settledOnly.length,
         totalCreditsRetired: retiredRecords.length,
