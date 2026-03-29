@@ -36,7 +36,7 @@ async function loadTemplate(docType) {
   const templateFile = docTemplateMap[docType];
   if (!templateFile) throw new DocumentGenerationError(`Unsupported docType ${docType}`, docType);
 
-  const templatePath = path.join(process.cwd(), 'uaiu-doc-engine', 'src', 'documents', 'templates', templateFile);
+  const templatePath = path.resolve(__dirname, '..', 'documents', 'templates', templateFile);
 
   if (templateFile.endsWith('.js')) {
     const templateModule = require(templatePath);

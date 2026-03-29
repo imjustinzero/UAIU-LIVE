@@ -67,7 +67,8 @@ const deal = {
 };
 
 (async () => {
-  await prepareTemplate(deal, 'DOC_02', false);
-  await prepareTemplate(deal, 'AUDIT_PACK_COVER', false);
+  for (const docType of ['DOC_02', 'DOC_03', 'DOC_04', 'DOC_05', 'DOC_08', 'DOC_12', 'AUDIT_PACK_COVER', 'CLOSING_SUMMARY']) {
+    await prepareTemplate(deal, docType, false);
+  }
   console.log('smoke-check-ok');
 })();
