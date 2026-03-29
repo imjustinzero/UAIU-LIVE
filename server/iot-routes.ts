@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 import { createHash, createHmac, randomBytes } from "crypto";
-// import mqtt from "mqtt"; // TODO: Install mqtt package via npm ci
+import mqtt from "mqtt";
 import PDFDocument from "pdfkit";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import {
@@ -80,6 +80,17 @@ type StandardReading = {
 
 const MQTT_TOPIC_PREFIX = "uaiu";
 let mqttStarted = false;
+let mqttConnected = false;
+let mqttStatusReason = "MQTT bridge not initialized";
+let mqttReconnectAttempts = 0;
+let mqttReconnectTimer: NodeJS.Timeout | null = null;
+
+export function getMqttHealthStatus() {
+  return {
+    connected: mqttConnected,
+    reason: mqttConnected ? undefined : mqttStatusReason,
+  };
+}
 
 function normalizeReading(input: any): StandardReading | null {
   if (!input || !input.deviceId || !input.readingType) return null;
@@ -176,57 +187,93 @@ function ensureMqttBridge() {
   if (mqttStarted) return;
   mqttStarted = true;
   const brokerUrl = process.env.MQTT_BROKER_URL;
-  if (!brokerUrl) return;
+  if (!brokerUrl) {
+    mqttConnected = false;
+    mqttStatusReason = "MQTT_BROKER_URL not set";
+    console.warn("[MQTT] MQTT_BROKER_URL not set; MQTT bridge disabled.");
+    return;
+  }
 
-  const client = mqtt.connect(brokerUrl, {
+  const connectClient = () => mqtt.connect(brokerUrl, {
     username: process.env.MQTT_USERNAME || undefined,
     password: process.env.MQTT_PASSWORD || undefined,
     port: Number(process.env.MQTT_PORT || 1883),
+    reconnectPeriod: 0,
   });
+  let client = connectClient();
 
-  client.on("connect", () => {
-    console.info(`[MQTT] Connected to broker ${brokerUrl}`);
-    client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/readings`);
-    client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/status`);
-  });
+  const queueReconnect = () => {
+    mqttReconnectAttempts += 1;
+    const backoffMs = Math.min(30_000, Math.max(1_000, 2 ** mqttReconnectAttempts * 1_000));
+    mqttStatusReason = `Reconnect scheduled in ${backoffMs}ms`;
+    if (mqttReconnectTimer) clearTimeout(mqttReconnectTimer);
+    mqttReconnectTimer = setTimeout(() => {
+      client.removeAllListeners();
+      client.end(true);
+      client = connectClient();
+      attachHandlers();
+    }, backoffMs);
+  };
 
-  client.on("error", (error) => {
-    console.error(`[MQTT] Connection error: ${error.message}`);
-  });
+  const attachHandlers = () => {
+    client.on("connect", () => {
+      mqttConnected = true;
+      mqttStatusReason = "Connected";
+      mqttReconnectAttempts = 0;
+      console.info(`MQTT connected to ${brokerUrl}`);
+      client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/readings`);
+      client.subscribe(`${MQTT_TOPIC_PREFIX}/devices/+/status`);
+    });
 
-  client.on("message", async (topic, payloadBuffer) => {
-    try {
-      const payload = JSON.parse(payloadBuffer.toString("utf8"));
-      const topicParts = topic.split("/");
-      const deviceId = topicParts[2];
-      if (!deviceId) return;
-      const raw = await logRawPayload("mqtt", payload, deviceId);
+    client.on("close", () => {
+      mqttConnected = false;
+      mqttStatusReason = "Connection closed";
+      queueReconnect();
+    });
 
-      if (topic.endsWith("/status")) {
-        const [device] = await db.select().from(iotDevices).where(eq(iotDevices.deviceId, deviceId));
-        if (device) await db.update(iotDevices).set({ status: String(payload.status || "active"), lastSeenAt: new Date() }).where(eq(iotDevices.id, device.id));
-        await markPayloadProcessed(raw.id, []);
-        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, type: "status", at: new Date().toISOString() }));
-        return;
+    client.on("error", (err) => {
+      mqttConnected = false;
+      mqttStatusReason = err?.message || "MQTT connection error";
+      console.error("MQTT connection error:", err);
+      queueReconnect();
+    });
+
+    client.on("message", async (topic, payloadBuffer) => {
+      try {
+        const payload = JSON.parse(payloadBuffer.toString("utf8"));
+        const topicParts = topic.split("/");
+        const deviceId = topicParts[2];
+        if (!deviceId) return;
+        const raw = await logRawPayload("mqtt", payload, deviceId);
+
+        if (topic.endsWith("/status")) {
+          const [device] = await db.select().from(iotDevices).where(eq(iotDevices.deviceId, deviceId));
+          if (device) await db.update(iotDevices).set({ status: String(payload.status || "active"), lastSeenAt: new Date() }).where(eq(iotDevices.id, device.id));
+          await markPayloadProcessed(raw.id, []);
+          client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, type: "status", at: new Date().toISOString() }));
+          return;
+        }
+
+        const reading = normalizeReading({ ...payload, deviceId });
+        if (!reading) {
+          client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: "invalid_payload" }));
+          return;
+        }
+        const result: any = await ingestStandardReading(reading, "mqtt");
+        if (result.error) {
+          client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: result.reason }));
+          return;
+        }
+        await markPayloadProcessed(raw.id, [result.readingId]);
+        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, readingId: result.readingId, auditBlockId: result.auditBlockId }));
+        client.publish(`${MQTT_TOPIC_PREFIX}/projects/${result.projectId}/summary`, JSON.stringify({ deviceId, readingType: reading.readingType, value: reading.value, at: reading.timestamp }));
+      } catch (e) {
+        // keep MQTT loop resilient
       }
+    });
+  };
 
-      const reading = normalizeReading({ ...payload, deviceId });
-      if (!reading) {
-        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: "invalid_payload" }));
-        return;
-      }
-      const result: any = await ingestStandardReading(reading, "mqtt");
-      if (result.error) {
-        client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: false, error: result.reason }));
-        return;
-      }
-      await markPayloadProcessed(raw.id, [result.readingId]);
-      client.publish(`${MQTT_TOPIC_PREFIX}/devices/${deviceId}/ack`, JSON.stringify({ ok: true, readingId: result.readingId, auditBlockId: result.auditBlockId }));
-      client.publish(`${MQTT_TOPIC_PREFIX}/projects/${result.projectId}/summary`, JSON.stringify({ deviceId, readingType: reading.readingType, value: reading.value, at: reading.timestamp }));
-    } catch (e) {
-      // keep MQTT loop resilient
-    }
-  });
+  attachHandlers();
 }
 async function createAnomaly(deviceId: string, readingId: string | null, anomalyType: string, severity: string, description: string) {
   const [event] = await db.insert(anomalyEvents).values({ deviceId, readingId, anomalyType, severity, description }).returning();

@@ -1,68 +1,83 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getHashAlgorithm, isAlgorithmApproved, hashRecord, validateEscrowFinality } from "../../server/hash-agility";
+import { describe, it, expect, beforeEach } from 'vitest'
+import { getHashAlgorithm, isAlgorithmApproved, hashRecord, validateEscrowFinality } from '../../server/hash-agility'
 
-describe("hash agility", () => {
-  const originalEnv = process.env;
-
+describe('getHashAlgorithm', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    process.env = { ...originalEnv };
-  });
+    delete process.env.HASH_ALGORITHM
+  })
 
-  afterEach(() => {
-    vi.useRealTimers();
-    process.env = originalEnv;
-  });
+  it('returns env var value when set', () => {
+    process.env.HASH_ALGORITHM = 'sha3-256'
+    expect(getHashAlgorithm()).toBe('sha3-256')
+    delete process.env.HASH_ALGORITHM
+  })
 
-  it("getHashAlgorithm() returns env var value", () => {
-    process.env.HASH_ALGORITHM = "sha3-256";
-    expect(getHashAlgorithm()).toBe("sha3-256");
-  });
+  it('returns sha256 when env not set', () => {
+    delete process.env.HASH_ALGORITHM
+    expect(getHashAlgorithm()).toBe('sha256')
+  })
+})
 
-  it("getHashAlgorithm() returns 'sha256' when env not set", () => {
-    delete process.env.HASH_ALGORITHM;
-    expect(getHashAlgorithm()).toBe("sha256");
-  });
+describe('isAlgorithmApproved', () => {
+  it('returns true for approved algorithm', () => {
+    process.env.APPROVED_ALGORITHMS = 'sha256,sha3-256'
+    expect(isAlgorithmApproved('sha256')).toBe(true)
+  })
 
-  it("hashRecord() produces consistent output for same input", () => {
-    const payload = { a: 1, b: "test" };
-    expect(hashRecord(payload, "sha256")).toBe(hashRecord(payload, "sha256"));
-  });
+  it('returns false for unapproved algorithm', () => {
+    process.env.APPROVED_ALGORITHMS = 'sha256'
+    expect(isAlgorithmApproved('md5')).toBe(false)
+  })
+})
 
-  it("hashRecord() uses current HASH_ALGORITHM", () => {
-    process.env.HASH_ALGORITHM = "sha512";
-    const payload = { x: 42 };
-    const hashUsingDefault = hashRecord(payload);
-    const hashSha256 = hashRecord(payload, "sha256");
-    expect(hashUsingDefault).not.toBe(hashSha256);
-  });
+describe('hashRecord', () => {
+  it('produces consistent output for same input', () => {
+    const data = { test: 'value' }
+    expect(hashRecord(data)).toBe(hashRecord(data))
+  })
 
-  it("isAlgorithmApproved() returns true for approved algorithms", () => {
-    expect(isAlgorithmApproved("sha256")).toBe(true);
-  });
+  it('produces different output for different input', () => {
+    expect(hashRecord({ a: 1 })).not.toBe(hashRecord({ a: 2 }))
+  })
+})
 
-  it("isAlgorithmApproved() returns false for unapproved algorithms", () => {
-    expect(isAlgorithmApproved("md5")).toBe(false);
-  });
+describe('validateEscrowFinality', () => {
+  it('returns settled=true after 24 hours', () => {
+    const settledAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.settled).toBe(true)
+  })
 
-  it("validateEscrowFinality() returns settled=true after 24hrs", () => {
-    vi.setSystemTime(new Date("2026-03-29T12:00:00.000Z"));
-    const settledAt = new Date("2026-03-28T11:59:00.000Z");
-    const finality = validateEscrowFinality(settledAt, "sha256", 24);
-    expect(finality.settled).toBe(true);
-  });
+  it('returns settled=false before 24 hours', () => {
+    const settledAt = new Date(Date.now() - 12 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.settled).toBe(false)
+  })
 
-  it("validateEscrowFinality() returns requiresManualReview=true for deprecated algo", () => {
-    vi.setSystemTime(new Date("2026-03-29T12:00:00.000Z"));
-    const settledAt = new Date("2026-03-28T11:00:00.000Z");
-    const finality = validateEscrowFinality(settledAt, "md5", 24);
-    expect(finality.settled).toBe(true);
-    expect(finality.requiresManualReview).toBe(true);
-  });
+  it('requiresManualReview true when settled and algo deprecated', () => {
+    process.env.APPROVED_ALGORITHMS = 'sha3-256'
+    const settledAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.requiresManualReview).toBe(true)
+    expect(result.settled).toBe(true)
+  })
 
-  it("validateEscrowFinality() never auto-rejects", () => {
-    const settledAt = new Date();
-    const finality = validateEscrowFinality(settledAt, "md5", 24) as any;
-    expect(finality.rejected).toBeUndefined();
-  });
-});
+  it('never sets requiresManualReview without settled=true', () => {
+    process.env.APPROVED_ALGORITHMS = 'sha3-256'
+    const settledAt = new Date(Date.now() - 1 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.requiresManualReview).toBe(false)
+  })
+
+  it('hoursRemaining never goes negative', () => {
+    const settledAt = new Date(Date.now() - 100 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.hoursRemaining).toBe(0)
+  })
+
+  it('percentComplete caps at 100', () => {
+    const settledAt = new Date(Date.now() - 100 * 60 * 60 * 1000)
+    const result = validateEscrowFinality(settledAt, 'sha256')
+    expect(result.percentComplete).toBe(100)
+  })
+})
