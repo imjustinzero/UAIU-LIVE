@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, real, integer, serial, timestamp, boolean, unique, check, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -477,6 +477,28 @@ export const exchangeSecurityLog = pgTable("exchange_security_log", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const auditChainEntries = pgTable("audit_chain_entries", {
+  id: serial("id").primaryKey(),
+  blockNumber: integer("block_number").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  algorithm: varchar("algorithm").notNull(),
+  transactionData: jsonb("transaction_data").notNull(),
+  prevHash: varchar("prev_hash").notNull(),
+  hash: varchar("hash").notNull(),
+});
+
+export const escrowSettlementsLog = pgTable("escrow_settlements_log", {
+  id: serial("id").primaryKey(),
+  tradeId: varchar("trade_id").notNull(),
+  paymentIntentId: varchar("payment_intent_id").notNull(),
+  amountEur: real("amount_eur").notNull(),
+  uaiuFeeEur: real("uaiu_fee_eur"),
+  sellerNetEur: real("seller_net_eur"),
+  status: varchar("status").notNull(),
+  settledAt: timestamp("settled_at"),
+  hashAlgorithm: varchar("hash_algorithm"),
+});
+
 export const sessions = pgTable("sessions", {
   id: varchar("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -565,6 +587,8 @@ export type AlertSubscriber = typeof alertSubscribers.$inferSelect;
 export type InsertTradeRetirementCertificate = z.infer<typeof insertTradeRetirementCertificateSchema>;
 export type TradeSignature = typeof tradeSignatures.$inferSelect;
 export type InsertTradeSignature = z.infer<typeof insertTradeSignatureSchema>;
+export type AuditChainEntry = typeof auditChainEntries.$inferSelect;
+export type EscrowSettlementLog = typeof escrowSettlementsLog.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
