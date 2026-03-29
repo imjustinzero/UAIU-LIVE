@@ -44,6 +44,11 @@ import SupplierDashboard from "@/pages/SupplierDashboard";
 import Trust from "@/pages/Trust";
 import EsgDashboard from "@/pages/esg-dashboard";
 import ProjectMonitorPage from "@/pages/project-monitor";
+import VerifyPage from "@/pages/verify";
+import StandardPage from "@/pages/standard";
+import CommitteePage from "@/pages/committee";
+import UvsRegistryPage from "@/pages/uvs-registry";
+import UvsWidget from "@/pages/widget";
 
 function Router() {
   return (
@@ -52,7 +57,6 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/feed" component={Feed} />
       <Route path="/live" component={LiveVideo} />
-      <Route path="/x/verify/:hash" component={VerifyTrade} />
       <Route path="/verify/:hash" component={VerifyTrade} />
       <Route path="/blog" component={Blog} />
       <Route path="/alerts" component={Alerts} />
@@ -75,6 +79,11 @@ function Router() {
       <Route path="/x/trust" component={Trust} />
       <Route path="/x/esg" component={EsgDashboard} />
       <Route path="/x/projects" component={ProjectMonitorPage} />
+      <Route path="/x/verify/:certificateNumber" component={VerifyPage} />
+      <Route path="/x/standard" component={StandardPage} />
+      <Route path="/x/committee" component={CommitteePage} />
+      <Route path="/x/registry" component={UvsRegistryPage} />
+      <Route path="/x/widget/:certificateNumber" component={UvsWidget} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

@@ -1,0 +1,29 @@
+{
+  "name": "UAIU.LIVE/X",
+  "short_name": "UAIU/X",
+  "start_url": "/x/market",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
+  "orientation": "any",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "72x72", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "384x384", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "/x/market",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}

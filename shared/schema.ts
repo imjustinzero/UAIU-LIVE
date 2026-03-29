@@ -676,6 +676,93 @@ export const iotTrustScores = pgTable("iot_trust_scores", {
   calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
 });
 
+
+
+export const creditRegistry = pgTable("credit_registry", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  status: varchar("status").notNull().default("active"),
+  registry: varchar("registry"),
+  projectType: varchar("project_type"),
+  corsiaEligible: boolean("corsia_eligible").default(false),
+  article6Eligible: boolean("article6_eligible").default(false),
+  uvsEligible: boolean("uvs_eligible").notNull().default(false),
+  uvsCertificateId: varchar("uvs_certificate_id"),
+  uvsGrade: varchar("uvs_grade"),
+  uvsCertifiedAt: timestamp("uvs_certified_at"),
+  uvsExpiresAt: timestamp("uvs_expires_at"),
+});
+
+export const verificationStatements = pgTable("verification_statements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  statementRef: varchar("statement_ref").notNull(),
+  signedAt: timestamp("signed_at").notNull().defaultNow(),
+});
+
+export const uvsCertifications = pgTable("uvs_certifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  creditId: varchar("credit_id").notNull().references(() => creditRegistry.id),
+  certificateNumber: varchar("certificate_number").notNull().unique(),
+  status: varchar("status").notNull().default("pending"),
+  certifiedAt: timestamp("certified_at"),
+  expiresAt: timestamp("expires_at"),
+  revokedAt: timestamp("revoked_at"),
+  revocationReason: text("revocation_reason"),
+  qualityScore: real("quality_score"),
+  qualityGrade: varchar("quality_grade"),
+  iotTrustScore: real("iot_trust_score"),
+  mrvDataQuality: real("mrv_data_quality"),
+  verifierId: varchar("verifier_id"),
+  verifierStatementId: varchar("verifier_statement_id").references(() => verificationStatements.id),
+  article6Status: varchar("article6_status"),
+  corsiaEligible: boolean("corsia_eligible").default(false),
+  sdgCount: integer("sdg_count").default(0),
+  sanctionsClean: boolean("sanctions_clean").default(false),
+  openInvestigations: integer("open_investigations").default(0),
+  auditBlockId: integer("audit_block_id"),
+  certificateHash: varchar("certificate_hash"),
+  publicUrl: varchar("public_url"),
+  qrCodePath: varchar("qr_code_path"),
+  evidencePackageHash: varchar("evidence_package_hash"),
+}, (table) => ({
+  qualityScoreMinimum: check("uvs_quality_score_minimum", sql`${table.qualityScore} IS NULL OR ${table.qualityScore} >= 80`),
+  iotTrustMinimum: check("uvs_iot_trust_minimum", sql`${table.iotTrustScore} IS NULL OR ${table.iotTrustScore} >= 80`),
+  mrvQualityMinimum: check("uvs_mrv_quality_minimum", sql`${table.mrvDataQuality} IS NULL OR ${table.mrvDataQuality} >= 90`),
+}));
+
+export const committeeMembers = pgTable("committee_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  organization: varchar("organization").notNull(),
+  role: varchar("role").notNull(),
+  expertise: varchar("expertise").notNull(),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  active: boolean("active").notNull().default(true),
+  bio: text("bio"),
+  photoUrl: text("photo_url"),
+});
+
+export const methodologyAmendments = pgTable("methodology_amendments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposedBy: varchar("proposed_by").notNull(),
+  title: varchar("title").notNull(),
+  description: text("description").notNull(),
+  status: varchar("status").notNull().default("proposed"),
+  proposedAt: timestamp("proposed_at").notNull().defaultNow(),
+  votingClosesAt: timestamp("voting_closes_at"),
+  approvedAt: timestamp("approved_at"),
+  votes: jsonb("votes").notNull().default(sql`'{"for": [], "against": [], "abstain": []}'::jsonb`),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  endpoint: text("endpoint").notNull(),
+  keys: jsonb("keys").notNull(),
+  deviceType: varchar("device_type").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -773,6 +860,12 @@ export type AnomalyEvent = typeof anomalyEvents.$inferSelect;
 export type FirmwareVersion = typeof firmwareVersions.$inferSelect;
 export type SatelliteReading = typeof satelliteReadings.$inferSelect;
 export type IotTrustScore = typeof iotTrustScores.$inferSelect;
+
+export type CreditRegistry = typeof creditRegistry.$inferSelect;
+export type UvsCertification = typeof uvsCertifications.$inferSelect;
+export type CommitteeMember = typeof committeeMembers.$inferSelect;
+export type MethodologyAmendment = typeof methodologyAmendments.$inferSelect;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {
