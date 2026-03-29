@@ -13,6 +13,7 @@ import {
   tradeRetirementCertificates,
 } from "@shared/schema";
 import { getApprovedAlgorithms, getHashAlgorithm, validateEscrowFinality } from "./hash-agility";
+import { logAlgorithmUsage } from "./crypto-routes";
 
 function hashEntry(entry: Record<string, unknown>, algorithm: string): string {
   return createHash(algorithm).update(JSON.stringify(entry)).digest("hex");
@@ -51,6 +52,13 @@ export function registerAuditChainRoutes(app: Express): void {
         prevHash,
         hash,
       }).returning();
+      await logAlgorithmUsage({
+        componentName: "Audit Chain Hash",
+        algorithmUsed: algorithm,
+        operationType: "hash",
+        entityId: String(created.id),
+        entityType: "audit_block",
+      }).catch(() => {});
 
       return res.status(201).json(created);
     } catch (error: any) {

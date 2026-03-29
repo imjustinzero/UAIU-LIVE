@@ -9,6 +9,13 @@ type TrustPayload = {
   totalCreditsRetired: number;
   lastAuditBlock: { blockNumber: number; timestamp: string; algorithm: string } | null;
   lastUpdated: string;
+  cryptography?: {
+    currentAlgorithm: string;
+    approvedAlgorithms: string[];
+    deprecatedUsageIn24h: number;
+    pqcPostureScore: number;
+    nextDeprecationYear: number;
+  };
 };
 
 export default function Trust() {
@@ -69,6 +76,16 @@ export default function Trust() {
         )}
 
         <div className="mt-6 rounded border border-white/10 bg-[#11182d] p-4">
+          {status?.cryptography && (
+            <div className="mb-4 rounded border border-white/10 bg-[#0d1428] p-3 text-sm">
+              <h3 className="text-base font-semibold">Cryptographic Posture</h3>
+              <p>Current algorithm: {status.cryptography.currentAlgorithm}</p>
+              <p>PQC posture score: {status.cryptography.pqcPostureScore}</p>
+              <p>Deprecated usage (24h): {status.cryptography.deprecatedUsageIn24h}</p>
+              <p>Next deprecation year: {status.cryptography.nextDeprecationYear}</p>
+              <a href="/x/crypto/governance" className="mt-2 inline-block text-[#00ff88] underline">Open governance dashboard</a>
+            </div>
+          )}
           <h2 className="mb-3 text-xl font-semibold">Algorithm Rotation History</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
