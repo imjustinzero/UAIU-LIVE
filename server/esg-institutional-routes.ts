@@ -20,7 +20,7 @@ import {
   webhookDeliveryLog,
   webhooks,
 } from "@shared/schema";
-import { APPROVED_ALGORITHMS, getHashAlgorithm, isAlgorithmApproved, validateEscrowFinality } from "./hash-agility";
+import { getApprovedAlgorithms, getHashAlgorithm, isAlgorithmApproved, validateEscrowFinality } from "./hash-agility";
 
 const complianceDir = path.resolve(process.cwd(), "tmp", "compliance-documents");
 
@@ -549,7 +549,7 @@ export function registerEsgInstitutionalRoutes(app: Express) {
     res.json({
       organization: (req as any).apiOrg,
       currentAlgorithm: getHashAlgorithm(),
-      approvedAlgorithms: APPROVED_ALGORITHMS,
+      approvedAlgorithms: getApprovedAlgorithms(),
       totalAuditBlocks: chainCount[0]?.count || 0,
       extended: true,
     });
@@ -669,7 +669,7 @@ export function registerEsgInstitutionalRoutes(app: Express) {
       webhookDeliveryLog: webhookLogs,
       algorithmManagement: {
         currentAlgorithm: getHashAlgorithm(),
-        approvedList: APPROVED_ALGORITHMS,
+        approvedList: getApprovedAlgorithms(),
         rotationHistory: rotations,
       },
       manualReviewQueue: (await db.select().from(escrowSettlementsLog)).filter((s) => !isAlgorithmApproved(s.hashAlgorithm || "")),
