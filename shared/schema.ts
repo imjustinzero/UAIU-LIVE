@@ -736,6 +736,46 @@ export const supplyChainMembers = pgTable("supply_chain_members", {
   joinedAt: timestamp("joined_at"),
 });
 
+export const digitalTwinSnapshots = pgTable("digital_twin_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  state: jsonb("state").notNull().default(sql`'{}'::jsonb`),
+  dataSourcesActive: jsonb("data_sources_active").notNull().default(sql`'[]'::jsonb`),
+  confidenceScore: real("confidence_score").notNull().default(0),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const predictions = pgTable("predictions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  generatedAt: timestamp("generated_at").notNull().defaultNow(),
+  predictionType: varchar("prediction_type").notNull(),
+  horizon: varchar("horizon").notNull(),
+  predictedValue: real("predicted_value").notNull().default(0),
+  confidenceInterval: jsonb("confidence_interval").notNull().default(sql`'{}'::jsonb`),
+  modelVersion: varchar("model_version").notNull().default("1.0"),
+  inputFeatures: jsonb("input_features").notNull().default(sql`'{}'::jsonb`),
+  auditBlockId: integer("audit_block_id"),
+  actualValue: real("actual_value"),
+  accuracy: real("accuracy"),
+});
+
+export const intelligenceEvents = pgTable("intelligence_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  eventType: varchar("event_type").notNull(),
+  severity: varchar("severity").notNull().default("info"),
+  title: varchar("title").notNull(),
+  body: text("body").notNull(),
+  dataSnapshot: jsonb("data_snapshot").notNull().default(sql`'{}'::jsonb`),
+  actionRequired: boolean("action_required").notNull().default(false),
+  suggestedAction: text("suggested_action"),
+  sentTo: jsonb("sent_to").notNull().default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  auditBlockId: integer("audit_block_id"),
+});
+
 export const insertExchangeListingSchema = createInsertSchema(exchangeListings).omit({
   id: true,
   createdAt: true,
@@ -815,6 +855,18 @@ export const insertSupplyChainMemberSchema = createInsertSchema(supplyChainMembe
   id: true,
   invitedAt: true,
 });
+export const insertDigitalTwinSnapshotSchema = createInsertSchema(digitalTwinSnapshots).omit({
+  id: true,
+  timestamp: true,
+});
+export const insertPredictionSchema = createInsertSchema(predictions).omit({
+  id: true,
+  generatedAt: true,
+});
+export const insertIntelligenceEventSchema = createInsertSchema(intelligenceEvents).omit({
+  id: true,
+  createdAt: true,
+});
 
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
@@ -858,6 +910,12 @@ export type VerifiedClaim = typeof verifiedClaims.$inferSelect;
 export type InsertVerifiedClaim = z.infer<typeof insertVerifiedClaimSchema>;
 export type SupplyChainMember = typeof supplyChainMembers.$inferSelect;
 export type InsertSupplyChainMember = z.infer<typeof insertSupplyChainMemberSchema>;
+export type DigitalTwinSnapshot = typeof digitalTwinSnapshots.$inferSelect;
+export type InsertDigitalTwinSnapshot = z.infer<typeof insertDigitalTwinSnapshotSchema>;
+export type Prediction = typeof predictions.$inferSelect;
+export type InsertPrediction = z.infer<typeof insertPredictionSchema>;
+export type IntelligenceEvent = typeof intelligenceEvents.$inferSelect;
+export type InsertIntelligenceEvent = z.infer<typeof insertIntelligenceEventSchema>;
 
 // ── Admin Action Audit Log ───────────────────────────────────────────────────
 export const actionLogs = pgTable("action_logs", {

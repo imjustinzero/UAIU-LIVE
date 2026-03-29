@@ -52,6 +52,9 @@ import EnterprisePage from "@/pages/enterprise";
 import ComplianceMonitorPage from "@/pages/compliance-monitor";
 import CarbonPassportPage from "@/pages/carbon-passport";
 import ClaimCertificatePage from "@/pages/claim-certificate";
+import DigitalTwinPage from "@/pages/digital-twin";
+import PortfolioTwinPage from "@/pages/portfolio-twin";
+import IntelligenceFeedPage from "@/pages/intelligence-feed";
 
 function Router() {
   return (
@@ -91,6 +94,9 @@ function Router() {
       <Route path="/x/compliance" component={ComplianceMonitorPage} />
       <Route path="/x/passport/:retirementId" component={CarbonPassportPage} />
       <Route path="/x/claims/:certificateNumber" component={ClaimCertificatePage} />
+      <Route path="/x/projects/:projectId/twin" component={DigitalTwinPage} />
+      <Route path="/x/buyer/portfolio/twin" component={PortfolioTwinPage} />
+      <Route path="/x/intelligence" component={IntelligenceFeedPage} />
       <Route path="/retire/:tradeId" component={RetireUpload} />
       <Route path="/navigator" component={NavigatorLanding} />
       <Route path="/navigator/intake" component={NavigatorIntake} />

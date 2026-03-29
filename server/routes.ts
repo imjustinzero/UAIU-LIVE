@@ -36,6 +36,8 @@ import { registerNavigatorRoutes } from "./navigator-routes";
 import { registerAuditChainRoutes } from "./audit-chain-routes";
 import { registerEsgInstitutionalRoutes } from "./esg-institutional-routes";
 import { registerIotRoutes, setIotLiveNamespace } from "./iot-routes";
+import { registerDigitalTwinRoutes } from "./digital-twin";
+import { registerPredictiveRoutes } from "./predictive-engine";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -205,6 +207,8 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   registerAuditChainRoutes(app);
   registerEsgInstitutionalRoutes(app);
   registerIotRoutes(app);
+  registerDigitalTwinRoutes(app);
+  registerPredictiveRoutes(app);
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

@@ -15,6 +15,7 @@ import {
   validateS3Access,
   classifyS3Error,
 } from "./backup-storage";
+import { recomputeAllProjectTwins } from "./digital-twin";
 
 const BACKUP_DIR = "/tmp/uaiu_backups";
 const BACKUP_KEEP = 7;
@@ -466,4 +467,11 @@ export function startCronJobs(_app: Express): void {
 
   setTimeout(checkStuckEscrows, 60_000);
   setInterval(checkStuckEscrows, 30 * 60 * 1000);
+
+  const twinIntervalMinutes = Number(process.env.TWIN_COMPUTE_INTERVAL_MINUTES || 15);
+  setInterval(() => {
+    recomputeAllProjectTwins()
+      .then((count) => console.log(`[DigitalTwin Cron] Recomputed ${count} project twin(s)`))
+      .catch((e: any) => console.warn("[DigitalTwin Cron] Failed:", e.message));
+  }, twinIntervalMinutes * 60 * 1000);
 }
