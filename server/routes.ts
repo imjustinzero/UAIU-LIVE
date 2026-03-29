@@ -38,7 +38,7 @@ import { registerEsgInstitutionalRoutes } from "./esg-institutional-routes";
 import { registerIotRoutes, setIotLiveNamespace } from "./iot-routes";
 import { registerUvsRoutes } from "./uvs-routes";
 import { registerIndustrialRoutes } from "./industrial-routes";
-import { registerMethodologyRoutes } from "./methodology-routes";
+import { registerMethodologyRoutes, startMethodologyCron } from "./methodology-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -236,6 +236,7 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   registerUvsRoutes(app);
   registerIndustrialRoutes(app);
   registerMethodologyRoutes(app);
+  startMethodologyCron();
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
