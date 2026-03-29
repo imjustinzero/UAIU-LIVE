@@ -33,6 +33,7 @@ import { generateTradePDF, generateSignatureCertificatePDF } from "./pdf-generat
 import { sendZohoEmail, isZohoConfigured } from "./zoho-mailer";
 import { getLivePrices, getPriceHistory } from "./exchange-prices";
 import { registerNavigatorRoutes } from "./navigator-routes";
+import { registerAuditChainRoutes } from "./audit-chain-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -5373,6 +5374,9 @@ ${pages.map(p => `  <url>
 
   // ── Autonomous marketplace routes ─────────────────────────────────────────
   registerAutonomousMarketplaceRoutes(app);
+
+  // ── Audit chain routes ────────────────────────────────────────────────────
+  registerAuditChainRoutes(app);
 
   // ── FIX 3: Start cron watchdog for stuck escrow trades ──────────────────────
   startCronJobs(app);
