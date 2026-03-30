@@ -65,6 +65,11 @@ import VerifierMarketplacePage from "@/pages/verifier-marketplace";
 import StandardsLabPage from "@/pages/standards-lab";
 import IndustryIntelligencePage from "@/pages/industry-intelligence";
 import ProfessionalProfilePage from "@/pages/professional-profile";
+import VerifierMapPage from "@/pages/verifier-map";
+import FieldAppPage from "@/pages/field-app";
+import VerifierCredentialsPage from "@/pages/verifier-credentials";
+import VerifierCoveragePage from "@/pages/verifier-coverage";
+import VerifierLegacyPage from "@/pages/verifier-legacy";
 import PartnerDashboardPage from "@/pages/partner-dashboard";
 import PartnerDirectoryPage from "@/pages/partner-directory";
 import PartnerProfilePage from "@/pages/partner-profile";
@@ -124,6 +129,11 @@ function Router() {
       <Route path="/x/standards-lab" component={StandardsLabPage} />
       <Route path="/x/intelligence" component={IndustryIntelligencePage} />
       <Route path="/x/professionals/:id" component={ProfessionalProfilePage} />
+      <Route path="/x/verifier/map" component={VerifierMapPage} />
+      <Route path="/x/field-app" component={FieldAppPage} />
+      <Route path="/x/verifier/credentials" component={VerifierCredentialsPage} />
+      <Route path="/x/verifier/coverage" component={VerifierCoveragePage} />
+      <Route path="/x/verifier/legacy" component={VerifierLegacyPage} />
       <Route path="/x/partners" component={PartnerDirectoryPage} />
       <Route path="/x/partners/:partnerId" component={PartnerProfilePage} />
       <Route path="/x/partners/:partnerId/dashboard" component={PartnerDashboardPage} />

@@ -14,6 +14,8 @@ import {
   mqiSnapshots,
   professionalProfiles,
   uvsCertifications,
+  verifierCredentials,
+  verifierQualityScores,
 } from "@shared/schema";
 import { db } from "./db";
 import { getHashAlgorithm } from "./hash-agility";
@@ -435,7 +437,15 @@ export function registerMethodologyRoutes(app: Express): void {
   app.get("/api/professionals/:id", async (req, res) => {
     const profile = await db.query.professionalProfiles.findFirst({ where: eq(professionalProfiles.id, req.params.id) });
     if (!profile) return res.status(404).json({ error: "Professional profile not found" });
-    res.json(profile);
+    const latestQuality = await db.query.verifierQualityScores.findFirst({
+      where: eq(verifierQualityScores.verifierId, profile.userId as any),
+      orderBy: (t, { desc }) => [desc(t.calculatedAt)],
+    });
+    const credentials = await db.query.verifierCredentials.findMany({
+      where: and(eq(verifierCredentials.verifierId, profile.userId as any), eq(verifierCredentials.publiclyVisible, true)),
+      orderBy: (t, { desc }) => [desc(t.issuedAt)],
+    });
+    res.json({ ...profile, latestQuality, verifierCredentials: credentials });
   });
 }
 

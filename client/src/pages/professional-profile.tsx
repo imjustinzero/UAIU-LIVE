@@ -38,10 +38,25 @@ export default function ProfessionalProfilePage() {
               <li>Verifications completed: {profile.verificationsCompleted || 0}</li>
               <li>Tonnes verified: {profile.tonnesVerified || 0}</li>
               <li>Reputation score: {profile.reputationScore || 0}</li>
+              <li>Verification quality score: {profile.latestQuality?.score || "N/A"} ({profile.latestQuality?.grade || "—"})</li>
               <li>Peer reviews completed: {profile.mqlContributions || 0}</li>
               <li>ORCID: {profile.orcidId || "Not linked"}</li>
             </ul>
           </article>
+        </section>
+        <section>
+          <h2 className="mb-2 text-lg font-medium">Public Credentials</h2>
+          <div className="grid gap-2 md:grid-cols-2">
+            {(profile.verifierCredentials || []).map((credential: any) => (
+              <article key={credential.id} className="rounded border border-[#d4a84322] bg-[#0a1322] p-3 text-xs">
+                <p className="font-semibold">{credential.credentialType}</p>
+                <p className="text-[#c7c0ae]">{credential.issuingBody}</p>
+                <p>Valid until: {credential.expiresAt ? new Date(credential.expiresAt).toLocaleDateString() : "N/A"}</p>
+                <p>{credential.verifiedByPlatform ? "Platform Verified ✓" : "Pending verification"}</p>
+                {credential.documentHash ? <p className="break-all text-[#c7c0ae]">Hash: {credential.documentHash}</p> : null}
+              </article>
+            ))}
+          </div>
         </section>
       </div>
     </div>

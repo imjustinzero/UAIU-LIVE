@@ -1014,6 +1014,36 @@ export const professionalProfiles = pgTable("professional_profiles", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const verifierCredentials = pgTable("verifier_credentials", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  verifierId: uuid("verifier_id").notNull(),
+  credentialType: varchar("credential_type").notNull(),
+  issuingBody: varchar("issuing_body").notNull(),
+  credentialNumber: varchar("credential_number").notNull(),
+  issuedAt: timestamp("issued_at").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  documentHash: varchar("document_hash").notNull(),
+  evidenceVaultId: uuid("evidence_vault_id"),
+  verifiedByPlatform: boolean("verified_by_platform").notNull().default(false),
+  verifiedAt: timestamp("verified_at"),
+  publiclyVisible: boolean("publicly_visible").notNull().default(true),
+  auditBlockId: integer("audit_block_id"),
+});
+
+export const verifierQualityScores = pgTable("verifier_quality_scores", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  verifierId: uuid("verifier_id").notNull(),
+  score: numeric("score", { precision: 5, scale: 2 }).notNull(),
+  grade: varchar("grade").notNull(),
+  components: jsonb("components").notNull().default(sql`'{}'::jsonb`),
+  totalVerifications: integer("total_verifications").notNull().default(0),
+  tonnesVerified: numeric("tonnes_verified", { precision: 14, scale: 2 }).notNull().default("0"),
+  disputeRate: numeric("dispute_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  calculatedAt: timestamp("calculated_at").notNull().defaultNow(),
+  trend: varchar("trend").notNull().default("new"),
+  auditBlockId: integer("audit_block_id"),
+});
+
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
@@ -1214,6 +1244,17 @@ export const insertAlertSubscriberSchema = createInsertSchema(alertSubscribers).
   subscribedAt: true,
 });
 
+export const insertVerifierCredentialSchema = createInsertSchema(verifierCredentials).omit({
+  id: true,
+  verifiedByPlatform: true,
+  verifiedAt: true,
+});
+
+export const insertVerifierQualityScoreSchema = createInsertSchema(verifierQualityScores).omit({
+  id: true,
+  calculatedAt: true,
+});
+
 export type ExchangeListing = typeof exchangeListings.$inferSelect;
 export type InsertExchangeListing = z.infer<typeof insertExchangeListingSchema>;
 export type ExchangeAccount = typeof exchangeAccounts.$inferSelect;
@@ -1270,6 +1311,10 @@ export type MethodologyVote = typeof methodologyVotes.$inferSelect;
 export type MethodologyPeerReview = typeof methodologyPeerReviews.$inferSelect;
 export type ProfessionalProfile = typeof professionalProfiles.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type VerifierCredential = typeof verifierCredentials.$inferSelect;
+export type InsertVerifierCredential = z.infer<typeof insertVerifierCredentialSchema>;
+export type VerifierQualityScore = typeof verifierQualityScores.$inferSelect;
+export type InsertVerifierQualityScore = z.infer<typeof insertVerifierQualityScoreSchema>;
 export type CbamDeclaration = typeof cbamDeclarations.$inferSelect;
 export type EpdRecord = typeof epdRecords.$inferSelect;
 export type ProductCarbonPassport = typeof productCarbonPassports.$inferSelect;

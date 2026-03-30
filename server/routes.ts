@@ -40,6 +40,7 @@ import { registerUvsRoutes } from "./uvs-routes";
 import { registerIndustrialRoutes } from "./industrial-routes";
 import { registerMethodologyRoutes, startMethodologyCron } from "./methodology-routes";
 import { registerCryptoRoutes } from "./crypto-routes";
+import { registerVerifierRoutes, startVerifierScoreCron } from "./verifier-routes";
 
 const ALLOWED_REGISTRY_NAMES = ['Verra', 'Gold Standard', 'EU ETS', 'ACR', 'CAR', 'other'] as const;
 
@@ -238,7 +239,9 @@ export async function registerRoutes(app: Express, httpServer: Server): Promise<
   registerIndustrialRoutes(app);
   registerMethodologyRoutes(app);
   registerCryptoRoutes(app);
+  registerVerifierRoutes(app);
   startMethodologyCron();
+  startVerifierScoreCron();
 
   const authLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
